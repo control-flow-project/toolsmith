@@ -1,0 +1,45 @@
+name: Verify private library and CLI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Install locked development tools
+        run: |
+          python -m pip install uv==0.12.10
+          sudo systemd-run --scope --quiet \
+            --property=MemoryMax=8G --property=MemorySwapMax=0 --property=TasksMax=256 \
+            --working-directory="$PWD" "$(command -v uv)" sync --frozen --extra http
+      - name: Bounded integrated verification
+        run: |
+          sudo systemd-run --scope --quiet \
+            --property=MemoryMax=8G --property=MemorySwapMax=0 --property=TasksMax=256 \
+            --working-directory="$PWD" "$PWD/.venv/bin/python" "$PWD/scripts/verify.py"
+      - name: Bounded installed artifact acceptance
+        run: |
+          sudo systemd-run --scope --quiet \
+            --property=MemoryMax=8G --property=MemorySwapMax=0 --property=TasksMax=256 \
+            --setenv="TOOLSMITH_UV=$(command -v uv)" \
+            --working-directory="$PWD" "$PWD/.venv/bin/python" "$PWD/scripts/accept_package.py"
+      - name: Bounded dependency audit
+        run: |
+          sudo systemd-run --scope --quiet \
+            --property=MemoryMax=8G --property=MemorySwapMax=0 --property=TasksMax=256 \
+            --working-directory="$PWD" "$PWD/.venv/bin/pip-audit" --path "$PWD/.venv/lib/python3.13/site-packages" --skip-editable
