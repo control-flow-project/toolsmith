@@ -59,3 +59,8 @@ custom callers remain responsible for their own transport's actual network behav
 
 Importing the HTTP module does not import its optional DNS dependency. Missing
 dependency fails on selected network acquisition, not on text/storage import.
+
+`toolsmith.semantic` exports the optional encoder and generic SQLite API;
+`toolsmith.semantic.store` composes those functions with exact retained citations.
+Importing either loads no optional native package or model. See
+[semantic contracts](semantic.md) and [fleet integration](fleet-recipes.md).

@@ -34,9 +34,14 @@ access controls and separately authorized roots.
 ## Maintainer builds
 
 `uv.lock` pins development/build dependencies under a seven-day release-age
-cutoff. `uv sync --frozen --extra http` followed by the bounded verification command builds
+cutoff. `uv sync --frozen --all-extras` followed by the bounded verification command builds
 both wheel and sdist. The wheel includes only library/CLI code, schema, typing
 marker and license/metadata; repository tests/scripts/docs remain in the sdist.
 Neither artifact includes private stores, `.analysis`, secrets or development
 environments. Installed-artifact acceptance verifies both formats from clean
 environments, including absence of the optional dependency in a base installation.
+
+The separately selected `[semantic]` extra provides pinned inference/tokenizer
+dependencies. See [model preparation](semantic.md): supplying model assets is an
+operator action, not an installation effect. Base installs have no model software,
+and non-semantic capabilities work without it.

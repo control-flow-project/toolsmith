@@ -28,13 +28,14 @@ toolsmith/
 │   ├── storage/             One SQLite schema, versions, artifacts, operation records
 │   ├── acquisition/         Explicit policy, quotas, bounded DNS/TLS/HTTPS, resume
 │   ├── retrieval.py         Literal lexical search and exact citations
+│   ├── semantic/            Offline encoder, generic SQLite vectors, store composition
 │   ├── operations/          Integrity, index rebuild, backup/restore, staging cleanup
 │   └── cli/                 Argument parsing and calls to the same library
 ├── scripts/                 Development verification and package acceptance
 └── tests/                   Controlled fixtures, integration and architecture checks
 ```
 
-No empty browser, PDF, OCR, embedding or migration modules exist. Schema one is
+No empty browser, PDF, OCR or migration modules exist. Schema one is
 the only schema. A future migration must be based on a real deployed predecessor,
 not a speculative compatibility layer.
 
@@ -66,6 +67,17 @@ Retained text parts are authoritative. Chunk spans and lexical postings are deri
 by one chunking implementation used for both normal writes and explicit rebuilds.
 Integrity checks verify complete coverage, not just the spans of remaining chunks.
 The cleanup plan also has one owning validator shared by library and CLI calls.
+
+Semantic tables are derived, in the same database. Generic functions accept
+caller-owned SQLite so consumers with an archive need not duplicate it. The store
+composition uses the same vector implementation. The only optional backend uses
+the exact pinned native ONNX C API, not its NumPy/Python wrapper. Resource lifetimes
+are explicit, reverse-ordered and ABI-checked; no fallback/global thread tuning.
+Native startup disables provider telemetry before it can create an uploader or
+global cache, restoring the process environment after construction. This privacy
+policy suppresses ONNX's process-wide telemetry; it is not a host configuration.
+Inference occurs outside SQL transactions, with source/digest rechecks before
+publication. Search has explicit bounded authorized candidates and coverage.
 
 File bytes are fsynced before transactional metadata references them. A crash may
 leave an unreferenced object; metadata never intentionally references unwritten bytes.

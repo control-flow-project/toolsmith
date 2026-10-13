@@ -2,7 +2,7 @@
 
 Toolsmith reduces ordinary acquisition/storage mistakes. It is not a sandbox for
 arbitrary executable code or full-access processes under the same OS identity.
-No skills, agent instruction text, model calls or fleet permissions are hosted here.
+No skills, agent instruction text, generative model calls or fleet permissions are hosted here.
 Caller/source rights remain with the consumer and operator.
 
 ## Filesystem
@@ -61,5 +61,29 @@ machine paths and credentials, but consumers must decide which retained content
 can be shared. Store metadata and source-limit state are private local records.
 
 Base installation has no runtime dependencies. HTTP's optional dependency is pinned;
-dependency audit is part of release verification. Browser/native extraction and
-semantic-search capabilities are excluded, not represented by fake substitutes.
+dependency audit is part of release verification. Browser automation and
+process-based PDF/OCR remain excluded, not represented by fake substitutes.
+
+## Optional semantic inference
+
+Model assets are explicit, private, no-follow, byte/hash pinned and passed as
+verified bytes. No arbitrary graph, remote code, model path, global cache or
+network model API is accepted. Inference uses the exact selected CPU runtime;
+unavailable versions fail without another backend. Provider telemetry is opted
+out before initialization so it cannot create background upload or private global
+state; the caller's prior environment is restored on success and failure. This
+deliberately disables the native provider's process-wide telemetry, not a host
+configuration. Arbitrary other same-process libraries are outside this boundary.
+
+The pinned native ABI validates runtime version, token tensor types/shapes and
+finite values before accessing bounded memory. Resources close in reverse order;
+the product creates no worker threads or helper processes. Native dependencies
+are trusted compiled software, not OS-isolated parsers. A verified asset does not
+make arbitrary native software safe under a hostile same-user environment.
+
+Authorized candidate selection remains consumer-owned. Names/digests are not
+permissions. Missing/stale derivatives are reported, never another user's corpus
+or silently substituted lexical results. Corrections/invalidation are atomic,
+encoding is outside transactions, and commit contention rolls back owned writes.
+Semantic scores locate text; they do not establish truth, rights, legal compliance
+or authentic execution of an external summary model.

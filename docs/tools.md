@@ -60,4 +60,11 @@ and recording times. No source catalog or model accounting is imposed.
 `unavailable` 7; `deferred` 8; `integrity` 9; `io` 10; `http` 11; `tls` 12.
 Success exits zero. `deferred` includes a retry interval when known, not a promise
 that a retry will succeed. Contention, policy/source cooldown and resource failure
-are ordinary bounded outcomes. No automatic retry loop, wait slot or fallback exists.
+are ordinary bounded outcomes. No automatic retry loop, background job, wait slot
+or fallback exists.
+
+Optional semantic contracts and immutable result records are defined in
+[semantic retrieval](semantic.md). The generic library validates exact pinned
+profiles, complete source spans, unit float32 vectors, publication digests and
+explicit authorized candidate/record/chunk bounds. Text-store APIs retain exact
+citations and use the same library, not an additional implementation.

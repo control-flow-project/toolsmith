@@ -30,6 +30,7 @@ class Arguments(argparse.Namespace):
     policy: Path | None = None
     network_state: Path | None = None
     url: str | None = None
+    model_directory: Path | None = None
 
 
 class Parser(argparse.ArgumentParser):
@@ -88,6 +89,20 @@ def make_parser() -> Parser:
     search.add_argument("query")
     search.add_argument("--limit", type=int, default=20)
     search.add_argument("--offset", type=int, default=0)
+    semantic = families.add_parser("semantic").add_subparsers(dest="command", required=True)
+    for name in ("model-check", "index", "search", "status", "clear"):
+        command = semantic.add_parser(name)
+        command.set_defaults(action="semantic." + name)
+        if name in {"model-check", "index", "search"}:
+            command.add_argument("--model-directory", type=Path, required=True)
+        if name == "index":
+            command.add_argument(
+                "--limit", type=int, default=10, help="Maximum parts in this foreground batch"
+            )
+        if name == "search":
+            command.add_argument("query")
+            command.add_argument("--limit", type=int, default=20)
+            command.add_argument("--item", help="Restrict candidates to a current item")
     citation = texts.add_parser("cite")
     citation.set_defaults(action="text.cite")
     citation.add_argument("version")

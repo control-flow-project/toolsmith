@@ -15,6 +15,13 @@ from toolsmith.operations.integrity import check_integrity, rebuild_index
 from toolsmith.readers import read_feed, read_html, read_text
 from toolsmith.result import Result, Success, ToolsmithError, unwrap
 from toolsmith.retrieval import read_citation, search_text
+from toolsmith.semantic import inspect_model
+from toolsmith.semantic.store import (
+    clear_text_index,
+    index_text,
+    inspect_text_index,
+    search_semantic_text,
+)
 from toolsmith.storage.artifacts import export_file, inspect_file, put_file, read_file
 from toolsmith.storage.database import initialize_store, inspect_store
 from toolsmith.storage.models import document_from_json
@@ -52,6 +59,8 @@ def execute(arguments: Arguments) -> Result[object]:
                     "integrity",
                     "index-rebuild",
                     "preview-cleanup",
+                    "offline-minilm",
+                    "semantic-search",
                 ],
                 "http_dependency": "http extra, loaded only for actual HTTP acquisition",
                 "excluded": [
@@ -62,10 +71,10 @@ def execute(arguments: Arguments) -> Result[object]:
                     "browser",
                     "pdf",
                     "ocr",
-                    "embeddings",
                     "skills",
                     "fleet-runtime",
                 ],
+                "semantic_dependency": "semantic extra; verified operator-supplied local assets, no download",
             }
         )
     if action.startswith("read."):
@@ -99,12 +108,31 @@ def execute(arguments: Arguments) -> Result[object]:
                 name=arguments.name,
             )
         return resume_http(root, collection, network, policy, request)
+    if action == "semantic.model-check":
+        return inspect_model(required_path(arguments.model_directory))
     root = required_path(arguments.root)
     collection = required_text(arguments.collection, "Collection")
     if action == "store.init":
         return initialize_store(root, collection)
     if action == "store.inspect":
         return inspect_store(root, collection)
+    if action == "semantic.status":
+        return inspect_text_index(root, collection)
+    if action == "semantic.clear":
+        return clear_text_index(root, collection)
+    if action == "semantic.index":
+        return index_text(
+            root, collection, required_path(arguments.model_directory), arguments.limit
+        )
+    if action == "semantic.search":
+        return search_semantic_text(
+            root,
+            collection,
+            required_text(arguments.query, "Query"),
+            required_path(arguments.model_directory),
+            arguments.limit,
+            item=arguments.item,
+        )
     if action == "text.put":
         document = document_from_json(
             parse_json(

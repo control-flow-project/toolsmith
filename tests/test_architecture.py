@@ -68,7 +68,28 @@ def test_product_has_no_process_server_thread_or_domain_owner() -> None:
 def test_dependencies_and_distribution_are_optional_and_private() -> None:
     config = tomllib.loads((ROOT / "pyproject.toml").read_text())
     assert config["project"]["dependencies"] == []
-    assert set(config["project"]["optional-dependencies"]) == {"http"}
+    assert set(config["project"]["optional-dependencies"]) == {"http", "semantic"}
     assert config["project"]["classifiers"] == ["Private :: Do Not Upload"]
     assert config["project"]["scripts"] == {"toolsmith": "toolsmith.cli:main"}
     assert config["project"]["license"] == "LicenseRef-Proprietary"
+
+
+def test_semantic_core_has_no_store_runtime_or_domain_dependency() -> None:
+    forbidden = {
+        "torch",
+        "sentence_transformers",
+        "transformers",
+        "badbets_research",
+        "crossfire",
+        "fleetd",
+    }
+    violations = []
+    for path in (ROOT / "src/toolsmith/semantic").glob("*.py"):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module is not None:
+                if node.module.split(".")[0] in forbidden:
+                    violations.append(node.module)
+                if path.name != "store.py" and node.module.startswith("toolsmith.storage"):
+                    violations.append(node.module)
+    assert violations == []

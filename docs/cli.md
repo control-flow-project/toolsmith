@@ -15,6 +15,10 @@ toolsmith text put DOCUMENT_JSON --item ITEM --request-id ID
 toolsmith text inspect VERSION
 toolsmith text list [--item ITEM] [--limit N] [--offset N]
 toolsmith text search QUERY [--limit N] [--offset N]
+toolsmith semantic model-check --model-directory DIR
+toolsmith semantic index --model-directory DIR [--limit N]
+toolsmith semantic status | clear
+toolsmith semantic search QUERY --model-directory DIR [--limit N] [--item ITEM]
 toolsmith text cite VERSION [--part N] [--start N] [--length N]
 toolsmith file put FILE --name NAME --media-type TYPE --request-id ID [--source-url URL]
 toolsmith file inspect | read VERSION
@@ -30,7 +34,7 @@ toolsmith maintenance cleanup-preview [--minimum-age SECONDS]
 toolsmith maintenance cleanup-apply PLAN_JSON
 ```
 
-`read`, `capabilities`, policy inspection and network-limit inspection do not
+`read`, `capabilities`, model checking, policy inspection and network-limit inspection do not
 require a collection store. All other commands require exact `--root` and
 `--collection`. For restore, `--root` selects the backup, not the destination.
 
@@ -88,3 +92,7 @@ toolsmith --root "$PWD/local-store" --collection sample maintenance cleanup-appl
 Review the cleanup plan before apply. Changed candidates invalidate it before
 deletion. Backups and restores require new destinations; these commands cannot
 reset production or overwrite existing stores.
+
+See [semantic retrieval](semantic.md) and the [fleet recipes](fleet-recipes.md)
+for model preparation, bounded indexing, coverage, exact citations, corrections
+and generic caller-owned SQLite integration.

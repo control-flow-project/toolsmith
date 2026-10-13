@@ -26,17 +26,27 @@ jobs:
           python -m pip install uv==0.12.10
           sudo systemd-run --scope --quiet \
             --property=MemoryMax=8G --property=MemorySwapMax=0 --property=TasksMax=256 \
-            --working-directory="$PWD" "$(command -v uv)" sync --frozen --extra http
+            --working-directory="$PWD" "$(command -v uv)" sync --frozen --all-extras
       - name: Bounded integrated verification
         run: |
           sudo systemd-run --scope --quiet \
             --property=MemoryMax=8G --property=MemorySwapMax=0 --property=TasksMax=256 \
             --working-directory="$PWD" "$PWD/.venv/bin/python" "$PWD/scripts/verify.py"
+      - name: Prepare exact native acceptance assets
+        run: |
+          mkdir -m 700 -p "$PWD/.verification/model"
+          BASE=https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41
+          curl --fail --location --max-time 120 "$BASE/onnx/model.onnx" --output "$PWD/.verification/model/model.onnx"
+          curl --fail --location --max-time 60 "$BASE/tokenizer.json" --output "$PWD/.verification/model/tokenizer.json"
+          chmod 600 "$PWD/.verification/model/model.onnx" "$PWD/.verification/model/tokenizer.json"
+          curl --fail --location --max-time 60 https://raw.githubusercontent.com/microsoft/onnxruntime/v1.30.0/include/onnxruntime/core/session/onnxruntime_c_api.h --output "$PWD/.verification/onnxruntime_c_api.h"
       - name: Bounded installed artifact acceptance
         run: |
           sudo systemd-run --scope --quiet \
             --property=MemoryMax=8G --property=MemorySwapMax=0 --property=TasksMax=256 \
             --setenv="TOOLSMITH_UV=$(command -v uv)" \
+            --setenv="TOOLSMITH_MODEL_DIRECTORY=$PWD/.verification/model" \
+            --setenv="TOOLSMITH_API_HEADER=$PWD/.verification/onnxruntime_c_api.h" \
             --working-directory="$PWD" "$PWD/.venv/bin/python" "$PWD/scripts/accept_package.py"
       - name: Bounded dependency audit
         run: |

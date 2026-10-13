@@ -13,12 +13,14 @@ The CLI calls the same validated library functions that applications import.
 - UTF-8 text, meaningful static HTML and RSS/Atom readers.
 - Versioned local text and private files in an explicitly selected collection.
 - Lexical search and exact-version, physical-page/character-span citations.
+- Optional offline English MiniLM embeddings and semantic search, with complete
+  token-aware chunks, exact source spans and caller-owned SQLite integration.
 - Optional approved HTTPS acquisition with bounded DNS/TLS, redirects, compressed
   responses, shared local quotas and explicit interrupted-operation recovery.
 - Verified backup/restore, explicit integrity/index checks and preview-bound
   cleanup of inactive staging files.
 
-Browser automation, PDF/OCR helpers, embeddings and vector/hybrid retrieval are
+Browser automation, PDF/OCR helpers and hybrid retrieval are
 not implemented. No substitute or placeholder is provided. Skills, source-specific
 connectors, domain analysis, financial calculations and fleet runtime remain with
 their existing owners.
@@ -63,10 +65,35 @@ else:
 - [Security](docs/security.md)
 - [Maintenance and recovery](docs/operations.md)
 - [Verification](docs/verification.md)
+- [WCBUBWHB architecture review](docs/architecture-review.md)
+- [Semantic retrieval and model preparation](docs/semantic.md)
+- [Fleet recipes: Bad Bets news and GAAP agreements](docs/fleet-recipes.md)
+
+## Fleet examples
+
+Both fleets can use the same private package, without changing fleet controllers,
+agent runtime, history or message delivery. Domain rules stay in the fleet.
+These checked-in examples are **synthetic demonstrations**, not research evidence.
+
+```sh
+toolsmith --root "$PWD/example-store" --collection demo store init
+toolsmith --root "$PWD/example-store" --collection demo text put "$PWD/examples/news-body.json" --item news-body --request-id news-1
+toolsmith --root "$PWD/example-store" --collection demo text put "$PWD/examples/news-summary.json" --item news-summary --request-id summary-1
+toolsmith --root "$PWD/example-store" --collection demo text put "$PWD/examples/agreement.json" --item agreement --request-id agreement-1
+toolsmith --root "$PWD/example-store" --collection demo semantic index --model-directory "$MODEL_DIRECTORY"
+toolsmith --root "$PWD/example-store" --collection demo semantic search "borrower transfers assets outside the guarantor group" --model-directory "$MODEL_DIRECTORY" --item agreement
+```
+
+Install the private wheel's `semantic` extra and explicitly prepare the two pinned
+model files as described in [the semantic guide](docs/semantic.md). No implicit
+download, network inference, silent truncation or lexical fallback. Bad Bets can
+also embed the generic SQLite functions directly in its own database; it need
+not create a Toolsmith store or copy its article archive. Read the fleet recipes
+for atomic correction/invalidation and authorized candidate selection.
 
 ## Development
 
-`uv sync --frozen --extra http` installs the locked development environment. Run
+`uv sync --frozen --all-extras` installs the locked development environment. Run
 `scripts/verify.py` in a cgroup v2 scope bounded to 8 GiB aggregate memory, zero
 swap and 256 tasks; see the verification guide. It runs format/lint, strict types,
 isolated test files on available cores and wheel/sdist builds. No test server or

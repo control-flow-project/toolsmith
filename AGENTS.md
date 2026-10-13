@@ -8,8 +8,11 @@ WCBUBWHB: one current implementation, no compatibility aliases, hidden fallbacks
 dual storage paths or legacy interfaces. The CLI calls the library. Do not add
 servers, listening sockets, daemons, unattended workers, helper processes,
 subprocess execution or automatic installation/activation. Ordinary short-lived
-CLI invocations are allowed. Browser automation, process-based PDF/OCR and
-embeddings are excluded. Do not add placeholder implementations for them.
+CLI invocations are allowed. Browser automation and process-based PDF/OCR remain
+excluded. Optional in-process MiniLM embeddings and vector retrieval are now
+authorized. Keep one CPU-only, single-calling-thread implementation: no encoder
+service, helper process, worker pool, automatic download or GPU/model fallback.
+Do not add placeholder implementations.
 
 Everything is optional to consumers. Core fleet setup, delivery, history and
 lifecycle must never depend on Toolsmith. No skills, domain connectors, financial

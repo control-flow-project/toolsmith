@@ -9,8 +9,8 @@ threads. Outbound approved HTTP/DNS requests are explicit acquisition effects.
 The library and CLI use one implementation, typed expected results and validated
 boundaries. No compatibility aliases, local/remote alternatives, speculative
 adapters, placeholders or automatic fallback are allowed. Runtime dependencies
-are absent from the base package. Only the selected HTTP capability requires its
-optional bounded DNS library. No global config, storage root or credential is
+are absent from the base package. Selected HTTP and semantic capabilities require
+their optional dependencies. No global config, storage root or credential is
 selected implicitly.
 
 ## Capabilities
@@ -24,12 +24,17 @@ selected implicitly.
 - Consistent backup/verified restore, integrity checks, index rebuilding and
   preview-bound cleanup of inactive tool-owned staging files.
 - Private installable package, command contracts and operational documentation.
+- Optional offline English MiniLM embeddings, complete token-aware source chunks,
+  exact cosine retrieval and transaction-safe SQLite derivatives. The generic
+  library accepts a caller-owned connection; store/CLI operations compose the
+  same functions over retained text with exact version/part/span citations.
 
 Browser automation and process-based PDF/OCR conflict with the no-helper-process
 rule and are not implemented. Do not substitute HTML parsing for a browser or
-UTF-8 reading for PDF/OCR. Embeddings, vector indexes and hybrid retrieval are
-deferred. No domain connectors, source catalogs, financial calculators, taxonomy,
-model calls, agent instructions or public hosting belong here.
+UTF-8 reading for PDF/OCR. Hybrid retrieval remains excluded: lexical and semantic
+queries are explicit, never substituted or blended. No domain connectors, source
+catalogs, financial calculators, taxonomy, generative model calls, agent
+instructions or public hosting belong here.
 
 ## Local state
 
@@ -78,6 +83,28 @@ status never starts work. Explicit HTTP resume reconciles completed results and
 retries uncertain GETs with that uncertainty disclosed, within remaining limits.
 
 ## Output and operations
+
+Semantic inference uses the pinned all-MiniLM-L6-v2 revision, CPU float32 ONNX,
+384 dimensions, attention-mask mean pooling and L2 normalization. Its immutable
+profile includes the backend, assets and complete-offset chunking contract.
+The runtime executes sequentially with one calling thread, no worker thread pool.
+Optional dependencies load only on explicit model loading. Operator-supplied
+assets are pinned by length and SHA-256, read through no-follow descriptors and
+passed as verified bytes, never an executable path. No inference network, global
+model cache, credentials or automatic installation/download.
+Queries exceeding 256 tokens fail; document chunks cover every character with
+32-token overlap, checking the actual token ceiling without silent truncation.
+
+Generic derivatives retain only references, source digest/length, profile, indexed
+time and bounded vector/span records, not a second source archive. Consumers own
+canonical text, authorization, summaries and source corrections. They invalidate
+derivatives in the same transaction as a correction and publish with an expected
+previous digest after encoding outside transactions. Search accepts an explicit
+bounded authorized candidate set and reports missing/stale coverage, never other
+collections or silent lexical fallback. Text imports invalidate old derivatives
+without deleting citable originals. Semantic clear deletes only derivatives.
+Integrity and verified backups include vector profiles, finite unit vectors,
+complete spans and canonical source bindings; no inference is required.
 
 Return completed/partial/failed outcomes, warnings, exact versions and bounded
 references. Publication, supplied observation and recording times remain distinct;

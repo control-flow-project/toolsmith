@@ -153,7 +153,7 @@ def child_directory(
 @contextmanager
 def private_file(directory: PrivateDirectory, name: str, *, create: bool = False) -> Iterator[int]:
     component(name)
-    flags = os.O_RDWR | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC
+    flags = (os.O_RDWR if create else os.O_RDONLY) | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC
     if create:
         flags |= os.O_CREAT
     descriptor = os.open(name, flags, 0o600, dir_fd=directory.descriptor)

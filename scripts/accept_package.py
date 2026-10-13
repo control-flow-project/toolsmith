@@ -33,6 +33,10 @@ from toolsmith.storage.artifacts import put_file, read_file, export_file
 from toolsmith.operations.integrity import check_integrity
 assert Path(toolsmith.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
 assert importlib.util.find_spec('dns') is None
+assert importlib.util.find_spec('onnxruntime') is None
+assert importlib.util.find_spec('tokenizers') is None
+from toolsmith.semantic import Candidate, Source, encode_query, initialize_index, inspect_model
+assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
 assert importlib.metadata.version('ctlflow-toolsmith') == '0.1.0'
 assert importlib.metadata.metadata('ctlflow-toolsmith')['License-Expression'] == 'LicenseRef-Proprietary'
 assert set(parent.iterdir()) == before
@@ -73,6 +77,7 @@ def check_archives(wheel: Path, source: Path) -> None:
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
         assert "toolsmith/storage/schema.sql" in names
+        assert "toolsmith/semantic/schema.sql" in names
         assert "toolsmith/py.typed" in names
         assert any(name.endswith("/licenses/LICENSE") for name in names)
         assert not any(name.startswith(("tests/", "scripts/", "docs/")) for name in names)
@@ -80,7 +85,7 @@ def check_archives(wheel: Path, source: Path) -> None:
         assert "Private :: Do Not Upload" in metadata
         assert "License-Expression: LicenseRef-Proprietary" in metadata
         assert all(
-            "extra == 'http'" in line
+            "extra == 'http'" in line or "extra == 'semantic'" in line
             for line in metadata.splitlines()
             if line.startswith("Requires-Dist:")
         )
@@ -96,6 +101,7 @@ def check_archives(wheel: Path, source: Path) -> None:
         for part in Path(name).parts
     )
     assert not any(name.endswith((".sqlite3", ".env", ".pyc")) for name in names)
+    assert not any(name.endswith((".onnx", ".safetensors")) for name in names)
 
 
 def main() -> int:
@@ -152,6 +158,78 @@ def main() -> int:
             )
             assert command["ok"] is True and command["result"]
             print(label + " installed CLI/library acceptance passed", flush=True)
+            model_directory = os.environ.get("TOOLSMITH_MODEL_DIRECTORY")
+            api_header = os.environ.get("TOOLSMITH_API_HEADER")
+            if model_directory is not None and api_header is not None:
+                run(
+                    [
+                        uv,
+                        "pip",
+                        "install",
+                        "--python",
+                        str(python),
+                        "--exclude-newer",
+                        "2026-10-04T00:00:00Z",
+                        str(artifact) + "[semantic]",
+                    ],
+                    parent,
+                )
+                print(
+                    run(
+                        [
+                            str(python),
+                            str(ROOT / "scripts/accept_semantic.py"),
+                            "--model-directory",
+                            model_directory,
+                            "--api-header",
+                            api_header,
+                        ],
+                        workspace,
+                    ),
+                    end="",
+                )
+                semantic_cli = json.loads(
+                    run(
+                        [
+                            str(environment / "bin/toolsmith"),
+                            "--json",
+                            "--root",
+                            str(workspace / "store"),
+                            "--collection",
+                            "sample",
+                            "semantic",
+                            "index",
+                            "--model-directory",
+                            model_directory,
+                        ],
+                        workspace,
+                    )
+                )
+                assert (
+                    semantic_cli["ok"] is True and semantic_cli["result"]["status"]["pending"] == 0
+                )
+                searched = json.loads(
+                    run(
+                        [
+                            str(environment / "bin/toolsmith"),
+                            "--json",
+                            "--root",
+                            str(workspace / "store"),
+                            "--collection",
+                            "sample",
+                            "semantic",
+                            "search",
+                            "lexical words",
+                            "--model-directory",
+                            model_directory,
+                        ],
+                        workspace,
+                    )
+                )
+                assert (
+                    searched["ok"] is True
+                    and searched["result"]["hits"][0]["citation"]["item"] == "doc"
+                )
         run(
             [
                 uv,
@@ -171,6 +249,30 @@ def main() -> int:
                     str(parent / "wheel-venv/bin/python"),
                     "-c",
                     "import importlib.util; assert importlib.util.find_spec('dns') is not None; print('optional HTTP installation passed')",
+                ],
+                parent,
+            ),
+            end="",
+        )
+        run(
+            [
+                uv,
+                "pip",
+                "install",
+                "--python",
+                str(parent / "wheel-venv/bin/python"),
+                "--exclude-newer",
+                "2026-10-04T00:00:00Z",
+                str(wheel) + "[semantic]",
+            ],
+            parent,
+        )
+        print(
+            run(
+                [
+                    str(parent / "wheel-venv/bin/python"),
+                    "-c",
+                    "import importlib.util,sys; from toolsmith.semantic import inspect_model; assert importlib.util.find_spec('tokenizers') is not None; assert importlib.util.find_spec('onnxruntime') is not None; assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules; assert importlib.util.find_spec('torch') is None; print('optional semantic installation passed')",
                 ],
                 parent,
             ),

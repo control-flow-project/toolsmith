@@ -6,7 +6,7 @@ actual run; fixture results are not certification of every publisher/network.
 ## Full gate
 
 ```sh
-uv sync --frozen --extra http
+uv sync --frozen --all-extras
 systemd-run --user --scope --quiet \
   --property=MemoryMax=8G --property=MemorySwapMax=0 --property=TasksMax=256 \
   --working-directory="$PWD" "$PWD/.venv/bin/python" "$PWD/scripts/verify.py"
@@ -31,6 +31,26 @@ CLI/library calls, schema/typing/license files and no private/temporary content.
 Dependency audit must be green; no release-age policy bypass or weakened gate.
 
 ## Scope of evidence
+
+Semantic release acceptance requires the explicitly prepared pinned model and
+official API-30 header. The script verifies native table slots, actual MiniLM,
+complete token chunking, original/summary/agreement examples, generic SQLite and
+backup/restore, zero added worker threads and unchanged process environment.
+Run it in the same bounded scope; it neither fetches assets nor modifies fleets:
+
+```sh
+curl --fail --location --max-time 60 https://raw.githubusercontent.com/microsoft/onnxruntime/v1.30.0/include/onnxruntime/core/session/onnxruntime_c_api.h --output "$PWD/onnxruntime_c_api.h"
+systemd-run --user --scope --quiet \
+  --property=MemoryMax=8G --property=MemorySwapMax=0 --property=TasksMax=256 \
+  --working-directory="$PWD" "$PWD/.venv/bin/python" "$PWD/scripts/accept_semantic.py" \
+  --model-directory "$MODEL_DIRECTORY" --api-header "$PWD/onnxruntime_c_api.h"
+```
+
+`--retained-news FILE` additionally exercises previously captured real originals;
+it does not collect news or call Luna. Fixture/sample success is not proof of
+domain analysis, current live acquisition, summary-model execution or deployment.
+Set `TOOLSMITH_MODEL_DIRECTORY` and `TOOLSMITH_API_HEADER` when running package
+acceptance to exercise installed wheel and sdist with the actual encoder as well.
 
 Controlled transport fixtures establish routing, contracts and negative controls.
 Real HTTPS acceptance establishes tested public-source DNS/TLS/body behavior, not
@@ -89,3 +109,36 @@ environments. Both SQLite builds provide FTS5.
 The pinned GitHub workflow runs the corresponding local gates; it has not been
 claimed as a completed remote run. No registry publication or consumer/production
 deployment is part of these verification results.
+
+## Integrated semantic addition — 2026-10-13
+
+- All 178 tests pass on Python 3.13.15/SQLite 3.53.1 and Python 3.14.4/SQLite
+  3.46.1, Linux x86_64. Ruff format/lint and strict Mypy pass for 60 files.
+- Fifteen isolated test files run on 24 available cores, inside verified 8 GiB,
+  zero-swap, 256-task scopes. Owned fixture roots are disposed by the runner.
+- Wheel and sdist build; clean installed base, HTTP and semantic-extra acceptance
+  passes. Installed wheel and sdist both execute actual MiniLM library/CLI calls,
+  the news/agreement recipes, exact citations, generic SQLite and backup/restore.
+  Base imports start nothing and require zero third-party runtime packages.
+- Actual CPU MiniLM passes token-ceiling rejection, complete long-source coverage,
+  page/clause ranking, isolated correction/invalidation and four previously retained
+  ECB/BoE/BBC originals. No new publisher request, Luna turn or production mutation
+  is performed by semantic acceptance. The sample summary declares no Luna provenance.
+- The exact upstream API-30 header and all used native slots are checked. Actual
+  syscall tracing records no network socket/connect or clone/clone3 during semantic
+  acceptance. Thread count remains one and the caller environment is restored.
+- Small-corpus warm query medians vary with host load/tracing (approximately
+  6–28 ms in these runs); this is not a large-corpus performance guarantee.
+- Correctness tests cover corrupt vectors/spans/profiles/references, atomic outer
+  rollback, busy commits, stale workers, search-time source changes, read-only
+  assets, zero metadata-only re-encoding and Unicode-whitespace pages.
+- Installed third-party dependency audit reports no known vulnerabilities; the
+  unpublished editable first-party package is skipped by advisory lookup. All 45
+  pre-existing external lock records remain unchanged, with no age-policy exception.
+- Native approved HTTPS acceptance still passes separately: one example.com request,
+  400 wire bytes, temporary state disposed. No publisher-wide certification.
+- The pinned CI workflow now prepares exact native assets and runs installed native
+  acceptance, not just mocked encoders. A remote CI run has not been claimed.
+
+WCBUBWHB/API conclusions are in [architecture review](architecture-review.md).
+No fleet/consumer code, production store or runtime is deployed by this work.

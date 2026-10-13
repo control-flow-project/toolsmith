@@ -16,6 +16,7 @@ dependencies = []
 
 [project.optional-dependencies]
 http = ["dnspython==2.8.0"]
+semantic = ["onnxruntime==1.30.0", "tokenizers==0.23.2"]
 
 [project.scripts]
 toolsmith = "toolsmith.cli:main"
@@ -27,7 +28,7 @@ dev = ["hatchling==1.32.4", "build==1.6.1", "mypy==2.4.0", "pytest==9.1.1", "ruf
 packages = ["src/toolsmith"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "tests", "docs", "scripts", "AGENTS.md", "LICENSE", "README.md", "pyproject.toml", "uv.lock"]
+include = ["src", "tests", "docs", "scripts", "examples", "AGENTS.md", "LICENSE", "README.md", "pyproject.toml", "uv.lock"]
 
 [tool.uv]
 exclude-newer = "2026-10-04T00:00:00Z"

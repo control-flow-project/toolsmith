@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from toolsmith.files import MAX_FILE_BYTES, read_private
-from toolsmith.result import ToolsmithError, boundary
+from toolsmith.result import ToolsmithError, boundary, unwrap
+from toolsmith.semantic import check_index
 from toolsmith.storage.database import Store, open_store, row_integer, row_optional_text, row_text
 from toolsmith.storage.index import index_part, text_chunks
 from toolsmith.storage.models import Document, TextPart, file_name, media_type, validate_document
@@ -53,6 +54,10 @@ def validate_retained(store: Store) -> None:
                     tuple(text(warning, 1024, "Warning") for warning in warnings),
                 )
             )
+            if hashlib.sha256(parts[-1].text.encode()).hexdigest() != part["text_digest"]:
+                raise ToolsmithError("integrity", "Retained part digest differs from its text")
+            if int(bool(parts[-1].text.strip())) != part["has_text"]:
+                raise ToolsmithError("integrity", "Retained part text-presence metadata differs")
         document = validate_document(
             Document(
                 row_text(version, "title"),
@@ -90,8 +95,31 @@ def validate_retained(store: Store) -> None:
             )
 
 
+def validate_embeddings(store: Store) -> None:
+    def source(reference: str) -> str | None:
+        identifier = reference.removeprefix("part:")
+        if (
+            not reference.startswith("part:")
+            or not identifier.isascii()
+            or not identifier.isdecimal()
+            or len(identifier) > 19
+        ):
+            raise ToolsmithError("integrity", "Stored semantic reference is not a retained part")
+        part_id = int(identifier)
+        if not 1 <= part_id <= 2**63 - 1 or identifier != str(part_id):
+            raise ToolsmithError("integrity", "Stored semantic part identity exceeds native bounds")
+        row = store.connection.execute(
+            "SELECT p.text FROM part p JOIN item i ON i.latest_version = p.version_id WHERE p.id = ?",
+            (part_id,),
+        ).fetchone()
+        return None if row is None else row_text(row, "text", 4 * 1024 * 1024)
+
+    unwrap(check_index(store.connection, source))
+
+
 def validate_database(store: Store) -> int:
     validate_retained(store)
+    validate_embeddings(store)
     connection = store.connection
     for part in connection.execute("SELECT id, text FROM part ORDER BY id"):
         chunks = connection.execute(

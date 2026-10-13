@@ -26,6 +26,8 @@ CREATE TABLE part (
     label TEXT NOT NULL,
     physical_page INTEGER CHECK (physical_page > 0),
     text TEXT NOT NULL,
+    text_digest TEXT NOT NULL,
+    has_text INTEGER NOT NULL CHECK (has_text IN (0, 1)),
     warnings TEXT NOT NULL,
     UNIQUE (version_id, ordinal)
 );

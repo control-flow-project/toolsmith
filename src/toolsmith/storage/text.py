@@ -48,6 +48,7 @@ def insert_document(store: Store, item: str, document: Document, clock: Clock) -
         store.connection.execute("SELECT 1 FROM text_version WHERE id = ?", (version,)).fetchone()
         is not None
     ):
+        reconcile_current_embeddings(store, selected, version)
         store.connection.execute(
             "UPDATE item SET latest_version = ? WHERE id = ?", (version, selected)
         )
@@ -72,21 +73,45 @@ def insert_document(store: Store, item: str, document: Document, clock: Clock) -
     )
     for ordinal, part in enumerate(checked.parts, start=1):
         cursor = store.connection.execute(
-            "INSERT INTO part (version_id, ordinal, label, physical_page, text, warnings) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO part (version_id, ordinal, label, physical_page, text, text_digest, has_text, warnings) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 version,
                 ordinal,
                 part.label,
                 part.physical_page,
                 part.text,
+                hashlib.sha256(part.text.encode()).hexdigest(),
+                int(bool(part.text.strip())),
                 canonical_json(json_value(part.warnings)).decode(),
             ),
         )
         if cursor.lastrowid is None:
             raise ToolsmithError("integrity", "Inserted text part has no identity")
         index_part(store, cursor.lastrowid, checked.title, part.text)
+    reconcile_current_embeddings(store, selected, version)
     store.connection.execute("UPDATE item SET latest_version = ? WHERE id = ?", (version, selected))
     return text_reference(store, version)
+
+
+def reconcile_current_embeddings(store: Store, item: str, version: str) -> None:
+    previous = store.connection.execute(
+        "SELECT d.reference, d.text_digest, p.ordinal FROM embedding_document d JOIN part p ON d.reference = 'part:' || p.id JOIN item i ON i.latest_version = p.version_id WHERE i.id = ? AND i.latest_version != ?",
+        (item, version),
+    ).fetchall()
+    for old in previous:
+        current = store.connection.execute(
+            "SELECT id, text_digest FROM part WHERE version_id = ? AND ordinal = ?",
+            (version, old["ordinal"]),
+        ).fetchone()
+        if current is not None and current["text_digest"] == old["text_digest"]:
+            store.connection.execute(
+                "UPDATE embedding_document SET reference = ? WHERE reference = ?",
+                ("part:" + str(current["id"]), old["reference"]),
+            )
+        else:
+            store.connection.execute(
+                "DELETE FROM embedding_document WHERE reference = ?", (old["reference"],)
+            )
 
 
 @boundary

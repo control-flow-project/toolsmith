@@ -1,0 +1,9 @@
+{
+  "title": "Synthetic credit agreement",
+  "method": "provided-page-extraction",
+  "parts": [
+    {"label": "Restricted payments", "physical_page": 7, "text": "The borrower may make restricted payments only within the applicable basket and subject to the specified leverage condition. Basket capacity and conditions must be read with the definitions and all applicable exceptions."},
+    {"label": "Investments", "physical_page": 8, "text": "Investments in unrestricted subsidiaries may move assets outside the guarantor group. Analysts must examine the investment baskets, designation conditions, affiliate transaction rules and collateral release provisions together."},
+    {"label": "Amendments", "physical_page": 9, "text": "Changes to payment rights or priority may require the consent of affected lenders. Exceptions for open-market purchases, refinancing debt and pro rata sharing must be checked against the complete executed agreement. This is a synthetic example, not legal advice or a real contractual provision."}
+  ]
+}
