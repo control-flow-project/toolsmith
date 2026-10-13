@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ctlflow-toolsmith"
+version = "0.1.0"
+description = "Optional generic libraries and CLI tools; no services or helper processes"
+readme = "README.md"
+requires-python = ">=3.13"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Jeswin P Kumar", email = "jeswinpk@agilehead.com" }]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/control-flow-project/toolsmith"
+Documentation = "https://github.com/control-flow-project/toolsmith/tree/main/docs"
+Issues = "https://github.com/control-flow-project/toolsmith/issues"
+
+[project.optional-dependencies]
+http = ["dnspython==2.8.0"]
+semantic = ["onnxruntime==1.30.0", "tokenizers==0.23.2"]
+
+[project.scripts]
+toolsmith = "toolsmith.cli:main"
+
+[dependency-groups]
+dev = ["hatchling==1.32.4", "build==1.6.1", "mypy==2.4.0", "pytest==9.1.1", "ruff>=0.15,<0.17", "pip-audit==2.10.1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/toolsmith"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "docs", "scripts", "examples", "AGENTS.md", "LICENSE", "README.md", "pyproject.toml", "uv.lock"]
+
+[tool.uv]
+exclude-newer = "2026-10-04T00:00:00Z"
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+mypy_path = "src"
+files = ["src", "tests", "scripts"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = ["error"]
