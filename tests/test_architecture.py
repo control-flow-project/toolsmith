@@ -77,6 +77,12 @@ def test_dependencies_are_optional_and_distribution_is_mit_licensed() -> None:
     assert license_text.startswith("MIT License\n\nCopyright (c) 2026 Jeswin P Kumar\n")
 
 
+def test_repository_has_no_github_actions_workflows() -> None:
+    directory = ROOT / ".github/workflows"
+    assert not list(directory.glob("*.yml"))
+    assert not list(directory.glob("*.yaml"))
+
+
 def test_semantic_core_has_no_store_runtime_or_domain_dependency() -> None:
     forbidden = {
         "torch",

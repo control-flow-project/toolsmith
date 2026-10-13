@@ -137,6 +137,7 @@ on ordinary agent reads.
 
 Verify strict types, formatting/lint, isolated tests, negative security controls,
 installed CLI/library parity, optional-dependency absence and wheel/sdist contents.
+Run these checks locally; GitHub Actions CI/CD workflows are not part of Toolsmith.
 Architecture checks reject process spawning, servers, threads, skills and domain
 coupling. Tests use controlled clocks and fake transport boundaries; no local test
 server or indefinite sleep. Actual approved network acceptance is separate from

@@ -38,6 +38,8 @@ Maintain docs/specification.md and .analysis/20261011-toolsmith/necessity-ledger
 Verify affected behavior, package contents and installed CLI/library parity.
 Cross-layer changes require all quality gates. Never weaken a gate, use fixture
 results as real-source certification or run unconditional test sleeps.
+Do not add GitHub Actions CI/CD workflows. Verification and release checks run
+locally through the existing scripts; hosted automation is not authorized.
 Verification runs in an aggregate-memory/swap/task-bounded process group; no
 unbounded test fallback. Development verification may launch ordinary compiler,
 test and packaging commands, never product helper processes or test servers.

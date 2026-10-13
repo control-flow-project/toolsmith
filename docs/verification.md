@@ -106,9 +106,8 @@ environments. Both SQLite builds provide FTS5.
   for writes/rebuilds, one cleanup validator, no product process/thread/server,
   no domain/fleet dependency, and no embedding/native-extraction placeholder.
 
-The pinned GitHub workflow runs the corresponding local gates; it has not been
-claimed as a completed remote run. No registry publication or consumer/production
-deployment is part of these verification results.
+Verification uses the local commands in this guide, not GitHub Actions CI/CD.
+No registry publication or consumer/production deployment is part of these results.
 
 ## Integrated semantic addition — 2026-10-13
 
@@ -137,8 +136,8 @@ deployment is part of these verification results.
   pre-existing external lock records remain unchanged, with no age-policy exception.
 - Native approved HTTPS acceptance still passes separately: one example.com request,
   400 wire bytes, temporary state disposed. No publisher-wide certification.
-- The pinned CI workflow now prepares exact native assets and runs installed native
-  acceptance, not just mocked encoders. A remote CI run has not been claimed.
+- Local installed native acceptance uses explicitly prepared exact assets and
+  actual MiniLM, not just mocked encoders. No hosted automation is required.
 
 WCBUBWHB/API conclusions are in [architecture review](architecture-review.md).
 No fleet/consumer code, production store or runtime is deployed by this work.

@@ -101,7 +101,8 @@ for atomic correction/invalidation and authorized candidate selection.
 `scripts/verify.py` in a cgroup v2 scope bounded to 8 GiB aggregate memory, zero
 swap and 256 tasks; see the verification guide. It runs format/lint, strict types,
 isolated test files on available cores and wheel/sdist builds. No test server or
-sleep-based timing is used. Tests clean their temporary state.
+sleep-based timing is used. Tests clean their temporary state. Verification runs
+locally; this repository has no GitHub Actions CI/CD workflows.
 
 ## License
 
