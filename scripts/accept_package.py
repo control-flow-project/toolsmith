@@ -38,7 +38,10 @@ assert importlib.util.find_spec('tokenizers') is None
 from toolsmith.semantic import Candidate, Source, encode_query, initialize_index, inspect_model
 assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
 assert importlib.metadata.version('ctlflow-toolsmith') == '0.1.0'
-assert importlib.metadata.metadata('ctlflow-toolsmith')['License-Expression'] == 'LicenseRef-Proprietary'
+metadata = importlib.metadata.metadata('ctlflow-toolsmith')
+assert metadata['License-Expression'] == 'MIT'
+assert metadata.get_all('License-File') == ['LICENSE']
+assert not any(value.startswith('Private ::') for value in metadata.get_all('Classifier', []))
 assert set(parent.iterdir()) == before
 assert unwrap(read_html(b'<main>Meaningful text</main>')).parts[0].text == 'Meaningful text'
 assert len(unwrap(read_feed(b'<rss><channel><item><link>https://example.com/a</link></item></channel></rss>', 'https://example.com/feed')).entries) == 1
@@ -73,17 +76,23 @@ def run(arguments: list[str], directory: Path, *, expected: int = 0) -> str:
     return result.stdout
 
 
+def check_license(metadata: str, license_text: str) -> None:
+    assert "License-Expression: MIT\n" in metadata
+    assert "License-File: LICENSE\n" in metadata
+    assert "Classifier: Private ::" not in metadata
+    assert license_text == (ROOT / "LICENSE").read_text()
+
+
 def check_archives(wheel: Path, source: Path) -> None:
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
         assert "toolsmith/storage/schema.sql" in names
         assert "toolsmith/semantic/schema.sql" in names
         assert "toolsmith/py.typed" in names
-        assert any(name.endswith("/licenses/LICENSE") for name in names)
+        license_path = next(name for name in names if name.endswith("/licenses/LICENSE"))
         assert not any(name.startswith(("tests/", "scripts/", "docs/")) for name in names)
         metadata = archive.read(next(name for name in names if name.endswith("/METADATA"))).decode()
-        assert "Private :: Do Not Upload" in metadata
-        assert "License-Expression: LicenseRef-Proprietary" in metadata
+        check_license(metadata, archive.read(license_path).decode())
         assert all(
             "extra == 'http'" in line or "extra == 'semantic'" in line
             for line in metadata.splitlines()
@@ -91,6 +100,15 @@ def check_archives(wheel: Path, source: Path) -> None:
         )
     with tarfile.open(source, "r:gz") as archive:
         source_names = archive.getnames()
+        metadata_file = archive.extractfile(
+            next(name for name in source_names if name.endswith("/PKG-INFO"))
+        )
+        license_file = archive.extractfile(
+            next(name for name in source_names if name.endswith("/LICENSE"))
+        )
+        assert metadata_file is not None and license_file is not None
+        with metadata_file, license_file:
+            check_license(metadata_file.read().decode(), license_file.read().decode())
         assert any(name.endswith("/tests/test_http.py") for name in source_names)
         assert any(name.endswith("/docs/specification.md") for name in source_names)
         assert any(name.endswith("/src/toolsmith/storage/schema.sql") for name in source_names)

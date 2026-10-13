@@ -1,7 +1,7 @@
 # Toolsmith
 
-Read docs/specification.md before implementation. Toolsmith is a private,
-proprietary collection of optional generic libraries and CLI commands. It is not
+Read docs/specification.md before implementation. Toolsmith is a public,
+MIT-licensed collection of optional generic libraries and CLI commands. It is not
 a fleet runtime, evidence application, skills distribution or hosted platform.
 
 WCBUBWHB: one current implementation, no compatibility aliases, hidden fallbacks,
@@ -28,8 +28,11 @@ Never claim that metadata creates OS isolation.
 
 Preserve credentials, shared work and production data. Verify backup/restore
 before production changes; forward migrations only, never production resets.
-Private distribution only. Owned npm packages, if ever separately approved, use
-@ctlflow. First-party work follows LICENSE; third-party rights remain intact.
+Public source and built artifacts use the MIT license in LICENSE. This policy is
+specific to Toolsmith; it does not relicense consumer projects. Keep private data,
+credentials, model weights and local .analysis out of commits and artifacts.
+Registry publication requires a separate explicit instruction. Owned npm packages,
+if ever separately approved, use @ctlflow. Third-party rights remain intact.
 
 Maintain docs/specification.md and .analysis/20261011-toolsmith/necessity-ledger.md.
 Verify affected behavior, package contents and installed CLI/library parity.

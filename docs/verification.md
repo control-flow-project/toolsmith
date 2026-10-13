@@ -142,3 +142,21 @@ deployment is part of these verification results.
 
 WCBUBWHB/API conclusions are in [architecture review](architecture-review.md).
 No fleet/consumer code, production store or runtime is deployed by this work.
+
+## Public MIT licensing update — 2026-10-13
+
+The owner authorized Toolsmith as a public MIT-licensed project. This changes
+licensing, distribution metadata, documentation and acceptance checks only;
+private storage protections and all library/runtime behavior stay unchanged.
+
+- All three affected architecture tests pass on Python 3.14.4. Ruff format/lint
+  and strict Mypy pass for all 60 source/test/script files. The frozen lock check
+  passes with no dependency record changes.
+- Both rebuilt wheel and sdist include the exact repository LICENSE, declare
+  `License-Expression: MIT` and `License-File: LICENSE`, and have no private-upload
+  classifier. Clean installed CLI/library acceptance passes for both formats.
+- Base installs still have zero runtime dependencies; both optional extras install
+  successfully. Archives exclude stores, credentials, analysis, test fixtures and
+  model weights. Registry publication and consumer deployment are not performed.
+- The earlier complete 178-test and real-model gates apply to the unchanged runtime
+  implementation. They were not rerun for this licensing/documentation-only edit.

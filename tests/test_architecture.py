@@ -65,13 +65,16 @@ def test_product_has_no_process_server_thread_or_domain_owner() -> None:
     assert not list((ROOT / "src").rglob("SKILL.md"))
 
 
-def test_dependencies_and_distribution_are_optional_and_private() -> None:
+def test_dependencies_are_optional_and_distribution_is_mit_licensed() -> None:
     config = tomllib.loads((ROOT / "pyproject.toml").read_text())
     assert config["project"]["dependencies"] == []
     assert set(config["project"]["optional-dependencies"]) == {"http", "semantic"}
-    assert config["project"]["classifiers"] == ["Private :: Do Not Upload"]
+    assert not any(value.startswith("Private ::") for value in config["project"]["classifiers"])
     assert config["project"]["scripts"] == {"toolsmith": "toolsmith.cli:main"}
-    assert config["project"]["license"] == "LicenseRef-Proprietary"
+    assert config["project"]["license"] == "MIT"
+    assert config["project"]["license-files"] == ["LICENSE"]
+    license_text = (ROOT / "LICENSE").read_text()
+    assert license_text.startswith("MIT License\n\nCopyright (c) 2026 Jeswin P Kumar\n")
 
 
 def test_semantic_core_has_no_store_runtime_or_domain_dependency() -> None:

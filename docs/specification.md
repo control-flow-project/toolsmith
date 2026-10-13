@@ -23,7 +23,7 @@ selected implicitly.
 - Recorded operation outcomes and explicit interrupted HTTP resumption.
 - Consistent backup/verified restore, integrity checks, index rebuilding and
   preview-bound cleanup of inactive tool-owned staging files.
-- Private installable package, command contracts and operational documentation.
+- MIT-licensed installable package, command contracts and operational documentation.
 - Optional offline English MiniLM embeddings, complete token-aware source chunks,
   exact cosine retrieval and transaction-safe SQLite derivatives. The generic
   library accepts a caller-owned connection; store/CLI operations compose the
@@ -35,6 +35,17 @@ UTF-8 reading for PDF/OCR. Hybrid retrieval remains excluded: lexical and semant
 queries are explicit, never substituted or blended. No domain connectors, source
 catalogs, financial calculators, taxonomy, generative model calls, agent
 instructions or public hosting belong here.
+
+## Licensing and distribution
+
+Toolsmith's first-party source, documentation and built artifacts are public and
+MIT-licensed under LICENSE, copyright Jeswin P Kumar. Distribution metadata declares
+the SPDX expression `MIT` and includes the license in wheel and sdist. Third-party
+dependencies/model assets retain their own licenses; weights are not redistributed.
+Consumer projects and retained source data are not relicensed by Toolsmith.
+Local stores, credentials, .analysis and verification fixtures remain excluded
+from published source and artifacts. Registry publication is a separate release
+action, not an effect of building, installing or importing this package.
 
 ## Local state
 

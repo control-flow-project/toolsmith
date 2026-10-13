@@ -1,6 +1,6 @@
 # Toolsmith
 
-Private, optional generic libraries and CLI tools maintained by Control Flow.
+MIT-licensed, optional generic libraries and CLI tools maintained by Control Flow.
 Use none, one or several capabilities. Toolsmith is not part of fleet setup,
 message delivery, sessions or history.
 
@@ -30,16 +30,20 @@ their existing owners.
 Python 3.13+ is required. Linux and SQLite FTS5 are required only for persistence
 and safe filesystem operations. The base distribution has **no runtime dependencies**.
 The distribution is `ctlflow-toolsmith`; the command and import are `toolsmith`.
-Distribution is private, not published to public PyPI or npm.
+Source and built artifacts are MIT-licensed. There is no PyPI or npm release yet;
+build from the public repository or install a built wheel.
 
 ```sh
+git clone https://github.com/control-flow-project/toolsmith.git
+cd toolsmith
+uv build --no-sources
 python3 -m venv .venv
-.venv/bin/python -m pip install /absolute/path/to/ctlflow_toolsmith-0.1.0-py3-none-any.whl
+.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.1.0-py3-none-any.whl
 .venv/bin/toolsmith --json capabilities
 .venv/bin/toolsmith --root "$PWD/local-store" --collection sample store init
 ```
 
-For network acquisition, install the same private wheel with its `http` extra.
+For network acquisition, install the same wheel with its `http` extra.
 No global configuration, data directory, credentials, model download or runtime
 activation is selected by installation.
 
@@ -71,7 +75,7 @@ else:
 
 ## Fleet examples
 
-Both fleets can use the same private package, without changing fleet controllers,
+Both fleets can use the same package, without changing fleet controllers,
 agent runtime, history or message delivery. Domain rules stay in the fleet.
 These checked-in examples are **synthetic demonstrations**, not research evidence.
 
@@ -84,7 +88,7 @@ toolsmith --root "$PWD/example-store" --collection demo semantic index --model-d
 toolsmith --root "$PWD/example-store" --collection demo semantic search "borrower transfers assets outside the guarantor group" --model-directory "$MODEL_DIRECTORY" --item agreement
 ```
 
-Install the private wheel's `semantic` extra and explicitly prepare the two pinned
+Install the wheel's `semantic` extra and explicitly prepare the two pinned
 model files as described in [the semantic guide](docs/semantic.md). No implicit
 download, network inference, silent truncation or lexical fallback. Bad Bets can
 also embed the generic SQLite functions directly in its own database; it need
@@ -99,5 +103,9 @@ swap and 256 tasks; see the verification guide. It runs format/lint, strict type
 isolated test files on available cores and wheel/sdist builds. No test server or
 sleep-based timing is used. Tests clean their temporary state.
 
-Copyright 2026 Jeswin P Kumar. Proprietary/restricted commercial software under
-[LICENSE](LICENSE); this is not open source. Third-party rights remain intact.
+## License
+
+Copyright 2026 Jeswin P Kumar. Licensed under the [MIT License](LICENSE).
+Maintainer: jeswinpk@agilehead.com. Third-party dependencies and model assets retain
+their own licenses; model weights are not distributed with Toolsmith. This license
+does not apply to consumer projects or their private data.

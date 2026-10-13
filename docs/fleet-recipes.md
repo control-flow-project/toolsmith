@@ -1,6 +1,6 @@
 # Using the same toolkit from any fleet
 
-Everything remains optional. Use the private wheel's `[http]` and/or `[semantic]`
+Everything remains optional. Use the MIT-licensed wheel's `[http]` and/or `[semantic]`
 extras only for selected capabilities; zero extras is valid. No setup, delivery,
 native history or lifecycle depends on this package. Importing it starts nothing.
 Existing production Bad Bets/GAAP code has **not** been changed by this extraction.

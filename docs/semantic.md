@@ -7,7 +7,7 @@ declaration, not language detection or multilingual certification.
 
 ## Explicit offline model preparation
 
-Install the private wheel with `[semantic]` into the caller's existing environment.
+Install the Toolsmith wheel with `[semantic]` into the caller's existing environment.
 The extra pins ONNX Runtime 1.30.0 and Tokenizers 0.23.2; the development lock also
 records the vendor's transitive dependencies. NumPy is not imported for inference. Nothing is
 installed automatically by the library. Operator preparation is the only download:
@@ -38,7 +38,7 @@ commands, not subprocesses spawned by Toolsmith.
 
 The [upstream model card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
 describes English sentence/paragraph embeddings, 384 dimensions and a 256-token
-limit. Model rights remain upstream Apache-2.0, not Toolsmith's proprietary license.
+limit. Model rights remain upstream Apache-2.0, separate from Toolsmith's MIT license.
 Toolsmith does not redistribute model weights. The immutable profile binds exact
 assets, CPU float32 backend, mask-mean pooling, L2 normalization, ceiling and
 complete-offset chunking. Other backends' vectors are not silently adopted.

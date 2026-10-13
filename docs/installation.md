@@ -1,8 +1,15 @@
-# Private installation
+# Installation
 
-Toolsmith 0.1.0 is a private wheel/sdist, not a public registry release. Metadata
-includes `Private :: Do Not Upload` and `LicenseRef-Proprietary`; no publishing
-command or workflow exists. Do not upload it to public PyPI/npm.
+Toolsmith 0.1.0 has public MIT-licensed source and wheel/sdist artifacts. Metadata
+declares the SPDX expression `MIT`; both artifacts include LICENSE. There is no
+PyPI/npm release yet and no automatic publishing workflow. Build from the public
+repository or install a built wheel:
+
+```sh
+git clone https://github.com/control-flow-project/toolsmith.git
+cd toolsmith
+uv build --no-sources
+```
 
 Python 3.13+ is required. Persistence/safe file reads require Linux, no-follow
 descriptor primitives and SQLite built with FTS5. Pure byte readers have no
@@ -10,14 +17,14 @@ store/network requirement. Unsupported platforms fail without a weakened path.
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install /absolute/path/to/ctlflow_toolsmith-0.1.0-py3-none-any.whl
+.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.1.0-py3-none-any.whl
 .venv/bin/toolsmith --json capabilities
 ```
 
 For selected network acquisition:
 
 ```sh
-.venv/bin/python -m pip install '/absolute/path/to/ctlflow_toolsmith-0.1.0-py3-none-any.whl[http]'
+.venv/bin/python -m pip install 'dist/ctlflow_toolsmith-0.1.0-py3-none-any.whl[http]'
 ```
 
 The `http` extra installs the pinned bounded DNS resolver `dnspython==2.8.0`.

@@ -1,4 +1,4 @@
-name: Verify private library and CLI
+name: Verify library and CLI
 
 on:
   pull_request:

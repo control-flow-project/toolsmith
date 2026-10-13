@@ -50,4 +50,5 @@ distributed retrieval service. Metadata is not OS isolation from same-user code.
 Bad Bets keeps its current domain implementation until its owner explicitly
 migrates to this library; there is no concurrent Toolsmith compatibility reader
 for its old vector tables. No consumer code, production database or native history
-is reset or upgraded by this work. Public distribution remains banned.
+is reset or upgraded by this work. Toolsmith source and artifacts are MIT-licensed;
+consumer projects, private data and upstream models retain their own rights.

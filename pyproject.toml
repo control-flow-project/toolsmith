@@ -8,11 +8,20 @@ version = "0.1.0"
 description = "Optional generic libraries and CLI tools; no services or helper processes"
 readme = "README.md"
 requires-python = ">=3.13"
-license = "LicenseRef-Proprietary"
+license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Jeswin P Kumar", email = "jeswinpk@agilehead.com" }]
-classifiers = ["Private :: Do Not Upload"]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
 dependencies = []
+
+[project.urls]
+Repository = "https://github.com/control-flow-project/toolsmith"
+Documentation = "https://github.com/control-flow-project/toolsmith/tree/main/docs"
+Issues = "https://github.com/control-flow-project/toolsmith/issues"
 
 [project.optional-dependencies]
 http = ["dnspython==2.8.0"]
