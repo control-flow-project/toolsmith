@@ -1,5 +1,36 @@
 # Toolsmith
 
+The [capability mapping](docs/capability-mapping.md) records which generic parts
+GAAP, Bad Bets and other consumers can replace, the required tests and the domain
+responsibilities that stay with them. Adoption is optional; an adopting project
+uses one generic implementation, not a selectable local/Toolsmith backend.
+The [full proposed layout](docs/proposed-layout.md) separates filesystem, parsing,
+HTTP, search, journals and the optional text archive; it is a proposal, not aliases.
+
+## Use your own application database
+
+No Toolsmith archive is needed for parsing, public HTTPS or caller-owned indexes.
+Create a private working directory explicitly; then use the included generic
+source/reference examples with the installed package:
+
+```sh
+toolsmith --json search lexical init --database /absolute/private/application.sqlite3
+toolsmith --json search lexical index --database /absolute/private/application.sqlite3 --sources /absolute/caller-owned-sources.json
+toolsmith --json search lexical query '"Restricted Payments"' --database /absolute/private/application.sqlite3 --sources /absolute/caller-owned-sources.json
+toolsmith --json search lexical status --database /absolute/private/application.sqlite3 --references /absolute/caller-owned-references.json
+```
+
+The library uses the same functions. Consumers keep canonical text, page/article
+metadata, permissions and corrected-source eligibility. Generic references are
+not access grants, and search snippets are not substitutes for the originals.
+Semantic indexing/query additionally requires the optional semantic extra and
+explicitly prepared pinned model assets; status does not load a model or bodies.
+
+Raw HTTPS uses `http request URL --policy FILE --budget-policy FILE --network-state
+DIR --task ID --destination FILE`, with the included policy examples. It returns
+a bounded receipt and an explicit file, not another source database. Application
+approval, permitted formats, job identity and publication remain with the caller.
+
 MIT-licensed, optional generic libraries and CLI tools maintained by Control Flow.
 Use none, one or several capabilities. Toolsmith is not part of fleet setup,
 message delivery, sessions or history.
@@ -10,15 +41,16 @@ The CLI calls the same validated library functions that applications import.
 
 ## Available tools
 
-- UTF-8 text, meaningful static HTML and RSS/Atom readers.
-- Versioned local text and private files in an explicitly selected collection.
-- Lexical search and exact-version, physical-page/character-span citations.
+- Streaming regular-file hash/copy, private tree inventory/publication and exact-file ZIPs.
+- UTF-8/strict JSON, static HTML/articles/tables, CSV/ZIP-CSV/GZIP-CSV and RSS/Atom readers.
+- Literal passages and lexical indexes over caller-owned sources and authorized candidates.
 - Optional offline English MiniLM embeddings and semantic search, with complete
   token-aware chunks, exact source spans and caller-owned SQLite integration.
-- Optional approved HTTPS acquisition with bounded DNS/TLS, redirects, compressed
-  responses, shared local quotas and explicit interrupted-operation recovery.
-- Verified backup/restore, explicit integrity/index checks and preview-bound
-  cleanup of inactive staging files.
+- Optional approved HTTPS responses with bounded DNS/TLS, redirects, compressed
+  responses and persistent shared group/task budgets.
+- Generic bounded JSON journals; applications own event meaning and retention.
+- A separately optional text/file archive: exact versions/citations, acquisition
+  receipts/recovery, verified backup/restore, integrity and staging cleanup.
 
 Browser automation, PDF/OCR helpers and hybrid retrieval are
 not implemented. No substitute or placeholder is provided. Skills, source-specific
@@ -38,7 +70,7 @@ git clone https://github.com/control-flow-project/toolsmith.git
 cd toolsmith
 uv build --no-sources
 python3 -m venv .venv
-.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.1.0-py3-none-any.whl
+.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.2.0-py3-none-any.whl
 .venv/bin/toolsmith --json capabilities
 .venv/bin/toolsmith --root "$PWD/local-store" --collection sample store init
 ```

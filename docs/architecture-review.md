@@ -1,5 +1,33 @@
 # WCBUBWHB architecture review — 2026-10-13
 
+## Consumer coverage addition — 2026-10-13/14
+
+The [capability map](capability-mapping.md) records real generic uses and tests;
+the [proposed full layout](proposed-layout.md) records the requested next directory
+organization. No consumer code, fleet core or production deployment is moved.
+
+- Readers own parsing types. Generic IO/tree/ZIP/journals, parsers, HTTP/quotas and
+  indexes have architecture checks rejecting archive and consumer imports.
+- One lexical engine serves caller-owned DBs and the optional archive; the
+  archive's superseded chunk schema/writer is removed. One bounded GZIP decoder
+  serves HTTP and compressed table input.
+- Public semantic metadata/invalidation/publication/relocation/clear/audit ports
+  replace archive SQL reach-through and full-vector readiness scans. Native
+  inference remains outside source transactions; schema and row factories stay
+  application-owned.
+- Lexical and semantic initialization both reject existing/partial derivative
+  schemas, roll back owned work and preserve unrelated application data. Neither
+  path silently adopts a schema through `IF NOT EXISTS`.
+- Public HTTPS routing/limits have one producer. Retention and request receipt
+  composition remain archive-owned. Generic quotas span cooperating transports;
+  adopting consumers do not gain a second canonical source archive.
+- Schema v2 has one explicit verified copy migration, not an older runtime reader,
+  reset or auto-migration. The original is preserved.
+- No server, daemon, helper process, worker thread, automatic asset download,
+  domain/consumer code, hosted CI or alternate Torch runtime is added.
+
+Physical namespace regrouping remains the requested proposal, not an alias layer.
+
 Scope: the initial optional library/CLI release, including semantic extraction.
 Consumer fleets and production are unchanged. No deployment is claimed.
 

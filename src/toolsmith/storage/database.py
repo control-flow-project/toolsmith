@@ -20,7 +20,7 @@ from toolsmith.result import ToolsmithError, boundary
 from toolsmith.validation import identity, integer, text
 
 APPLICATION_ID = 1414745393
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_DATABASE_BYTES = 128 * 1024 * 1024
 DATABASE_NAME = "toolsmith.sqlite3"
 
@@ -155,6 +155,10 @@ def initialize_store(root: Path, collection: str, *, clock: Clock | None = None)
                         connection.executescript(
                             "BEGIN IMMEDIATE;\n"
                             + files("toolsmith.storage")
+                            .joinpath("schema.sql")
+                            .read_text(encoding="utf-8")
+                            + "\n"
+                            + files("toolsmith.lexical")
                             .joinpath("schema.sql")
                             .read_text(encoding="utf-8")
                             + "\n"

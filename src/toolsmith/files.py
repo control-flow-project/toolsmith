@@ -1,8 +1,10 @@
+import ctypes
+import errno
 import hashlib
 import os
 import stat
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +14,23 @@ from toolsmith.result import ToolsmithError, boundary
 from toolsmith.validation import integer
 
 MAX_FILE_BYTES = 16 * 1024 * 1024
+MAX_READ_BYTES = 128 * 1024 * 1024
+MAX_STREAM_BYTES = 1024 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class FileDigest:
+    sha256: str
+    content_bytes: int
+
+
+@dataclass(frozen=True)
+class FileStamp:
+    device: int
+    inode: int
+    size: int
+    modified_ns: int
+    changed_ns: int
 
 
 @dataclass(frozen=True)
@@ -46,6 +65,44 @@ def component(name: str) -> str:
             "denied", "Private file operations require a single explicit leaf component"
         )
     return name
+
+
+def rename_new(directory: PrivateDirectory, source: str, destination: str) -> None:
+    require_filesystem()
+    component(source)
+    component(destination)
+    try:
+        function = ctypes.CDLL(None, use_errno=True).renameat2
+    except AttributeError as error:
+        raise ToolsmithError(
+            "unavailable", "Atomic no-replace directory publication requires renameat2"
+        ) from error
+    function.argtypes = [
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    ]
+    function.restype = ctypes.c_int
+    if (
+        function(
+            directory.descriptor,
+            os.fsencode(source),
+            directory.descriptor,
+            os.fsencode(destination),
+            1,
+        )
+        != 0
+    ):
+        code = ctypes.get_errno()
+        if code == errno.EEXIST:
+            raise ToolsmithError("conflict", "Destination exists; nothing was overwritten")
+        if code in {errno.ENOSYS, errno.EOPNOTSUPP}:
+            raise ToolsmithError(
+                "unavailable", "Filesystem does not support atomic no-replace publication"
+            )
+        raise OSError(code, "Atomic publication failed")
 
 
 @contextmanager
@@ -209,19 +266,133 @@ def read_descriptor(descriptor: int, maximum: int) -> bytes:
     return bytes(content)
 
 
+def stable_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+@contextmanager
+def regular_descriptor(path: Path) -> Iterator[int]:
+    absolute_path(path)
+    with directory_descriptor(path.parent) as parent:
+        descriptor = os.open(
+            path.name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent
+        )
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise ToolsmithError("denied", "Input must be a regular file")
+            yield descriptor
+        finally:
+            os.close(descriptor)
+
+
+def stream_file(
+    descriptor: int,
+    maximum: int,
+    destination: int | None = None,
+    *,
+    sink: Callable[[bytes], object] | None = None,
+) -> FileDigest:
+    before = os.fstat(descriptor)
+    if before.st_size > maximum:
+        raise ToolsmithError("limit", "Input exceeds the explicit streaming byte limit")
+    checksum = hashlib.sha256()
+    consumed = 0
+    while chunk := os.read(descriptor, min(65_536, maximum + 1 - consumed)):
+        consumed += len(chunk)
+        if consumed > maximum:
+            raise ToolsmithError("limit", "Input grew beyond the explicit streaming byte limit")
+        checksum.update(chunk)
+        if destination is not None:
+            write_chunk(destination, chunk)
+        if sink is not None:
+            sink(chunk)
+    after = os.fstat(descriptor)
+    if stable_identity(before) != stable_identity(after) or consumed != after.st_size:
+        raise ToolsmithError("conflict", "Input changed during the streaming operation")
+    return FileDigest(checksum.hexdigest(), consumed)
+
+
+@boundary
+def hash_file(path: Path, maximum_bytes: int) -> FileDigest:
+    maximum = integer(maximum_bytes, 1, MAX_STREAM_BYTES, "Maximum streaming bytes")
+    with regular_descriptor(path) as descriptor:
+        return stream_file(descriptor, maximum)
+
+
+@boundary
+def file_stamp(path: Path) -> FileStamp:
+    with regular_descriptor(path) as descriptor:
+        return FileStamp(*stable_identity(os.fstat(descriptor)))
+
+
+@boundary
+def copy_file(
+    source: Path, destination: Path, maximum_bytes: int, *, expected_stamp: FileStamp | None = None
+) -> FileDigest:
+    absolute_path(destination)
+    maximum = integer(maximum_bytes, 1, MAX_STREAM_BYTES, "Maximum streaming bytes")
+    with regular_descriptor(source) as incoming, directory_descriptor(destination.parent) as parent:
+        staged = ".stage-" + uuid4().hex + ".tmp"
+        outgoing = os.open(
+            staged,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+            0o600,
+            dir_fd=parent,
+        )
+        try:
+            if expected_stamp is not None and (
+                not isinstance(expected_stamp, FileStamp)
+                or FileStamp(*stable_identity(os.fstat(incoming))) != expected_stamp
+            ):
+                raise ToolsmithError(
+                    "conflict", "Source no longer matches the selected inventory snapshot"
+                )
+            result = stream_file(incoming, maximum, outgoing)
+            os.fsync(outgoing)
+            try:
+                os.link(
+                    staged,
+                    destination.name,
+                    src_dir_fd=parent,
+                    dst_dir_fd=parent,
+                    follow_symlinks=False,
+                )
+            except FileExistsError as error:
+                raise ToolsmithError(
+                    "conflict", "Destination exists; nothing was overwritten"
+                ) from error
+            os.fsync(parent)
+            return result
+        finally:
+            os.close(outgoing)
+            with suppress(FileNotFoundError):
+                os.unlink(staged, dir_fd=parent)
+            os.fsync(parent)
+
+
 def read_private(directory: PrivateDirectory, name: str, maximum: int) -> bytes:
     with private_file(directory, name) as descriptor:
         return read_descriptor(descriptor, maximum)
 
 
 def write_descriptor(descriptor: int, content: bytes) -> None:
+    write_chunk(descriptor, content)
+    os.fsync(descriptor)
+
+
+def write_chunk(descriptor: int, content: bytes) -> None:
     remaining = memoryview(content)
     while remaining:
         written = os.write(descriptor, remaining)
         if written <= 0:
             raise ToolsmithError("io", "The explicit file write did not make progress")
         remaining = remaining[written:]
-    os.fsync(descriptor)
 
 
 def new_private(directory: PrivateDirectory, name: str, content: bytes) -> None:
@@ -285,21 +456,15 @@ def put_object(objects: PrivateDirectory, temporary: PrivateDirectory, content: 
 @boundary
 def read_bytes(path: Path, maximum_bytes: int = MAX_FILE_BYTES) -> bytes:
     absolute_path(path)
-    maximum = integer(maximum_bytes, 1, MAX_FILE_BYTES, "Maximum bytes")
-    with directory_descriptor(path.parent) as parent:
-        descriptor = os.open(
-            path.name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent
-        )
-        try:
-            return read_descriptor(descriptor, maximum)
-        finally:
-            os.close(descriptor)
+    maximum = integer(maximum_bytes, 1, MAX_READ_BYTES, "Maximum bytes")
+    with regular_descriptor(path) as descriptor:
+        return read_descriptor(descriptor, maximum)
 
 
 @boundary
 def write_new_bytes(path: Path, content: bytes) -> dict[str, int | bool]:
     absolute_path(path)
-    if not isinstance(content, bytes) or len(content) > MAX_FILE_BYTES:
+    if not isinstance(content, bytes) or len(content) > MAX_READ_BYTES:
         raise ToolsmithError("invalid_input", "Output must be bounded bytes")
     with directory_descriptor(path.parent) as parent:
         directory = PrivateDirectory(parent)

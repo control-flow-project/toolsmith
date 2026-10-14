@@ -54,6 +54,13 @@ def digest(value: object, label: str = "Version") -> str:
     return output
 
 
+def source_reference(value: object) -> str:
+    reference = text(value, 200, "Source reference")
+    if any(ord(character) < 32 or ord(character) == 127 for character in reference):
+        raise ToolsmithError("invalid_input", "References cannot contain control characters")
+    return reference
+
+
 def timestamp(value: object, label: str = "Timestamp") -> str | None:
     if value is None:
         return None

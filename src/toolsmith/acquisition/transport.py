@@ -3,14 +3,14 @@ import io
 import ipaddress
 import socket
 import ssl
-import zlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, cast
 from urllib.parse import urlsplit
 
 from toolsmith.acquisition.urls import public_address
 from toolsmith.clock import Clock
-from toolsmith.result import ToolsmithError
+from toolsmith.compression import expand_gzip
+from toolsmith.result import Failure, ToolsmithError
 
 if TYPE_CHECKING:
     from _typeshed import WriteableBuffer
@@ -166,18 +166,10 @@ def expanded_body(content: bytes, encoding: str | None, maximum_bytes: int) -> b
         return content
     if encoding.lower() != "gzip":
         raise ToolsmithError("http", "Only identity and bounded gzip responses are supported")
-    decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
-    try:
-        expanded = decoder.decompress(content, maximum_bytes + 1)
-        if len(expanded) > maximum_bytes or decoder.unconsumed_tail:
-            raise ToolsmithError("limit", "Expanded response exceeds its byte limit")
-        if not decoder.eof or decoder.unused_data:
-            raise ToolsmithError(
-                "http", "Gzip response is truncated or contains additional members"
-            )
-        return expanded
-    except zlib.error as error:
-        raise ToolsmithError("http", "Gzip response is invalid") from error
+    result = expand_gzip(content, maximum_bytes)
+    if isinstance(result, Failure):
+        raise ToolsmithError("limit" if result.code == "limit" else "http", result.message)
+    return result.value
 
 
 class NativeTransport:
@@ -200,7 +192,7 @@ class NativeTransport:
                 "GET",
                 parts.path + ("?" + parts.query if parts.query else ""),
                 headers={
-                    "User-Agent": "Mozilla/5.0 (Toolsmith/0.1.0; approved bounded acquisition)",
+                    "User-Agent": "Mozilla/5.0 (Toolsmith/0.2.0; approved bounded acquisition)",
                     "Accept": "*/*",
                     "Accept-Encoding": "gzip",
                     "Connection": "close",

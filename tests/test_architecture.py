@@ -102,3 +102,61 @@ def test_semantic_core_has_no_store_runtime_or_domain_dependency() -> None:
                 if path.name != "store.py" and node.module.startswith("toolsmith.storage"):
                     violations.append(node.module)
     assert violations == []
+
+
+def test_generic_capabilities_do_not_import_archive_or_consumers() -> None:
+    selected = [
+        ROOT / "src/toolsmith/files.py",
+        ROOT / "src/toolsmith/filesystem.py",
+        ROOT / "src/toolsmith/archives.py",
+        ROOT / "src/toolsmith/journal.py",
+        ROOT / "src/toolsmith/sqlite.py",
+    ]
+    selected += list((ROOT / "src/toolsmith/readers").glob("*.py"))
+    selected += list((ROOT / "src/toolsmith/lexical").glob("*.py"))
+    selected += [
+        ROOT / "src/toolsmith/acquisition" / name
+        for name in (
+            "client.py",
+            "budgets.py",
+            "budget_import.py",
+            "config.py",
+            "urls.py",
+            "transport.py",
+        )
+    ]
+    forbidden = (
+        "toolsmith.storage",
+        "toolsmith.operations",
+        "badbets_research",
+        "agreement_tools",
+        "crossfire",
+        "fleetd",
+    )
+    violations: list[str] = []
+    for path in selected:
+        for node in ast.walk(ast.parse(path.read_text())):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module is not None
+                and node.module.startswith(forbidden)
+            ):
+                violations.append(path.name + ":" + node.module)
+    assert violations == []
+
+
+def test_archive_uses_current_index_ports_not_superseded_indexes() -> None:
+    from toolsmith.storage import models as archive_models
+
+    assert not hasattr(archive_models, "Document")
+    assert not hasattr(archive_models, "TextPart")
+    assert not (ROOT / "src/toolsmith/storage/index.py").exists()
+    schema = (ROOT / "src/toolsmith/storage/schema.sql").read_text()
+    assert "CREATE TABLE chunk" not in schema and "chunk_search" not in schema
+    text_writer = (ROOT / "src/toolsmith/storage/text.py").read_text()
+    semantic_store = (ROOT / "src/toolsmith/semantic/store.py").read_text()
+    assert "embedding_document" not in text_writer and "embedding_document" not in semantic_store
+    assert "indexed_digest" not in semantic_store
+    for family in ("lexical", "semantic"):
+        index_schema = (ROOT / "src/toolsmith" / family / "schema.sql").read_text()
+        assert "IF NOT EXISTS" not in index_schema

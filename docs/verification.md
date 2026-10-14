@@ -142,6 +142,59 @@ No registry publication or consumer/production deployment is part of these resul
 WCBUBWHB/API conclusions are in [architecture review](architecture-review.md).
 No fleet/consumer code, production store or runtime is deployed by this work.
 
+## Generic capability coverage — 0.2.0, 2026-10-14
+
+The [capability mapping](capability-mapping.md) covers fifty required generic
+capabilities and consumer-owned exclusions. The complete integrated gates pass
+on Linux x86_64 in both supported test environments:
+
+| Python | SQLite | Tests | Result |
+| --- | --- | ---: | --- |
+| 3.13.15 | 3.53.1 | 269 | All passed |
+| 3.14.4 | 3.46.1 | 269 | All passed |
+
+- Ruff format/check and strict Mypy pass for all 90 source/test/script files.
+  Twenty-four test files run isolated on 24 available CPU cores under verified
+  8 GiB/no-swap/256-task aggregate limits; the runner disposes owned fixtures.
+- Generic acceptance covers an actual 512 MiB original copied in blocks no larger
+  than 64 KiB, exact byte limits, mutation/snapshot races, symlinks/FIFOs/hard links,
+  no-overwrite publication and exact-file ZIP extraction failures. A 64 MiB+1 GZIP
+  bomb is rejected, not silently returned as a prefix.
+- Parsing tests cover JSON uniqueness/finite values, static HTML access gates and
+  article identity, feed original/offset/UTC dates, duplicate counts and validation
+  of omitted entries, compressed CSV counts/limits and ambiguous HTML tables.
+- Caller-owned index tests cover phrase/term/amendment/blank/full-page cases,
+  authorized current candidates before result limits, title/posting corruption,
+  stale workers, cheap metadata with no vector reads, arbitrary row factories,
+  source/derivative rollback and symmetric rejection of existing/partial schemas.
+- Quota/journal tests cover group/task conservation, unknown charges, unchanged
+  policy bindings, reboot and clock rollback, cooldowns across window rollover,
+  quiesced counter transfer, tampered/incomplete records and partial-write rollback.
+- Explicit archive-v1 to v2 migration tests preserve the original database bytes
+  and exact text/file versions; corrupt shapes/objects, scope or collisions fail.
+  Removed archive chunk writers and old parsing-type imports are rejected by
+  architecture checks. There is no older runtime reader or index fallback.
+- Wheel and sdist build and pass clean installed CLI/library/base/extras acceptance.
+  Both installed formats execute actual MiniLM and caller-owned search commands,
+  exact citations and backup/restore. Base dependencies remain zero; no private
+  data, analysis, development fixtures, model weights or CI workflow is packaged.
+- Actual API-30 MiniLM acceptance passes in both Python environments, checking the
+  exact upstream header/slots, complete long-source coverage, oversized queries,
+  caller-owned SQLite/CLI and no added worker threads/environment changes.
+  Native syscall tracing records zero socket/connect or clone/clone3 calls.
+- Actual approved DNS/TLS/HTTPS passes in both environments: one example.com
+  request/400 response-body bytes each, with invocation state disposed. This is
+  not authenticated-broker, browser or publisher-wide certification.
+- Dependency audit reports no known vulnerabilities for installed third-party
+  packages. Only the first-party editable package is skipped. All 60 external
+  lock records remain unchanged; only Toolsmith's own version becomes 0.2.0.
+
+This run uses synthetic/consumer-shaped examples, not newly collected publisher
+originals or Luna execution. Small-corpus warm query observations (approximately
+6–16 ms here) do not establish unlimited-corpus performance. No consumer migration,
+registry publication or production deployment is performed. The complete directory
+reorganization remains a [proposal](proposed-layout.md), not import aliases.
+
 ## Public MIT licensing update — 2026-10-13
 
 The owner authorized Toolsmith as a public MIT-licensed project. This changes

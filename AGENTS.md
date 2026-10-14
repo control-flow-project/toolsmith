@@ -34,7 +34,9 @@ credentials, model weights and local .analysis out of commits and artifacts.
 Registry publication requires a separate explicit instruction. Owned npm packages,
 if ever separately approved, use @ctlflow. Third-party rights remain intact.
 
-Maintain docs/specification.md and .analysis/20261011-toolsmith/necessity-ledger.md.
+Maintain docs/specification.md and the current task's dated necessity ledger.
+The consumer-coverage task uses .analysis/20261013-consumer-capabilities/necessity-ledger.md;
+the initial implementation record is .analysis/20261011-toolsmith/necessity-ledger.md.
 Verify affected behavior, package contents and installed CLI/library parity.
 Cross-layer changes require all quality gates. Never weaken a gate, use fixture
 results as real-source certification or run unconditional test sleeps.

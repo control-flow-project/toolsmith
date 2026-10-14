@@ -9,11 +9,11 @@ from toolsmith.files import PrivateDirectory, new_private
 from toolsmith.operations.backup import backup_store, restore_store
 from toolsmith.operations.cleanup import apply_cleanup, preview_cleanup
 from toolsmith.operations.integrity import check_integrity, rebuild_index
+from toolsmith.readers.models import Document, TextPart
 from toolsmith.result import Failure, unwrap
 from toolsmith.retrieval import search_text
 from toolsmith.storage.artifacts import put_file, read_file
 from toolsmith.storage.database import open_store
-from toolsmith.storage.models import Document, TextPart
 from toolsmith.storage.text import put_text
 
 
@@ -94,11 +94,11 @@ def test_index_rebuild_uses_retained_canonical_text(store: Path, damage: str) ->
         )
     )
     with open_store(store, "sample", write=True) as selected, selected.connection:
-        selected.connection.execute("DELETE FROM chunk_search")
+        selected.connection.execute("DELETE FROM lexical_search")
         if damage == "missing_chunks":
-            selected.connection.execute("DELETE FROM chunk")
+            selected.connection.execute("DELETE FROM lexical_chunk")
         elif damage == "forged_chunks":
-            selected.connection.execute("UPDATE chunk SET text = 'forged'")
+            selected.connection.execute("UPDATE lexical_chunk SET text = 'forged'")
     assert not unwrap(search_text(store, "sample", "words"))
     assert isinstance(check_integrity(store, "sample"), Failure)
     assert unwrap(rebuild_index(store, "sample")).valid
@@ -117,12 +117,13 @@ def test_corrupt_provenance_prevents_rebuild_mutation(store: Path) -> None:
     )
     with open_store(store, "sample", write=True) as selected, selected.connection:
         selected.connection.execute("UPDATE text_version SET title = 'forged'")
-        original = selected.connection.execute("SELECT title FROM chunk_search").fetchone()[0]
+        original = selected.connection.execute("SELECT title FROM lexical_search").fetchone()[0]
     assert isinstance(check_integrity(store, "sample"), Failure)
     assert isinstance(rebuild_index(store, "sample"), Failure)
     with open_store(store, "sample") as selected:
         assert (
-            selected.connection.execute("SELECT title FROM chunk_search").fetchone()[0] == original
+            selected.connection.execute("SELECT title FROM lexical_search").fetchone()[0]
+            == original
         )
 
 

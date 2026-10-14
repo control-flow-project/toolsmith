@@ -3,8 +3,9 @@ from pathlib import Path
 import pytest
 
 from toolsmith.files import component
+from toolsmith.readers.models import Document, TextPart
 from toolsmith.result import Failure
-from toolsmith.storage.models import Document, TextPart, document_from_json
+from toolsmith.storage.models import document_from_json
 from toolsmith.storage.text import put_text
 from toolsmith.validation import parse_json
 

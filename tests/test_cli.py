@@ -7,8 +7,8 @@ import pytest
 
 from toolsmith.cli import main
 from toolsmith.operations.cleanup import preview_cleanup
+from toolsmith.readers.models import Document, TextPart
 from toolsmith.result import unwrap
-from toolsmith.storage.models import Document, TextPart
 from toolsmith.storage.text import put_text
 from toolsmith.validation import JsonValue, canonical_json
 

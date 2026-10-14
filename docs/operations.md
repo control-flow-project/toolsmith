@@ -1,9 +1,13 @@
-# Maintenance and recovery
+# Optional text-archive maintenance and recovery
 
 Maintenance is explicit library/CLI work. Nothing runs on a timer or behind an
 accepted-job response. Do not reset production, erase history or replace upstream
 limit state to bypass quotas. Collection data and shared network state have
 separate lifetimes; preserve both when moving an operational installation.
+
+These backup/receipt/citation operations belong to the optional archive. Consumers
+with their own stores retain their existing backup manifests, event semantics and
+activation procedures, using generic file/tree/index primitives as appropriate.
 
 ## Status and explicit HTTP resume
 
@@ -27,9 +31,11 @@ ends. Total request allowance can be exhausted; that fails rather than silently
 creating a new job. Publisher denials, unavailable dependencies and unsupported
 response types remain explicit failures.
 
-`Acquisition.wire_bytes` measures the final received response body, not aggregate
-headers, previous failed attempts or redirect bodies. The persistent allowance
-conservatively accounts each request, including redirects/unknown outcomes.
+`Acquisition.wire_bytes` measures known response-body bytes from the successful
+invocation, including redirect bodies, not headers or earlier failed invocations.
+Its request count includes recorded attempts across resumes. Raw `FetchResponse`
+reports request/body counts for that invocation only. The persistent allowance
+conservatively accounts every admitted request, including unknown outcomes.
 
 Valid upstream `Retry-After` delays are preserved even when longer than a quota
 window or seven days. If a supplied delay cannot be represented, limit inspection
@@ -94,7 +100,15 @@ of filesystem deletion. Retained originals/objects are never cleanup targets.
 
 ## Schema
 
-Only schema one exists. Unknown schemas fail without an alternate reader, importer
-or automatic migration. No production predecessor is known, so no migration is
-invented. Future forward migration requires the actual old schema, verified backup,
-one replacement model and coordinated consumers. No production resets are allowed.
+Current archive schema v2 uses the same generic lexical index as caller-owned
+databases. Ordinary reads reject other schemas. `migrate_store` explicitly verifies
+the reviewed v1 schema, canonical provenance and objects, forward-copies to a new
+destination, replaces only obsolete lexical derivatives and verifies the result
+before atomic publication. The source remains unchanged as the rollback copy.
+Unknown schema shapes, destination collisions or verification failures abort;
+there is no dual runtime reader, in-place reset or automatic migration.
+
+Generic application index adoption has its own consumer-owned forward migration;
+this archive command cannot convert Bad Bets news or GAAP case schemas. Shared
+quota adoption uses reviewed quiesced counters with `import_budget`, preserving
+periods, charges and cooldowns rather than copying old-format runtime handlers.

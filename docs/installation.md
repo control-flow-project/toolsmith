@@ -1,6 +1,6 @@
 # Installation
 
-Toolsmith 0.1.0 has public MIT-licensed source and wheel/sdist artifacts. Metadata
+Toolsmith 0.2.0 has public MIT-licensed source and wheel/sdist artifacts. Metadata
 declares the SPDX expression `MIT`; both artifacts include LICENSE. There is no
 PyPI/npm release yet and no automatic publishing workflow. Build from the public
 repository or install a built wheel:
@@ -17,14 +17,14 @@ store/network requirement. Unsupported platforms fail without a weakened path.
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.1.0-py3-none-any.whl
+.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.2.0-py3-none-any.whl
 .venv/bin/toolsmith --json capabilities
 ```
 
 For selected network acquisition:
 
 ```sh
-.venv/bin/python -m pip install 'dist/ctlflow_toolsmith-0.1.0-py3-none-any.whl[http]'
+.venv/bin/python -m pip install 'dist/ctlflow_toolsmith-0.2.0-py3-none-any.whl[http]'
 ```
 
 The `http` extra installs the pinned bounded DNS resolver `dnspython==2.8.0`.

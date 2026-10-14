@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 import pytest
 from conftest import ControlledClock
 
-from toolsmith.acquisition.http import acquire_http, resume_http, retry_after
+from toolsmith.acquisition.client import retry_after
+from toolsmith.acquisition.http import acquire_http, resume_http
 from toolsmith.acquisition.limits import inspect_limits
 from toolsmith.acquisition.policy import SourcePolicy
 from toolsmith.acquisition.transport import (

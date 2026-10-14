@@ -3,10 +3,10 @@ from pathlib import Path
 import pytest
 from conftest import ControlledClock
 
+from toolsmith.readers.models import Document, TextPart
 from toolsmith.result import Failure, unwrap
 from toolsmith.retrieval import read_citation, search_text
 from toolsmith.storage.database import initialize_store, inspect_store, open_store
-from toolsmith.storage.models import Document, TextPart
 from toolsmith.storage.operations import operation_status
 from toolsmith.storage.text import inspect_text, list_text, put_text
 
@@ -28,7 +28,7 @@ def test_initialization_rejects_nonempty_and_can_finish_unpublished_state(tmp_pa
     (incomplete / "objects").mkdir(mode=0o700)
     (incomplete / "tmp").mkdir(mode=0o700)
     (incomplete / "tmp" / (".stage-" + "a" * 32 + ".tmp")).write_bytes(b"unpublished")
-    assert unwrap(initialize_store(incomplete, "sample")).schema_version == 1
+    assert unwrap(initialize_store(incomplete, "sample")).schema_version == 2
 
 
 def test_immutable_versions_idempotency_and_current_search(

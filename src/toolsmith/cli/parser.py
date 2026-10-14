@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 from typing import Never
 
+from toolsmith.lexical.query import QueryMode
 from toolsmith.result import ToolsmithError
 
 
@@ -29,8 +30,20 @@ class Arguments(argparse.Namespace):
     minimum_age: float = 86_400
     policy: Path | None = None
     network_state: Path | None = None
+    budget_policy: Path | None = None
+    task: str | None = None
     url: str | None = None
     model_directory: Path | None = None
+    database: Path | None = None
+    sources: Path | None = None
+    references: Path | None = None
+    reference: str | None = None
+    mode: QueryMode = "literal"
+    selection: str = "text"
+    format: str = "csv"
+    columns: list[str] | None = None
+    filters: list[str] | None = None
+    header_row: int = 1
 
 
 class Parser(argparse.ArgumentParser):
@@ -50,14 +63,14 @@ def make_parser() -> Parser:
     parser.add_argument("--collection", help="Exact collection identity bound to the store")
     parser.add_argument("--json", action="store_true", help="Compact structured result")
     families = parser.add_subparsers(dest="family", required=True)
-    parser.add_argument("--version", action="version", version="toolsmith 0.1.0")
+    parser.add_argument("--version", action="version", version="toolsmith 0.2.0")
     capabilities = families.add_parser("capabilities")
     capabilities.set_defaults(action="capabilities")
     store = families.add_parser("store").add_subparsers(dest="command", required=True)
     for name in ("init", "inspect"):
         store.add_parser(name).set_defaults(action="store." + name)
     readers = families.add_parser("read").add_subparsers(dest="command", required=True)
-    for name in ("text", "html", "feed"):
+    for name in ("text", "html", "feed", "json", "table", "html-tables"):
         command = readers.add_parser(name)
         command.set_defaults(action="read." + name)
         command.add_argument("file", type=Path)
@@ -65,9 +78,47 @@ def make_parser() -> Parser:
             command.add_argument("--title", required=True)
         elif name == "html":
             command.add_argument("--title")
-        else:
+            command.add_argument("--selection", choices=("text", "article"), default="text")
+        elif name == "feed":
             command.add_argument("--source-url", required=True)
             command.add_argument("--limit", type=int, default=100)
+        elif name == "table":
+            command.add_argument("--format", choices=("csv", "zip-csv", "gzip-csv"), default="csv")
+            command.add_argument("--column", dest="columns", action="append", required=True)
+            command.add_argument("--filter", dest="filters", action="append", default=[])
+            command.add_argument("--header-row", type=int, default=1)
+            command.add_argument("--limit", type=int, default=20)
+    streaming = families.add_parser("filesystem").add_subparsers(dest="command", required=True)
+    for name in ("hash", "copy"):
+        command = streaming.add_parser(name)
+        command.set_defaults(action="filesystem." + name)
+        command.add_argument("file", type=Path)
+        command.add_argument("--maximum-bytes", type=int, required=True)
+        if name == "copy":
+            command.add_argument("destination", type=Path)
+    indexes = families.add_parser("search").add_subparsers(dest="kind", required=True)
+    for kind in ("lexical", "semantic"):
+        commands = indexes.add_parser(kind).add_subparsers(dest="command", required=True)
+        for name in ("init", "index", "query", "status", "check", "delete"):
+            command = commands.add_parser(name)
+            command.set_defaults(action="search." + kind + "." + name)
+            command.add_argument("--database", type=Path, required=True)
+            if name not in {"init", "delete", "status"}:
+                command.add_argument("--sources", type=Path, required=True)
+            if name == "status":
+                command.add_argument("--references", type=Path, required=True)
+            if name in {"index", "query"}:
+                command.add_argument("--limit", type=int, default=20)
+                if kind == "semantic":
+                    command.add_argument("--model-directory", type=Path, required=True)
+            if name == "query":
+                command.add_argument("query")
+                if kind == "lexical":
+                    command.add_argument(
+                        "--mode", choices=("literal", "phrase", "fts5"), default="literal"
+                    )
+            if name == "delete":
+                command.add_argument("reference")
     texts = families.add_parser("text").add_subparsers(dest="command", required=True)
     put = texts.add_parser("put")
     put.set_defaults(action="text.put")
@@ -124,6 +175,14 @@ def make_parser() -> Parser:
         if name == "export":
             command.add_argument("destination", type=Path)
     http = families.add_parser("http").add_subparsers(dest="command", required=True)
+    request = http.add_parser("request")
+    request.set_defaults(action="http.request")
+    request.add_argument("url")
+    request.add_argument("--policy", type=Path, required=True)
+    request.add_argument("--budget-policy", type=Path, required=True)
+    request.add_argument("--network-state", type=Path, required=True)
+    request.add_argument("--task", required=True)
+    request.add_argument("--destination", type=Path, required=True)
     for name in ("inspect-policy", "limits", "fetch", "resume"):
         command = http.add_parser(name)
         command.set_defaults(action="http." + name)
@@ -147,6 +206,7 @@ def make_parser() -> Parser:
         "cleanup-apply",
         "backup",
         "restore",
+        "migrate",
     ):
         command = maintenance.add_parser(name)
         command.set_defaults(action="maintenance." + name)
@@ -156,7 +216,7 @@ def make_parser() -> Parser:
             command.add_argument(
                 "file", type=Path, help="Exact cleanup plan JSON, not a command-result envelope"
             )
-        if name in {"backup", "restore"}:
+        if name in {"backup", "restore", "migrate"}:
             command.add_argument(
                 "destination", type=Path, help="New private destination; never overwritten"
             )

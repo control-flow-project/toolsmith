@@ -1,29 +1,12 @@
 import re
 from dataclasses import dataclass
 
+from toolsmith.readers import models as reader_models
 from toolsmith.result import ToolsmithError
 from toolsmith.validation import fields, integer, text, timestamp
 
 MAX_TEXT_BYTES = 4 * 1024 * 1024
 MAX_PARTS = 1000
-
-
-@dataclass(frozen=True)
-class TextPart:
-    label: str
-    text: str
-    physical_page: int | None = None
-    warnings: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class Document:
-    title: str
-    parts: tuple[TextPart, ...]
-    method: str = "provided-text"
-    source_url: str | None = None
-    published_at: str | None = None
-    observed_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,20 +34,20 @@ class FileReference:
     reused: bool
 
 
-def validate_document(document: Document) -> Document:
+def validate_document(document: reader_models.Document) -> reader_models.Document:
     if (
-        not isinstance(document, Document)
+        not isinstance(document, reader_models.Document)
         or not isinstance(document.parts, tuple)
         or not 1 <= len(document.parts) <= MAX_PARTS
     ):
         raise ToolsmithError("invalid_input", "Document requires 1..1000 immutable text parts")
     title = text(document.title, 1024, "Title")
     method = text(document.method, 80, "Method")
-    parts: list[TextPart] = []
+    parts: list[reader_models.TextPart] = []
     total = 0
     for part in document.parts:
         if (
-            not isinstance(part, TextPart)
+            not isinstance(part, reader_models.TextPart)
             or not isinstance(part.warnings, tuple)
             or len(part.warnings) > 64
         ):
@@ -79,7 +62,7 @@ def validate_document(document: Document) -> Document:
             else integer(part.physical_page, 1, 1_000_000, "Physical page")
         )
         parts.append(
-            TextPart(
+            reader_models.TextPart(
                 text(part.label, 200, "Part label"),
                 body,
                 page,
@@ -93,7 +76,7 @@ def validate_document(document: Document) -> Document:
         from toolsmith.acquisition.urls import canonical_url
 
         source = canonical_url(document.source_url)
-    return Document(
+    return reader_models.Document(
         title,
         tuple(parts),
         method,
@@ -103,14 +86,14 @@ def validate_document(document: Document) -> Document:
     )
 
 
-def document_from_json(value: object) -> Document:
+def document_from_json(value: object) -> reader_models.Document:
     data = fields(
         value, {"title", "parts"}, {"method", "source_url", "published_at", "observed_at"}
     )
     supplied = data["parts"]
     if not isinstance(supplied, list) or not 1 <= len(supplied) <= MAX_PARTS:
         raise ToolsmithError("invalid_input", "Document requires a bounded parts array")
-    parts: list[TextPart] = []
+    parts: list[reader_models.TextPart] = []
     for entry in supplied:
         part = fields(entry, {"label", "text"}, {"physical_page", "warnings"})
         warnings = part.get("warnings", [])
@@ -118,7 +101,7 @@ def document_from_json(value: object) -> Document:
             raise ToolsmithError("invalid_input", "Part warnings require a bounded array")
         page = part.get("physical_page")
         parts.append(
-            TextPart(
+            reader_models.TextPart(
                 text(part["label"], 200, "Part label"),
                 text(part["text"], MAX_TEXT_BYTES, "Part text", allow_empty=True),
                 None if page is None else integer(page, 1, 1_000_000, "Physical page"),
@@ -126,7 +109,7 @@ def document_from_json(value: object) -> Document:
             )
         )
     return validate_document(
-        Document(
+        reader_models.Document(
             text(data["title"], 1024, "Title"),
             tuple(parts),
             text(data.get("method", "provided-text"), 80, "Method"),
