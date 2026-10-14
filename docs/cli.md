@@ -1,5 +1,30 @@
 # CLI
 
+## Archive-independent commands
+
+`search lexical/semantic` uses an explicit caller-owned `--database`. `init` adds
+derivatives, not a canonical source database or application schema version.
+`index/query/check` take `--sources FILE`, a JSON array of
+`{reference,text,language?}`. `status` takes `--references FILE`, an array of source
+references only, with no model, source-body or vector reads. `delete REFERENCE`
+removes one exact derivative. Semantic index/query require `--model-directory`;
+init/status/check/delete do not activate a model.
+
+`read json`, `read table --column NAME [--filter COLUMN=VALUE]`, `read html-tables`
+and `read html --selection article [--title INTENDED]` use generic parsers.
+Table output includes complete scan/match counts and explicit truncation.
+`filesystem hash/copy FILE --maximum-bytes N` streams selected regular files.
+
+`http request URL --policy FILE --budget-policy FILE --network-state DIR --task ID
+--destination FILE` returns a raw approved response file and receipt without an
+archive. The stable task shares group/task quotas; the caller owns job-level
+receipt storage/recovery. `http fetch/resume` is optional text-archive composition
+over the same HTTPS producer, not another implementation.
+
+`maintenance migrate DESTINATION` with explicit `--root/--collection` verifies
+and forward-copies an archive-v1 store to v2; the original remains unchanged.
+Regular backup/restore commands are specific to the optional text archive.
+
 `toolsmith --help` and each subcommand's `--help` define the current syntax.
 Global `--root`, `--collection` and `--json` precede the command family.
 Paths are explicit and absolute; use `$PWD` when working in a suitable directory.
@@ -11,6 +36,17 @@ toolsmith store init | inspect
 toolsmith read text FILE --title TITLE
 toolsmith read html FILE [--title TITLE]
 toolsmith read feed FILE --source-url URL [--limit N]
+toolsmith read json FILE
+toolsmith read table FILE --column COLUMN [--filter COLUMN=VALUE] [--format csv|zip-csv|gzip-csv]
+toolsmith read html-tables FILE
+toolsmith filesystem hash FILE --maximum-bytes N
+toolsmith filesystem copy FILE DESTINATION --maximum-bytes N
+toolsmith search lexical|semantic init --database FILE
+toolsmith search lexical|semantic index --database FILE --sources FILE [--limit N]
+toolsmith search lexical|semantic query QUERY --database FILE --sources FILE [--limit N]
+toolsmith search lexical|semantic status --database FILE --references FILE
+toolsmith search lexical|semantic check --database FILE --sources FILE
+toolsmith search lexical|semantic delete REFERENCE --database FILE
 toolsmith text put DOCUMENT_JSON --item ITEM --request-id ID
 toolsmith text inspect VERSION
 toolsmith text list [--item ITEM] [--limit N] [--offset N]
@@ -24,19 +60,23 @@ toolsmith file put FILE --name NAME --media-type TYPE --request-id ID [--source-
 toolsmith file inspect | read VERSION
 toolsmith file export VERSION DESTINATION
 toolsmith http inspect-policy --policy FILE
+toolsmith http request URL --policy FILE --budget-policy FILE --network-state DIR --task ID --destination FILE
 toolsmith http limits --policy FILE --network-state DIR
 toolsmith http fetch URL --policy FILE --network-state DIR --request-id ID [--item ITEM] [--name NAME]
 toolsmith http resume --policy FILE --network-state DIR --request-id ID
 toolsmith operation ID
 toolsmith maintenance integrity | rebuild-index
 toolsmith maintenance backup | restore DESTINATION [--maximum-bytes N]
+toolsmith maintenance migrate DESTINATION [--maximum-bytes N]
 toolsmith maintenance cleanup-preview [--minimum-age SECONDS]
 toolsmith maintenance cleanup-apply PLAN_JSON
 ```
 
-`read`, `capabilities`, model checking, policy inspection and network-limit inspection do not
-require a collection store. All other commands require exact `--root` and
-`--collection`. For restore, `--root` selects the backup, not the destination.
+`read`, `filesystem`, caller-owned `search`, raw `http request`, `capabilities`,
+model checking, policy inspection and network-limit inspection require no archive.
+Archive commands require exact `--root` and `--collection`; for restore, `--root`
+selects the backup, not the destination. Standalone semantic index/query additionally
+require `--model-directory`, omitted from the compact syntax list above.
 
 Results use `{ "ok": true, "result": ... }` or `{ "ok": false, "error": ... }`.
 `--json` emits compact JSON; ordinary output is the same data formatted readably.

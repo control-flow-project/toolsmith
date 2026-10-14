@@ -51,10 +51,43 @@ switching that live consumer is a separately scoped owner change.
 
 ## GAAP: page-based agreements and exact citations
 
-GAAP owns PDF/browser/OCR, extracted pages and legal analysis. Supply one `TextPart`
-per meaningful extracted page/section, including known physical page and explicit
-extraction warnings. Never invent a page number. Toolsmith reads/indexes that
-text; it does not parse a PDF, approve a legal conclusion or promise OCR accuracy.
+GAAP keeps its room-specific case database, source/amendment identity, PDF/OCR
+outputs, physical page relations, methods/warnings and full page reads. Replace its
+generic file/ZIP/chunk/FTS mechanics, not those domain records or permissions.
+Use public `lexical.Source` per canonical page with an opaque exact reference,
+initialize derivatives in that same case DB, and supply authorized current page
+digests before query ranking. Preserve the exact-room database boundary: candidate
+filtering does not isolate BM25's database-wide statistics. Use `find_text` with
+caller-selected page regions for literal context that must not cross pages.
+
+```python
+from toolsmith import lexical
+from toolsmith.result import unwrap
+
+unwrap(lexical.initialize_index(case_connection))
+source = lexical.Source(page_reference, canonical_page_text, source_title)
+unwrap(lexical.index_source(case_connection, source, expected_digest=previous_digest))
+matches = unwrap(lexical.search(case_connection, '"Restricted Payments"', authorized_pages))
+```
+
+The case connection, canonical text and authorized candidate tuple are deliberately
+consumer-owned. Enable foreign keys before writes. Apply corrections/invalidation
+inside its transaction and unwrap failures there. Query hit offsets address the
+original page text; short snippets do not replace full page reads. For document
+handoffs, `pack_files/unpack_files` use the exact consumer-approved file set and
+digests without imposing an agreement bundle manifest or recipient policy.
+
+Semantic analysis can additionally use the same page references on this caller-owned
+connection. Prepare vectors outside its transaction, recheck current text when
+publishing, invalidate corrections atomically and use metadata-only `inspect_index`
+for readiness. No PDF parser, OCR assurance or legal conclusion is supplied.
+
+## Optional retained-text demonstration
+
+For a consumer that deliberately chooses the separate text archive, supply one
+`TextPart` per extracted page/section, including known physical page and explicit
+extraction warnings. Never invent a page number. This is not GAAP's required storage
+model or a replacement for its full-page CLI.
 
 The checked-in `examples/agreement.json` demonstrates three physical pages. Import
 through `text put` or `put_text`, run bounded semantic batches until pending=0,
@@ -70,18 +103,25 @@ toolsmith --root "$PWD/gaap-example" --collection demo semantic search "assets o
 toolsmith --root "$PWD/gaap-example" --collection demo maintenance integrity
 ```
 
-Alternatively, GAAP can use the exact same generic SQLite library in its own
-canonical database, as Bad Bets can. Neither consumer is forced to use the
-platform text store or duplicative state. This is composition over one vector
-implementation, not two product modes or a special per-fleet integration.
+Neither consumer is forced to create this archive. It is composition over the same
+indexes, not a per-fleet plugin, alternate backend or mirrored application store.
 
 ## Broader toolkit recipes
 
 - Saved HTML: `read html` keeps meaningful text; a browser, cookies and scripts
   are not emulated. Feed reading does not automatically fetch article bodies.
-- Approved acquisition: `http fetch` takes reviewed host/retention policy and a
-  shared explicit network-limit root. Its transport already uses a browser-style
-  User-Agent; this is not permission to bypass quota/access restrictions.
+- Approved public acquisition: `http request` takes reviewed network/budget policy,
+  a shared network-state root and stable task, returning raw bytes/receipts. The
+  optional archive's `http fetch` adds retention/operation identity through the
+  same producer. The browser-style User-Agent never authorizes access bypass.
+- Quotas: all cooperating public HTTP and externally owned browser transports
+  reserve against the same group/task budget root. Preserve reviewed existing
+  charges/cooldowns through quiesced `import_budget`; never reset them at adoption.
+- Generic parsing: strict JSON, article-selected static HTML, feeds and compressed
+  CSV validate bytes/fields/counts, not source rights or financial interpretation.
+- File/tree/journal primitives: preserve exact file snapshots and explicit private
+  staging. Consumers choose included backup areas and validate their event schemas;
+  no Toolsmith document schema or automatic journal retention is imposed.
 - Read exact text: `text cite` preserves Unicode offsets, provenance and unknown
   timestamps. Lexical `text search` and semantic search are separate explicit
   tools. A missing encoder is not silently replaced with lexical results.

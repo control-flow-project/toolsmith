@@ -1,7 +1,6 @@
 import math
 import sqlite3
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib.resources import files
 
@@ -18,11 +17,11 @@ from toolsmith.semantic.profile import (
     Prepared,
     Source,
     fingerprint,
-    source_reference,
     unpack_vector,
     validate_source,
 )
-from toolsmith.validation import digest, integer, timestamp
+from toolsmith.sqlite import execute, transaction
+from toolsmith.validation import digest, integer, source_reference, timestamp
 
 SCHEMA_SQL = files("toolsmith.semantic").joinpath("schema.sql").read_text(encoding="utf-8")
 
@@ -52,50 +51,21 @@ class IndexReport:
     profile: str
 
 
-@contextmanager
-def database_errors(connection: sqlite3.Connection) -> Iterator[None]:
-    if not isinstance(connection, sqlite3.Connection):
-        raise ToolsmithError("invalid_input", "Supply an explicit caller-owned SQLite connection")
-    try:
-        yield
-    except sqlite3.Error as error:
-        code = getattr(error, "sqlite_errorcode", 0) & 255
-        if code in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
-            raise ToolsmithError("deferred", "Semantic index database is busy", 0.1) from error
-        raise ToolsmithError("integrity", "Semantic index schema or transaction failed") from error
-
-
-@contextmanager
-def index_transaction(connection: sqlite3.Connection, *, write: bool = False) -> Iterator[None]:
-    with database_errors(connection):
-        if write and connection.execute("PRAGMA foreign_keys").fetchone()[0] != 1:
-            raise ToolsmithError(
-                "denied", "Caller must enable SQLite foreign keys before index writes"
-            )
-        owned = not connection.in_transaction
-        name = "toolsmith_embedding_write" if write else "toolsmith_embedding_read"
-        connection.execute("SAVEPOINT " + name)
-        try:
-            yield
-            connection.execute("RELEASE " + name)
-        except BaseException:
-            if owned:
-                connection.rollback()
-            elif connection.in_transaction:
-                connection.execute("ROLLBACK TO " + name)
-                connection.execute("RELEASE " + name)
-            raise
-
-
 def validate_profile(connection: sqlite3.Connection) -> None:
-    rows = connection.execute("SELECT id, definition FROM embedding_profile LIMIT 2").fetchall()
+    rows = execute(connection, "SELECT id, definition FROM embedding_profile LIMIT 2").fetchall()
     if any(tuple(row) != (PROFILE_ID, PROFILE_JSON) for row in rows):
         raise ToolsmithError("integrity", "Index contains a different or corrupt embedding profile")
+    if (
+        not rows
+        and execute(connection, "SELECT 1 FROM embedding_document LIMIT 1").fetchone() is not None
+    ):
+        raise ToolsmithError("integrity", "Indexed sources have no retained profile")
 
 
 def document_row(connection: sqlite3.Connection, reference: str) -> tuple[str, int, int] | None:
     validate_profile(connection)
-    row = connection.execute(
+    row = execute(
+        connection,
         "SELECT text_digest, characters, chunks, profile_id, indexed_at FROM embedding_document WHERE reference = ?",
         (source_reference(reference),),
     ).fetchone()
@@ -116,7 +86,8 @@ def retained_chunks(
     previous_end = 0
     previous_start = -1
     ordinal = 0
-    for row in connection.execute(
+    for row in execute(
+        connection,
         "SELECT ordinal, start_offset, end_offset, text_digest, vector FROM embedding_chunk WHERE reference = ? ORDER BY ordinal",
         (reference,),
     ):
@@ -141,16 +112,16 @@ def retained_chunks(
 
 @boundary
 def initialize_index(connection: sqlite3.Connection) -> IndexReport:
-    with index_transaction(connection, write=True):
+    with transaction(connection, "toolsmith_embedding", write=True):
         for statement in SCHEMA_SQL.split(";"):
             if statement.strip():
-                connection.execute(statement)
+                execute(connection, statement)
     return IndexReport(0, 0, PROFILE_ID)
 
 
 @boundary
 def indexed_digest(connection: sqlite3.Connection, reference: str) -> str | None:
-    with index_transaction(connection):
+    with transaction(connection, "toolsmith_embedding"):
         row = document_row(connection, reference)
         if row is None:
             return None
@@ -211,7 +182,7 @@ def publish_embedding(
             "invalid_input", "Index publication requires a timezone-aware timestamp"
         )
     expected = None if expected_digest is None else digest(expected_digest)
-    with index_transaction(connection, write=True):
+    with transaction(connection, "toolsmith_embedding", write=True):
         previous = document_row(connection, source.reference)
         if previous is not None:
             for _ in retained_chunks(connection, source.reference, previous[1], previous[2]):
@@ -222,14 +193,16 @@ def publish_embedding(
             raise ToolsmithError(
                 "conflict", "Indexed source changed while encoding; publication was rolled back"
             )
-        connection.execute(
-            "DELETE FROM embedding_document WHERE reference = ?", (source.reference,)
+        execute(
+            connection, "DELETE FROM embedding_document WHERE reference = ?", (source.reference,)
         )
-        connection.execute(
+        execute(
+            connection,
             "INSERT OR IGNORE INTO embedding_profile (id, definition) VALUES (?, ?)",
             (PROFILE_ID, PROFILE_JSON),
         )
-        connection.execute(
+        execute(
+            connection,
             "INSERT INTO embedding_document (reference, profile_id, text_digest, characters, chunks, indexed_at) VALUES (?, ?, ?, ?, ?, ?)",
             (
                 source.reference,
@@ -260,10 +233,10 @@ def publish_embedding(
 @boundary
 def invalidate_embedding(connection: sqlite3.Connection, reference: str) -> bool:
     selected = source_reference(reference)
-    with index_transaction(connection, write=True):
+    with transaction(connection, "toolsmith_embedding", write=True):
         validate_profile(connection)
-        cursor = connection.execute(
-            "DELETE FROM embedding_document WHERE reference = ?", (selected,)
+        cursor = execute(
+            connection, "DELETE FROM embedding_document WHERE reference = ?", (selected,)
         )
         return cursor.rowcount > 0
 
@@ -291,7 +264,7 @@ def search_embeddings(
     missing, stale = 0, 0
     scanned_chunks = 0
     winners: list[Hit] = []
-    with index_transaction(connection):
+    with transaction(connection, "toolsmith_embedding"):
         validate_profile(connection)
         for candidate in candidates:
             row = document_row(connection, candidate.reference)
@@ -331,21 +304,63 @@ def search_embeddings(
 
 
 @boundary
+def relocate_embedding(
+    connection: sqlite3.Connection, old_reference: str, source: Source, *, expected_digest: str
+) -> bool:
+    previous_reference = source_reference(old_reference)
+    validate_source(source)
+    expected = digest(expected_digest)
+    if fingerprint(source.text) != expected:
+        raise ToolsmithError(
+            "conflict", "Reference relocation requires the same exact canonical text"
+        )
+    with transaction(connection, "toolsmith_embedding", write=True):
+        previous = document_row(connection, previous_reference)
+        if previous is None or previous[0] != expected:
+            raise ToolsmithError("conflict", "Indexed source changed before reference relocation")
+        for chunk, _ in retained_chunks(connection, previous_reference, previous[1], previous[2]):
+            if fingerprint(source.text[chunk.start : chunk.end]) != chunk.digest:
+                raise ToolsmithError(
+                    "integrity", "Relocated vectors do not match canonical source spans"
+                )
+        if previous_reference == source.reference:
+            return False
+        if document_row(connection, source.reference) is not None:
+            raise ToolsmithError("conflict", "Target reference already has derivatives")
+        execute(
+            connection,
+            "UPDATE embedding_document SET reference = ? WHERE reference = ?",
+            (source.reference, previous_reference),
+        )
+        return True
+
+
+@boundary
+def clear_index(connection: sqlite3.Connection) -> int:
+    with transaction(connection, "toolsmith_embedding", write=True):
+        count = execute(connection, "SELECT count(*) FROM embedding_document").fetchone()[0]
+        execute(connection, "DELETE FROM embedding_document")
+        execute(connection, "DELETE FROM embedding_profile")
+        return integer(count, 0, 2**63 - 1, "Cleared source count")
+
+
+@boundary
 def check_index(
     connection: sqlite3.Connection, source_text: Callable[[str], str | None]
 ) -> IndexReport:
-    with index_transaction(connection):
+    with transaction(connection, "toolsmith_embedding"):
         validate_profile(connection)
         documents, chunks = 0, 0
         if (
-            connection.execute(
-                "SELECT 1 FROM embedding_chunk c LEFT JOIN embedding_document d ON d.reference = c.reference WHERE d.reference IS NULL LIMIT 1"
+            execute(
+                connection,
+                "SELECT 1 FROM embedding_chunk c LEFT JOIN embedding_document d ON d.reference = c.reference WHERE d.reference IS NULL LIMIT 1",
             ).fetchone()
             is not None
         ):
             raise ToolsmithError("integrity", "Index contains orphan vector chunks")
-        for document in connection.execute(
-            "SELECT reference FROM embedding_document ORDER BY reference"
+        for document in execute(
+            connection, "SELECT reference FROM embedding_document ORDER BY reference"
         ):
             reference = source_reference(document[0])
             row = document_row(connection, reference)

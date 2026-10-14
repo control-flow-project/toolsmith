@@ -1,10 +1,14 @@
+import hashlib
 from pathlib import Path
 
+from toolsmith.acquisition.client import fetch_http
+from toolsmith.acquisition.config import read_budget_policy, read_http_policy
 from toolsmith.acquisition.http import acquire_http, resume_http
 from toolsmith.acquisition.limits import inspect_limits
 from toolsmith.acquisition.policy import read_policy
+from toolsmith.cli.indexes import execute_index
 from toolsmith.cli.parser import Arguments
-from toolsmith.files import read_bytes
+from toolsmith.files import copy_file, hash_file, read_bytes, write_new_bytes
 from toolsmith.operations.backup import backup_store, restore_store
 from toolsmith.operations.cleanup import (
     apply_cleanup,
@@ -13,6 +17,8 @@ from toolsmith.operations.cleanup import (
 )
 from toolsmith.operations.integrity import check_integrity, rebuild_index
 from toolsmith.readers import read_feed, read_html, read_text
+from toolsmith.readers.json import read_json
+from toolsmith.readers.tables import TableFormat, decode_table, project_table, read_html_tables
 from toolsmith.result import Result, Success, ToolsmithError, unwrap
 from toolsmith.retrieval import read_citation, search_text
 from toolsmith.semantic import inspect_model
@@ -24,6 +30,7 @@ from toolsmith.semantic.store import (
 )
 from toolsmith.storage.artifacts import export_file, inspect_file, put_file, read_file
 from toolsmith.storage.database import initialize_store, inspect_store
+from toolsmith.storage.migration import migrate_store
 from toolsmith.storage.models import document_from_json
 from toolsmith.storage.operations import operation_status
 from toolsmith.storage.text import inspect_text, list_text, put_text
@@ -61,6 +68,18 @@ def execute(arguments: Arguments) -> Result[object]:
                     "preview-cleanup",
                     "offline-minilm",
                     "semantic-search",
+                    "streaming-files",
+                    "tabular-readers",
+                    "caller-owned-lexical-index",
+                    "caller-owned-search-cli",
+                    "semantic-metadata-status",
+                    "independent-https-response",
+                    "group-task-budgets",
+                    "literal-passages",
+                    "exact-file-archives",
+                    "private-tree-operations",
+                    "generic-json-journal",
+                    "forward-quota-import",
                 ],
                 "http_dependency": "http extra, loaded only for actual HTTP acquisition",
                 "excluded": [
@@ -78,15 +97,85 @@ def execute(arguments: Arguments) -> Result[object]:
             }
         )
     if action.startswith("read."):
-        content = unwrap(read_bytes(required_path(arguments.file), 4 * 1024 * 1024))
+        content = unwrap(read_bytes(required_path(arguments.file), 32 * 1024 * 1024))
         if action == "read.text":
             return read_text(content, required_text(arguments.title, "Title"))
         if action == "read.html":
-            return read_html(content, arguments.title)
-        return read_feed(
-            content, required_text(arguments.source_url, "Source URL"), arguments.limit
+            if arguments.selection not in {"text", "article"}:
+                raise ToolsmithError("invalid_input", "Choose text or article selection")
+            return read_html(
+                content,
+                arguments.title,
+                selection="article" if arguments.selection == "article" else "text",
+            )
+        if action == "read.feed":
+            return read_feed(
+                content, required_text(arguments.source_url, "Source URL"), arguments.limit
+            )
+        if action == "read.json":
+            return read_json(content)
+        if action == "read.html-tables":
+            return read_html_tables(content)
+        if arguments.format not in {"csv", "zip-csv", "gzip-csv"}:
+            raise ToolsmithError("invalid_input", "Choose an explicit CSV format")
+        selected_format: TableFormat = (
+            "zip-csv"
+            if arguments.format == "zip-csv"
+            else "gzip-csv"
+            if arguments.format == "gzip-csv"
+            else "csv"
         )
+        filters: dict[str, str] = {}
+        for supplied in arguments.filters or []:
+            key, separator, value = supplied.partition("=")
+            if not separator or key in filters:
+                raise ToolsmithError("invalid_input", "Supply distinct COLUMN=VALUE filters")
+            filters[key] = value
+        return project_table(
+            unwrap(decode_table(content, selected_format)),
+            tuple(arguments.columns or []),
+            filters,
+            arguments.limit,
+            header_row=arguments.header_row,
+        )
+    if action.startswith("filesystem."):
+        source = required_path(arguments.file)
+        return (
+            hash_file(source, arguments.maximum_bytes)
+            if action == "filesystem.hash"
+            else copy_file(source, required_path(arguments.destination), arguments.maximum_bytes)
+        )
+    if action.startswith("search."):
+        return execute_index(arguments)
     if action.startswith("http."):
+        if action == "http.request":
+            response = unwrap(
+                fetch_http(
+                    required_text(arguments.url, "URL"),
+                    unwrap(
+                        read_http_policy(unwrap(read_bytes(required_path(arguments.policy), 65536)))
+                    ),
+                    required_path(arguments.network_state),
+                    unwrap(
+                        read_budget_policy(
+                            unwrap(read_bytes(required_path(arguments.budget_policy), 65536))
+                        )
+                    ),
+                    required_text(arguments.task, "Task"),
+                )
+            )
+            unwrap(write_new_bytes(required_path(arguments.destination), response.content))
+            return Success(
+                {
+                    "final_url": response.final_url,
+                    "media_type": response.media_type,
+                    "content_bytes": len(response.content),
+                    "sha256": hashlib.sha256(response.content).hexdigest(),
+                    "requests": response.requests,
+                    "wire_bytes": response.wire_bytes,
+                    "received_at": response.received_at,
+                }
+            )
         policy = unwrap(read_policy(unwrap(read_bytes(required_path(arguments.policy), 65_536))))
         if action == "http.inspect-policy":
             return Success(policy)
@@ -213,6 +302,10 @@ def execute(arguments: Arguments) -> Result[object]:
         )
     if action == "maintenance.restore":
         return restore_store(
+            root, collection, required_path(arguments.destination), arguments.maximum_bytes
+        )
+    if action == "maintenance.migrate":
+        return migrate_store(
             root, collection, required_path(arguments.destination), arguments.maximum_bytes
         )
     raise ToolsmithError(

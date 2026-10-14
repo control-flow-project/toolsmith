@@ -1,5 +1,6 @@
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
@@ -8,11 +9,13 @@ import statistics
 import sys
 import tempfile
 import time
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
 from verify import require_limits
 
+from toolsmith.cli import main as cli_main
 from toolsmith.files import read_bytes
 from toolsmith.operations.backup import backup_store, restore_store
 from toolsmith.operations.integrity import check_integrity
@@ -57,6 +60,59 @@ def verify_abi(header: Path) -> None:
     for name, slot in SLOTS.items():
         if ordered[slot] != name:
             raise RuntimeError("Pinned native API slot differs: " + name)
+
+
+def verify_caller_cli(model: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="toolsmith-native-cli-") as temporary:
+        parent = Path(temporary)
+        database = parent / "application.sqlite3"
+        sources = parent / "sources.json"
+        sources.write_text(
+            json.dumps(
+                [
+                    {"reference": "permitted", "text": "Rain and wet weather affected the region."},
+                    {"reference": "excluded", "text": "Sunny desert days without rainfall."},
+                ]
+            )
+        )
+        references = parent / "references.json"
+        references.write_text('["permitted"]')
+        for command in (
+            ["init", "--database", str(database)],
+            [
+                "index",
+                "--database",
+                str(database),
+                "--sources",
+                str(sources),
+                "--model-directory",
+                str(model),
+            ],
+            ["status", "--database", str(database), "--references", str(references)],
+            [
+                "query",
+                "Wet weather",
+                "--database",
+                str(database),
+                "--sources",
+                str(sources),
+                "--model-directory",
+                str(model),
+            ],
+            ["check", "--database", str(database), "--sources", str(sources)],
+        ):
+            output = io.StringIO()
+            with redirect_stdout(output):
+                status = cli_main(["--json", "search", "semantic", *command])
+            if status != 0:
+                raise RuntimeError(
+                    "Installed caller-owned semantic CLI failed: " + output.getvalue()
+                )
+            result = json.loads(output.getvalue())["result"]
+            if command[0] == "query" and result["hits"][0]["reference"] != "permitted":
+                raise RuntimeError("Actual caller-owned semantic CLI ranking differs")
+        if (parent / "toolsmith.sqlite3").exists() or list(parent.rglob("objects")):
+            raise RuntimeError("Caller-owned semantic CLI created an archive")
 
 
 def retained_sources(path: Path) -> tuple[Source, ...]:
@@ -213,6 +269,7 @@ def main() -> int:
                     raise RuntimeError("Mutable-source invalidation did not preserve coverage")
             finally:
                 connection.close()
+    verify_caller_cli(options.model_directory)
     if len(os.listdir("/proc/self/task")) != threads or dict(os.environ) != environment:
         raise RuntimeError("Native resources or caller configuration were not disposed")
     print(
@@ -224,6 +281,7 @@ def main() -> int:
                 "warm_query_median_ms": round(statistics.median(timings), 3),
                 "fleet_examples": "passed",
                 "generic_sqlite": "passed",
+                "caller_owned_cli": "passed",
                 "backup_restore": "passed",
                 "complete_long_source": "passed",
                 "retained_originals": len(sources) if options.retained_news else 0,

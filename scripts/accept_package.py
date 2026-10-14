@@ -31,20 +31,26 @@ from toolsmith.storage.database import initialize_store
 from toolsmith.storage.text import put_text
 from toolsmith.storage.artifacts import put_file, read_file, export_file
 from toolsmith.operations.integrity import check_integrity
+from toolsmith import lexical
+from toolsmith.readers import decode_table, project_table
+from toolsmith.journal import append_record, read_journal
+import sqlite3
+import hashlib
+from contextlib import closing
 assert Path(toolsmith.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
 assert importlib.util.find_spec('dns') is None
 assert importlib.util.find_spec('onnxruntime') is None
 assert importlib.util.find_spec('tokenizers') is None
 from toolsmith.semantic import Candidate, Source, encode_query, initialize_index, inspect_model
 assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
-assert importlib.metadata.version('ctlflow-toolsmith') == '0.1.0'
+assert importlib.metadata.version('ctlflow-toolsmith') == '0.2.0'
 metadata = importlib.metadata.metadata('ctlflow-toolsmith')
 assert metadata['License-Expression'] == 'MIT'
 assert metadata.get_all('License-File') == ['LICENSE']
 assert not any(value.startswith('Private ::') for value in metadata.get_all('Classifier', []))
 assert set(parent.iterdir()) == before
 assert unwrap(read_html(b'<main>Meaningful text</main>')).parts[0].text == 'Meaningful text'
-assert len(unwrap(read_feed(b'<rss><channel><item><link>https://example.com/a</link></item></channel></rss>', 'https://example.com/feed')).entries) == 1
+assert len(unwrap(read_feed(b'<rss><channel><item><title>A</title><link>https://example.com/a</link></item></channel></rss>', 'https://example.com/feed')).entries) == 1
 root = parent / 'store'
 unwrap(initialize_store(root, 'sample'))
 document = unwrap(read_text(b'Installed package lexical words', 'Installed'))
@@ -60,6 +66,18 @@ assert unwrap(check_integrity(root, 'sample')).valid
 unwrap(backup_store(root, 'sample', parent / 'backup'))
 unwrap(restore_store(parent / 'backup', 'sample', parent / 'restored'))
 assert unwrap(check_integrity(parent / 'restored', 'sample')).valid
+with closing(sqlite3.connect(':memory:')) as connection:
+    connection.execute('PRAGMA foreign_keys = ON')
+    unwrap(lexical.initialize_index(connection))
+    source = lexical.Source('source', 'Restricted Payments mean dividends')
+    unwrap(lexical.index_source(connection, source, expected_digest=None))
+    hits = unwrap(lexical.search(connection, '"Restricted Payments"', (lexical.Candidate(source.reference, hashlib.sha256(source.text.encode()).hexdigest()),)))
+    assert len(hits.hits) == 1
+assert unwrap(project_table(unwrap(decode_table(b'Name,Value\\nA,10\\n')), ('Value',), {'Name':'A'})).matched == 1
+journal = parent / 'journal'
+journal.mkdir(mode=0o700)
+record = unwrap(append_record(journal, {'generic':'event'}))
+assert unwrap(read_journal(journal)) == (record,)
 print(json.dumps({'installed_library':'passed','base_dependencies':0,'optional_http_absent':True,'schema_license_and_typed_result':'passed'}))
 """
 
@@ -88,6 +106,7 @@ def check_archives(wheel: Path, source: Path) -> None:
         names = archive.namelist()
         assert "toolsmith/storage/schema.sql" in names
         assert "toolsmith/semantic/schema.sql" in names
+        assert "toolsmith/lexical/schema.sql" in names
         assert "toolsmith/py.typed" in names
         license_path = next(name for name in names if name.endswith("/licenses/LICENSE"))
         assert not any(name.startswith(("tests/", "scripts/", "docs/")) for name in names)
@@ -124,8 +143,8 @@ def check_archives(wheel: Path, source: Path) -> None:
 
 def main() -> int:
     require_limits()
-    wheel = ROOT / "dist/ctlflow_toolsmith-0.1.0-py3-none-any.whl"
-    source = ROOT / "dist/ctlflow_toolsmith-0.1.0.tar.gz"
+    wheel = ROOT / "dist/ctlflow_toolsmith-0.2.0-py3-none-any.whl"
+    source = ROOT / "dist/ctlflow_toolsmith-0.2.0.tar.gz"
     check_archives(wheel, source)
     uv = os.environ.get("TOOLSMITH_UV") or shutil.which("uv")
     if uv is None:

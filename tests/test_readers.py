@@ -33,7 +33,7 @@ def test_html_structure_and_no_text_limits() -> None:
 
 
 def test_rss_dates_are_not_retrieval_dates() -> None:
-    supplied = b"<rss><channel><title>Reports</title><item><title>One</title><link>/one</link><description>Excerpt</description><pubDate>Sun, 11 Oct 2026 10:00:00 +0530</pubDate></item><item><link>https://example.com/two</link><pubDate>yesterday</pubDate></item></channel></rss>"
+    supplied = b"<rss><channel><title>Reports</title><item><title>One</title><link>/one</link><description>Excerpt</description><pubDate>Sun, 11 Oct 2026 10:00:00 +0530</pubDate></item><item><title>Two</title><link>https://example.com/two</link><pubDate>yesterday</pubDate></item></channel></rss>"
     feed = unwrap(read_feed(supplied, "https://example.com/feed"))
     assert feed.entries[0].url == "https://example.com/one"
     assert feed.entries[0].published_at == "2026-10-11T04:30:00+00:00"

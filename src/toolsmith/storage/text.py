@@ -2,11 +2,13 @@ import hashlib
 import sqlite3
 from pathlib import Path
 
+from toolsmith import semantic
 from toolsmith.clock import Clock, SystemClock, utc_now
-from toolsmith.result import ToolsmithError, boundary
+from toolsmith.lexical import Source, index_source
+from toolsmith.readers.models import Document
+from toolsmith.result import ToolsmithError, boundary, unwrap
 from toolsmith.storage.database import Store, open_store, row_integer, row_text
-from toolsmith.storage.index import index_part
-from toolsmith.storage.models import Document, TextReference, validate_document
+from toolsmith.storage.models import TextReference, validate_document
 from toolsmith.storage.operations import begin_operation, complete_operation
 from toolsmith.validation import (
     JsonValue,
@@ -87,7 +89,13 @@ def insert_document(store: Store, item: str, document: Document, clock: Clock) -
         )
         if cursor.lastrowid is None:
             raise ToolsmithError("integrity", "Inserted text part has no identity")
-        index_part(store, cursor.lastrowid, checked.title, part.text)
+        unwrap(
+            index_source(
+                store.connection,
+                Source("part:" + str(cursor.lastrowid), part.text, checked.title),
+                expected_digest=None,
+            )
+        )
     reconcile_current_embeddings(store, selected, version)
     store.connection.execute("UPDATE item SET latest_version = ? WHERE id = ?", (version, selected))
     return text_reference(store, version)
@@ -95,23 +103,35 @@ def insert_document(store: Store, item: str, document: Document, clock: Clock) -
 
 def reconcile_current_embeddings(store: Store, item: str, version: str) -> None:
     previous = store.connection.execute(
-        "SELECT d.reference, d.text_digest, p.ordinal FROM embedding_document d JOIN part p ON d.reference = 'part:' || p.id JOIN item i ON i.latest_version = p.version_id WHERE i.id = ? AND i.latest_version != ?",
+        "SELECT p.id, p.ordinal FROM part p JOIN item i ON i.latest_version = p.version_id "
+        "WHERE i.id = ? AND i.latest_version != ?",
         (item, version),
     ).fetchall()
+    references = tuple("part:" + str(row["id"]) for row in previous)
+    states = {
+        entry.reference: entry.digest
+        for entry in unwrap(semantic.inspect_index(store.connection, references))
+    }
     for old in previous:
+        reference = "part:" + str(old["id"])
+        previous_digest = states[reference]
+        if previous_digest is None:
+            continue
         current = store.connection.execute(
-            "SELECT id, text_digest FROM part WHERE version_id = ? AND ordinal = ?",
+            "SELECT id, text_digest, text FROM part WHERE version_id = ? AND ordinal = ?",
             (version, old["ordinal"]),
         ).fetchone()
-        if current is not None and current["text_digest"] == old["text_digest"]:
-            store.connection.execute(
-                "UPDATE embedding_document SET reference = ? WHERE reference = ?",
-                ("part:" + str(current["id"]), old["reference"]),
+        if current is not None and current["text_digest"] == previous_digest:
+            unwrap(
+                semantic.relocate_embedding(
+                    store.connection,
+                    reference,
+                    semantic.Source("part:" + str(current["id"]), current["text"]),
+                    expected_digest=previous_digest,
+                )
             )
         else:
-            store.connection.execute(
-                "DELETE FROM embedding_document WHERE reference = ?", (old["reference"],)
-            )
+            unwrap(semantic.invalidate_embedding(store.connection, reference))
 
 
 @boundary

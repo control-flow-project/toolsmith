@@ -1,0 +1,9 @@
+{
+  "group": "example",
+  "period_seconds": 60,
+  "group_requests": 5,
+  "group_bytes": 5242880,
+  "task_requests": 3,
+  "task_bytes": 3145728,
+  "minimum_interval_seconds": 1
+}

@@ -15,6 +15,17 @@ selected implicitly.
 
 ## Capabilities
 
+The 2026-10-13 consumer-coverage extension also requires archive-independent
+parsing types, streaming regular-file hash/copy, bounded generic tabular reading,
+article/access-screen and feed-date fidelity, caller-owned lexical indexes,
+cheap bulk semantic index state, independent approved HTTP responses and shared
+group/task acquisition budgets. Every addition needs a concrete consumer call,
+an ownership decision and executable verification in the capability mapping.
+Do not copy application schemas, summaries, permissions or financial logic.
+Adopting projects replace their applicable generic implementation completely;
+other fleets remain free not to install Toolsmith. Directory reorganization is
+proposed only after this coverage work; no import aliases are retained.
+
 - Bounded UTF-8 text, meaningful HTML and RSS/Atom reading.
 - Explicit safe regular-file reads and private artifact storage/export.
 - Immutable local text/file versions and exact citations, with lexical FTS5 search.
@@ -57,8 +68,13 @@ does not include another collection. Collection labels are accident prevention,
 not isolation from arbitrary full-access processes under the same OS account.
 
 Persistent source-limit state lives in a separately explicit private network-state
-directory, shared by every cooperating caller using the same upstream quota. It
-uses validated bounded files and kernel locks, not another database or process.
+directory, shared by every cooperating caller using the same upstream quota. One
+bounded `budget.json` holds group/task charges, reservations, pacing and cooldowns.
+It uses validated files and kernel locks, not another database or process. Boot,
+wall and monotonic observations preserve elapsed quota periods and reject clock
+rollback. Changing a policy cannot silently clear charges. Explicit quiesced
+forward quota import accepts reviewed generic counters, not consumer-specific
+legacy formats, and preserves their period and unknown charged usage.
 There is no guarantee over callers selecting other state roots or bypassing tools.
 
 Linux, Python 3.13+ and SQLite FTS5 are required for secure local persistence.
@@ -124,8 +140,14 @@ credentials. Export destinations are explicit and cannot overwrite existing file
 
 Backup is consistent under the selected store lock. Restore verifies the complete
 backup before creating a new destination; it never overwrites production. Reject
-unsupported schemas. Version one has no deployed predecessor to migrate; future
-forward migrations need actual schema evidence and verified backups.
+unsupported schemas. The current optional archive schema is version two: its
+lexical derivatives use the same caller-owned index implementation, not a second
+archive-specific engine. Explicit version-one migration verifies the reviewed
+source schema, canonical provenance and objects, copies to a new destination,
+verifies the copy, replaces only its derivative relations and verifies the result.
+The original remains unchanged as the preserved rollback copy. There is no
+ordinary version-one reader, automatic migration or reset. Neither adopting
+consumer is required to use this archive or its migration.
 
 Cleanup requires a preview describing exact eligible inactive staging files and
 their identities, then verifies the plan before deletion. Unknown files, symlinks,

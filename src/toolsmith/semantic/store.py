@@ -12,8 +12,9 @@ from toolsmith.semantic import (
     Candidate,
     Encoder,
     Source,
+    clear_index,
     encode_query,
-    indexed_digest,
+    inspect_index,
     load_model,
     prepare_embedding,
     publish_embedding,
@@ -63,12 +64,26 @@ def selected_encoder(directory: Path, encoder: Encoder | None) -> Iterator[Encod
             yield loaded
 
 
+def current_parts(store: Store) -> list[sqlite3.Row]:
+    return store.connection.execute(
+        "SELECT p.id, p.text_digest FROM part p JOIN item i ON i.latest_version=p.version_id "
+        "WHERE p.has_text=1 ORDER BY p.id"
+    ).fetchall()
+
+
 def current_status(store: Store) -> TextIndexStatus:
-    parts, indexed = store.connection.execute(
-        "SELECT COUNT(*), COALESCE(SUM(CASE WHEN d.profile_id = ? AND d.text_digest = p.text_digest THEN 1 ELSE 0 END), 0) FROM part p JOIN item i ON i.latest_version = p.version_id LEFT JOIN embedding_document d ON d.reference = 'part:' || p.id WHERE p.has_text = 1",
-        (PROFILE_ID,),
-    ).fetchone()
-    return TextIndexStatus(parts, indexed, parts - indexed, PROFILE_ID)
+    rows = current_parts(store)
+    states = {
+        state.reference: state.digest
+        for state in unwrap(
+            inspect_index(
+                store.connection,
+                tuple("part:" + str(row["id"]) for row in rows),
+            )
+        )
+    }
+    indexed = sum(states["part:" + str(row["id"])] == row["text_digest"] for row in rows)
+    return TextIndexStatus(len(rows), indexed, len(rows) - indexed, PROFILE_ID)
 
 
 @boundary
@@ -89,10 +104,19 @@ def index_text(
 ) -> TextIndexReport:
     maximum = integer(maximum_parts, 1, 100, "Maximum indexed parts")
     with open_store(root, collection) as store:
-        selected = store.connection.execute(
-            "SELECT p.id FROM part p JOIN item i ON i.latest_version = p.version_id LEFT JOIN embedding_document d ON d.reference = 'part:' || p.id WHERE p.has_text = 1 AND (d.reference IS NULL OR d.text_digest != p.text_digest OR d.profile_id != ?) ORDER BY p.id LIMIT ?",
-            (PROFILE_ID, maximum),
-        ).fetchall()
+        rows = current_parts(store)
+        states = {
+            state.reference: state.digest
+            for state in unwrap(
+                inspect_index(
+                    store.connection,
+                    tuple("part:" + str(row["id"]) for row in rows),
+                )
+            )
+        }
+        selected = [row for row in rows if states["part:" + str(row["id"])] != row["text_digest"]][
+            :maximum
+        ]
         if not selected:
             return TextIndexReport(0, current_status(store))
     with selected_encoder(model_directory, encoder) as actual:
@@ -116,7 +140,7 @@ def index_parts(
                     "conflict", "Current text changed before indexing; retry explicitly"
                 )
             source = Source(reference, row_text(row, "text", 4 * 1024 * 1024))
-            previous = unwrap(indexed_digest(store.connection, reference))
+            previous = unwrap(inspect_index(store.connection, (reference,)))[0].digest
         prepared = unwrap(prepare_embedding(source, actual))
         with open_store(root, collection, write=True) as store, store.connection:
             row = store.connection.execute(
@@ -229,8 +253,4 @@ def search_parts(
 @boundary
 def clear_text_index(root: Path, collection: str) -> int:
     with open_store(root, collection, write=True) as store, store.connection:
-        count = store.connection.execute("SELECT COUNT(*) FROM embedding_document").fetchone()[0]
-        store.connection.execute("DELETE FROM embedding_chunk")
-        store.connection.execute("DELETE FROM embedding_document")
-        store.connection.execute("DELETE FROM embedding_profile")
-        return int(count)
+        return unwrap(clear_index(store.connection))

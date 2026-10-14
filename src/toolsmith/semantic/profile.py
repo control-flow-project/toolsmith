@@ -4,7 +4,7 @@ import struct
 from dataclasses import dataclass
 
 from toolsmith.result import ToolsmithError
-from toolsmith.validation import canonical_json, text
+from toolsmith.validation import canonical_json, source_reference, text
 
 MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
@@ -77,13 +77,6 @@ def validate_source(source: Source) -> None:
         raise ToolsmithError("invalid_input", "Supply an explicitly English semantic source")
     source_reference(source.reference)
     text(source.text, MAX_SOURCE_BYTES, "Source text")
-
-
-def source_reference(value: object) -> str:
-    reference = text(value, 200, "Source reference")
-    if any(ord(character) < 32 or ord(character) == 127 for character in reference):
-        raise ToolsmithError("invalid_input", "References cannot contain control characters")
-    return reference
 
 
 def pack_vector(values: tuple[float, ...]) -> bytes:

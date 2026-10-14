@@ -1,95 +1,125 @@
 # Architecture
 
 ```text
-Caller imports toolsmith            Human or agent invokes toolsmith CLI
+Caller imports Toolsmith         Human or agent invokes its short-lived CLI
            |                                      |
            +---------- validated library ----------+
                                  |
-              selected reader / storage / acquisition / maintenance
+          filesystem / parsing / HTTP / search / journal
                                  |
-              explicit local files and SQLite; approved outbound HTTPS
+          explicit files; caller-owned SQLite; approved outbound HTTPS
                                  |
-                      result or expected failure; return
+                   result or expected failure; return
 ```
 
-There is no service transport, job queue, plugin framework or second implementation.
-The package does not depend on Crossfire, fleetd, any agent runtime or domain project.
-Consumers can continue using all fleet functions without installing Toolsmith.
+The separately optional text archive composes those same primitives with its
+own version/citation/retention schema. It is not a required application database,
+a generic storage backend, or another parsing/network/index implementation.
+No service transport, daemon, job queue, plugin framework, helper process or
+worker thread exists. Toolsmith has no fleet/runtime/domain dependency.
 
-## Source ownership
+## Current source ownership
 
 ```text
-toolsmith/
-├── AGENTS.md, LICENSE, README.md, pyproject.toml, uv.lock
-├── docs/
-├── src/toolsmith/
-│   ├── result.py, validation.py, clock.py, files.py
-│   ├── readers/             UTF-8, static HTML, RSS/Atom
-│   ├── storage/             One SQLite schema, versions, artifacts, operation records
-│   ├── acquisition/         Explicit policy, quotas, bounded DNS/TLS/HTTPS, resume
-│   ├── retrieval.py         Literal lexical search and exact citations
-│   ├── semantic/            Offline encoder, generic SQLite vectors, store composition
-│   ├── operations/          Integrity, index rebuild, backup/restore, staging cleanup
-│   └── cli/                 Argument parsing and calls to the same library
-├── scripts/                 Development verification and package acceptance
-└── tests/                   Controlled fixtures, integration and architecture checks
+src/toolsmith/
+├── result.py, validation.py, clock.py, compression.py, sqlite.py
+├── files.py, filesystem.py  Safe IO, streams, descriptors, locks and tree publication
+├── archives.py             Exact explicitly selected files, not document manifests
+├── readers/                Parsing types, UTF-8/JSON, static HTML, feeds and tables
+├── lexical/                Caller-owned derivatives and exact literal passages
+├── semantic/               Offline encoder, caller-owned vectors and bulk metadata
+│   └── store.py            Optional archive composition, no second vector engine
+├── acquisition/
+│   ├── client.py           Generic approved raw HTTPS responses
+│   ├── transport.py        One DNS/TLS/HTTPS implementation
+│   ├── urls.py, config.py   Boundary validation and generic policy parsing
+│   ├── budgets.py          Shared durable group/task reservations and cooldowns
+│   ├── budget_import.py    Explicit reviewed quota transfer, original state retained
+│   └── http.py, policy.py, limits.py
+│                           Optional archive receipts/retention composition
+├── journal.py              Generic bounded JSON framing; caller-owned event meaning
+├── storage/                Optional archive schema, immutable versions/files/receipts
+├── retrieval.py            Archive citations and composition of generic lexical search
+├── operations/             Archive integrity/backup/restore/staging cleanup
+└── cli/                    Thin calls to the same libraries
 ```
 
-No empty browser, PDF, OCR or migration modules exist. Schema one is
-the only schema. A future migration must be based on a real deployed predecessor,
-not a speculative compatibility layer.
+This describes the implemented paths. The [full proposed layout](proposed-layout.md)
+moves them into explicit capability namespaces once approved; it creates no aliases,
+parallel implementations or runtime placeholders.
 
-## Persistent state
+No browser/PDF/OCR substitute exists. No application source approvals, financial
+schemas/calculations, summary model or agent instructions are copied here.
+
+## Application-owned data and derivatives
+
+Consumers keep canonical pages/articles, identity, permission and source-correction
+rules in their own databases. Public lexical/semantic libraries own only indexed
+derivative relations, use application transactions and leave its row factory and
+schema version unchanged. Initialization is explicit and requires foreign keys
+before writes. Expected failures roll back; encoding remains outside transactions.
+
+Candidates are authorized by the caller and joined with current digests before
+ranking and result limits. Missing/stale coverage is explicit. BM25 statistics
+are database-wide; candidates are not statistical corpus isolation. GAAP therefore
+keeps its room-specific databases. Literal passages and indexed lexical/semantic
+queries have deliberately different semantics, never fallback behavior.
+
+Bulk readiness reads metadata only. Full source/chunk/vector audits are separate,
+explicit operations. Reference relocation reuses exact unchanged vectors without
+inference. There is one lexical engine for applications and the optional archive.
+
+Native inference uses exact pinned MiniLM assets and ONNX C API with explicit,
+reverse-order lifetimes, one CPU calling thread and no download/backend fallback.
+Telemetry is opted out before startup creates a cache/uploader; the caller's prior
+environment is restored. Actual acceptance checks native slots, inference, threads
+and syscalls rather than treating fixture encoders as native certification.
+
+## Explicit persistent state
 
 ```text
-<explicit private collection root>/
-├── .lock                    Cooperating-reader/writer kernel lock
-├── toolsmith.sqlite3        Collection, text/file versions, chunks, FTS, operations
-├── objects/<sha256>         Immutable permitted file bytes
-└── tmp/.stage-<uuid>.tmp    Invocation-owned staging
+<application-owned database>
+└── Toolsmith lexical/semantic derivative relations, only if selected
 
 <explicit shared network-state root>/
+├── .lock                    Cooperating-caller kernel lock
+└── budget.json              One group/task period, reservations, spacing/cooldowns
+
+<explicit journal root>/
 ├── .lock
-└── <source-group-hash>.json Policy binding, current quota window, reservations/cooldown
+└── journal.jsonl            Bounded generic JSON events; application-owned retention
+
+<separately optional archive root>/
+├── .lock
+├── toolsmith.sqlite3        Current archive schema v2, versions/files/operations
+├── objects/<sha256>         Immutable retained file bytes
+└── tmp/.stage-<uuid>.tmp    Invocation-owned staging
 ```
 
-Each store has one collection. Every store API checks its identity before lookup,
-mutation or search. BM25 ranks only that collection, not unrelated tenants' text.
-Names and caller-supplied labels do not grant filesystem authority or isolate
-arbitrary programs running as the same user.
+Neither consumer must create the last root. No private/global default is chosen
+on import or installation. Cooperating kernel locks/private modes prevent ordinary
+mistakes; labels and digests do not isolate arbitrary same-user processes.
 
-Text versions bind exact validated item/provenance/parts; recording time is separate.
-An item's current pointer changes on a new import, but old versions remain citable.
-Replaying a completed request does not revert the current pointer. Request identities
-bind exact validated input and reject reuse with different input.
+## Durability and explicit recovery
 
-Retained text parts are authoritative. Chunk spans and lexical postings are derived
-by one chunking implementation used for both normal writes and explicit rebuilds.
-Integrity checks verify complete coverage, not just the spans of remaining chunks.
-The cleanup plan also has one owning validator shared by library and CLI calls.
+Regular-file IO is bounded/no-follow and checks stable descriptor metadata. Tree
+inventory reads metadata, not every content digest. Exact-file ZIPs are streamed,
+validated and published atomically without overwriting existing destinations.
+Mutable state uses explicit atomic replacement; original artifacts are immutable.
 
-Semantic tables are derived, in the same database. Generic functions accept
-caller-owned SQLite so consumers with an archive need not duplicate it. The store
-composition uses the same vector implementation. The only optional backend uses
-the exact pinned native ONNX C API, not its NumPy/Python wrapper. Resource lifetimes
-are explicit, reverse-ordered and ABI-checked; no fallback/global thread tuning.
-Native startup disables provider telemetry before it can create an uploader or
-global cache, restoring the process environment after construction. This privacy
-policy suppresses ONNX's process-wide telemetry; it is not a host configuration.
-Inference occurs outside SQL transactions, with source/digest rechecks before
-publication. Search has explicit bounded authorized candidates and coverage.
+Generic HTTP returns raw bytes/receipts without a store. Consumers keep their own
+durable job admission via the pre-request hook. One shared budget engine can also
+charge externally owned browser operations. Unknown usage stays reserved; changes
+to policy or reboot/clock rollback cannot clear quotas. Explicit forward import
+takes reviewed counters/cooldowns into an empty root; there is no old-state reader.
 
-File bytes are fsynced before transactional metadata references them. A crash may
-leave an unreferenced object; metadata never intentionally references unwritten bytes.
-Initialization publishes a complete schema from staging; unpublished staging can
-be retried without adopting a partial database. SQLite writes roll back on failure.
+Archive HTTP composition owns retained request/result identities and explicit
+resume. It calls the same HTTPS producer. Network/native effects stay outside SQL
+transactions. Status starts nothing; retries uncertain GETs are explicitly requested
+and disclosed, within remaining admission limits.
 
-Read locks are shared; writes are exclusive and nonblocking. Contention returns
-`deferred`, not a waiting background job. Acquisition holds the store write lock
-for its bounded invocation and releases network-state locks between reservations.
-Network I/O never occurs inside a SQLite transaction.
-
-HTTP resumes use the saved validated request and existing request count. Policy
-and network-root bindings cannot be changed under the same operation identity.
-Completed results are reused. Interrupted GETs can be retried only explicitly,
-with uncertainty reported; unknown response usage remains conservatively reserved.
+Archive schema v2 replaces its old chunk writer/schema with the generic lexical
+engine. A finite offline v1-to-v2 migration verifies originals, copies into a new
+destination, rebuilds only derivatives and verifies before publication. The source
+remains unchanged as the rollback copy. Ordinary reads accept only the current
+schema: no dual runtime reader, automatic migration, reset or hidden fallback.

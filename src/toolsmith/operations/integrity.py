@@ -3,12 +3,13 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from toolsmith import lexical
 from toolsmith.files import MAX_FILE_BYTES, read_private
+from toolsmith.readers.models import Document, TextPart
 from toolsmith.result import ToolsmithError, boundary, unwrap
 from toolsmith.semantic import check_index
 from toolsmith.storage.database import Store, open_store, row_integer, row_optional_text, row_text
-from toolsmith.storage.index import index_part, text_chunks
-from toolsmith.storage.models import Document, TextPart, file_name, media_type, validate_document
+from toolsmith.storage.models import file_name, media_type, validate_document
 from toolsmith.validation import canonical_json, digest, json_value, parse_json, text
 
 
@@ -120,36 +121,35 @@ def validate_embeddings(store: Store) -> None:
 def validate_database(store: Store) -> int:
     validate_retained(store)
     validate_embeddings(store)
-    connection = store.connection
-    for part in connection.execute("SELECT id, text FROM part ORDER BY id"):
-        chunks = connection.execute(
-            "SELECT start_offset, end_offset, text FROM chunk WHERE part_id = ? ORDER BY start_offset",
-            (part["id"],),
+
+    def source(reference: str) -> str | None:
+        row = store.connection.execute(
+            "SELECT text FROM part WHERE 'part:' || id = ?",
+            (reference,),
+        ).fetchone()
+        return None if row is None else row_text(row, "text", 4 * 1024 * 1024)
+
+    count = unwrap(lexical.check_index(store.connection, source))
+    if count != store.connection.execute("SELECT count(*) FROM part").fetchone()[0]:
+        raise ToolsmithError("integrity", "Lexical index is missing retained parts")
+    if (
+        store.connection.execute(
+            "SELECT 1 FROM lexical_document d LEFT JOIN part p ON d.reference = 'part:' || p.id "
+            "LEFT JOIN text_version v ON v.id = p.version_id WHERE p.id IS NULL OR d.title != v.title LIMIT 1"
+        ).fetchone()
+        is not None
+    ):
+        raise ToolsmithError(
+            "integrity", "Lexical title or source binding differs from retained text"
         )
-        for expected in text_chunks(row_text(part, "text", 4 * 1024 * 1024)):
-            actual = next(chunks, None)
-            if actual is None or tuple(actual) != expected:
-                raise ToolsmithError(
-                    "integrity", "Indexed chunks do not completely match the retained text"
-                )
-        if next(chunks, None) is not None:
-            raise ToolsmithError("integrity", "Index contains unexpected retained-text chunks")
-    mismatch = connection.execute(
-        "SELECT 1 FROM chunk c JOIN part p ON p.id = c.part_id JOIN text_version v ON v.id = p.version_id LEFT JOIN chunk_search f ON f.rowid = c.id WHERE f.rowid IS NULL OR f.text != c.text OR f.title != v.title LIMIT 1"
-    ).fetchone()
-    orphan = connection.execute(
-        "SELECT 1 FROM chunk_search f LEFT JOIN chunk c ON c.id = f.rowid WHERE c.id IS NULL LIMIT 1"
-    ).fetchone()
-    if mismatch is not None or orphan is not None:
-        raise ToolsmithError("integrity", "Lexical index differs from the canonical retained text")
     probe = sqlite3.connect(":memory:")
     try:
-        probe.deserialize(connection.serialize())
+        probe.deserialize(store.connection.serialize())
         probe.execute("PRAGMA trusted_schema = OFF")
-        probe.execute("INSERT INTO chunk_search (chunk_search) VALUES ('integrity-check')")
+        probe.execute("INSERT INTO lexical_search (lexical_search) VALUES ('integrity-check')")
     finally:
         probe.close()
-    return int(connection.execute("SELECT count(*) FROM chunk").fetchone()[0])
+    return int(store.connection.execute("SELECT count(*) FROM lexical_chunk").fetchone()[0])
 
 
 def validate_objects(store: Store) -> int:
@@ -181,16 +181,21 @@ def rebuild_index(root: Path, collection: str) -> IntegrityReport:
     with open_store(root, collection, write=True) as store:
         with store.connection:
             validate_retained(store)
-            store.connection.execute("DELETE FROM chunk_search")
-            store.connection.execute("DELETE FROM chunk")
+            store.connection.execute("DELETE FROM lexical_search")
+            store.connection.execute("DELETE FROM lexical_document")
             for part in store.connection.execute(
                 "SELECT p.id, p.text, v.title FROM part p JOIN text_version v ON v.id = p.version_id ORDER BY p.id"
             ):
-                index_part(
-                    store,
-                    row_integer(part, "id"),
-                    row_text(part, "title"),
-                    row_text(part, "text", 4 * 1024 * 1024),
+                unwrap(
+                    lexical.index_source(
+                        store.connection,
+                        lexical.Source(
+                            "part:" + str(row_integer(part, "id")),
+                            row_text(part, "text", 4 * 1024 * 1024),
+                            row_text(part, "title"),
+                        ),
+                        expected_digest=None,
+                    )
                 )
         chunks = validate_database(store)
         return IntegrityReport(store.collection, 0, chunks, True)

@@ -32,16 +32,6 @@ CREATE TABLE part (
     UNIQUE (version_id, ordinal)
 );
 CREATE INDEX part_version ON part(version_id, ordinal);
-CREATE TABLE chunk (
-    id INTEGER PRIMARY KEY,
-    part_id INTEGER NOT NULL REFERENCES part(id),
-    start_offset INTEGER NOT NULL CHECK (start_offset >= 0),
-    end_offset INTEGER NOT NULL CHECK (end_offset > start_offset),
-    text TEXT NOT NULL,
-    UNIQUE (part_id, start_offset, end_offset)
-);
-CREATE INDEX chunk_part ON chunk(part_id, start_offset);
-CREATE VIRTUAL TABLE chunk_search USING fts5(text, title, tokenize = 'unicode61');
 CREATE TABLE blob (
     id TEXT PRIMARY KEY,
     size INTEGER NOT NULL CHECK (size >= 0)

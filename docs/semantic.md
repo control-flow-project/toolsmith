@@ -114,7 +114,13 @@ explicitly rather than running unbounded work or silently dropping candidates.
 Missing or stale vectors are excluded and counted in coverage; this is not a
 silent fallback or a claim that the full archive was indexed.
 
-`indexed_digest` checks existing chunk completeness, without inference. Repeated
+`inspect_index(connection, references)` returns cheap bulk digest/character/chunk
+metadata without reading source bodies or vectors. Use it for readiness, not
+integrity certification. `indexed_digest` fully validates existing vectors and
+complete source spans without inference; it is intentionally not a cheap readiness
+call. `relocate_embedding` reuses exact unchanged vectors under a new reference;
+`clear_index` removes only derivatives, never application tables or canonical text.
+Repeated
 identical publication reuses vectors. Changed publication must supply the previous
 digest; a competing update produces `conflict` and rolls back only its savepoint.
 Consumers must also recheck their canonical source at publication: an index's

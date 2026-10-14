@@ -1,14 +1,20 @@
+import html
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import cast
 from urllib.parse import urljoin
 
 from toolsmith.acquisition.urls import canonical_url
+from toolsmith.readers.html_dom import OMIT, content_text, normalized_text, parse_html
 from toolsmith.readers.text import decode_text
 from toolsmith.result import ToolsmithError, boundary
-from toolsmith.validation import integer, text, timestamp
+from toolsmith.validation import integer, text
+
+ATOM = "{http://www.w3.org/2005/Atom}"
+DC = "{http://purl.org/dc/elements/1.1/}"
 
 
 @dataclass(frozen=True)
@@ -17,7 +23,11 @@ class FeedEntry:
     title: str
     excerpt: str
     published_original: str | None
+    published_source_at: str | None
     published_at: str | None
+    updated_original: str | None
+    updated_source_at: str | None
+    updated_at: str | None
 
 
 @dataclass(frozen=True)
@@ -25,45 +35,65 @@ class Feed:
     title: str
     entries: tuple[FeedEntry, ...]
     warnings: tuple[str, ...]
+    total_entries: int
+    duplicate_entries: int
+    truncated: bool
 
 
-def local_tag(element: ET.Element) -> str:
-    return element.tag.rsplit("}", 1)[-1]
+def selected(parent: ET.Element, name: str) -> ET.Element | None:
+    matches = parent.findall(name)
+    if len(matches) > 1:
+        raise ToolsmithError("conflict", "Feed contains an ambiguous duplicate field")
+    return matches[0] if matches else None
 
 
-def field_value(element: ET.Element, name: str, maximum: int) -> str | None:
+def markup_text(element: ET.Element) -> str:
+    if element.tag.rsplit("}", 1)[-1].lower() in OMIT:
+        return ""
+    parts = [element.text or ""]
     for child in element:
-        if local_tag(child) == name:
-            return text(
-                "".join(child.itertext()).strip(), maximum, "Feed " + name, allow_empty=True
-            )
-    return None
+        parts.extend((markup_text(child), child.tail or ""))
+    return " ".join(parts)
 
 
-def feed_date(value: str | None) -> str | None:
-    if not value:
+def field_text(element: ET.Element | None, maximum: int) -> str | None:
+    if element is None:
         return None
+    value = markup_text(element)
+    for _iteration in range(5):
+        decoded = html.unescape(value)
+        if decoded == value:
+            break
+        value = decoded
+    if html.unescape(value) != value:
+        raise ToolsmithError("limit", "Feed field contains excessive nested escapes")
+    parsed = parse_html(("<div>" + value + "</div>").encode())
+    extracted = normalized_text(content_text(parsed))
+    return text(extracted, maximum, "Feed field", allow_empty=True)
+
+
+def feed_dates(value: str | None) -> tuple[str | None, str | None]:
+    if not value:
+        return None, None
     try:
-        return timestamp(value, "Feed date")
-    except ToolsmithError:
         try:
-            parsed = parsedate_to_datetime(value)
-            return timestamp(parsed.isoformat(), "Feed date") if parsed.tzinfo is not None else None
-        except (ValueError, TypeError, OverflowError):
-            return None
+            instant = datetime.fromisoformat(value)
+        except ValueError:
+            instant = parsedate_to_datetime(value)
+        if instant.utcoffset() is None:
+            return None, None
+        return instant.isoformat(), instant.astimezone(UTC).isoformat()
+    except (ValueError, TypeError, OverflowError):
+        return None, None
 
 
-@boundary
-def read_feed(content: bytes, source_url: str, maximum_entries: int = 100) -> Feed:
-    source = canonical_url(source_url)
-    maximum = integer(maximum_entries, 1, 1000, "Maximum entries")
-    decoded = decode_text(content)
-    if re.search(r"<!\s*(?:DOCTYPE|ENTITY)", decoded, re.I):
+def bounded_xml(content: bytes) -> ET.Element:
+    decoded = decode_text(content, 2 * 1024 * 1024)
+    if re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b", decoded, re.I):
         raise ToolsmithError("denied", "Feed DTDs and entity definitions are not permitted")
     parser: ET.XMLPullParser[ET.Element[str]] = ET.XMLPullParser(events=("start", "end"))
-    depth = 0
-    nodes = 0
     root: ET.Element | None = None
+    depth, nodes = 0, 0
     try:
         for offset in range(0, len(decoded), 4096):
             parser.feed(decoded[offset : offset + 4096])
@@ -75,60 +105,106 @@ def read_feed(content: bytes, source_url: str, maximum_entries: int = 100) -> Fe
                         root = element
                     depth += 1
                     nodes += 1
-                    if depth > 32 or nodes > 50_000 or len(element.attrib) > 32:
-                        raise ToolsmithError("limit", "Feed structure exceeds its bounded limits")
+                    if depth > 32 or nodes > 12000 or len(element.attrib) > 16:
+                        raise ToolsmithError("limit", "Feed exceeds its structural budget")
+                    if len(element.tag) > 500 or any(
+                        len(name) > 500 or len(value.encode()) > 8192
+                        for name, value in element.attrib.items()
+                    ):
+                        raise ToolsmithError("limit", "Feed metadata exceeds its field budget")
                 else:
                     depth -= 1
+                    if any(
+                        len(value.encode()) > 32768
+                        for value in (element.text or "", element.tail or "")
+                    ):
+                        raise ToolsmithError("limit", "Feed text exceeds its field budget")
         parser.close()
     except ET.ParseError as error:
         raise ToolsmithError("invalid_input", "Feed XML is malformed") from error
-    if root is None or local_tag(root) not in {"rss", "feed"}:
-        raise ToolsmithError("invalid_input", "Only RSS and Atom feeds are supported")
-    container = next((child for child in root if local_tag(child) == "channel"), root)
-    entries: dict[str, FeedEntry] = {}
-    truncated = False
-    for element in container:
-        if local_tag(element) not in {"item", "entry"}:
-            continue
-        if len(entries) >= maximum:
-            truncated = True
-            break
-        link = field_value(element, "link", 8192)
-        if local_tag(element) == "entry":
-            link = next(
-                (
-                    child.attrib.get("href")
-                    for child in element
-                    if local_tag(child) == "link"
-                    and child.attrib.get("rel", "alternate") == "alternate"
-                ),
-                None,
-            )
+    if root is None or depth:
+        raise ToolsmithError("invalid_input", "Feed has no complete root")
+    return root
+
+
+def feed_entry(element: ET.Element, source: str, atom: bool) -> FeedEntry:
+    prefix = ATOM if atom else ""
+    title = field_text(selected(element, prefix + "title"), 1024)
+    if not title:
+        raise ToolsmithError("invalid_input", "Feed entry needs a meaningful title")
+    if atom:
+        links = {
+            canonical_url(urljoin(source, child.attrib.get("href", "")))
+            for child in element.findall(ATOM + "link")
+            if child.attrib.get("rel", "alternate") == "alternate"
+            and child.attrib.get("type", "text/html") in {"text/html", "application/xhtml+xml"}
+        }
+        if len(links) != 1:
+            raise ToolsmithError("conflict", "Atom needs one unambiguous alternate article link")
+        url = next(iter(links))
+    else:
+        link = field_text(selected(element, "link"), 8192)
         if not link:
             raise ToolsmithError("invalid_input", "Feed entry lacks an explicit article link")
         url = canonical_url(urljoin(source, link))
-        original = (
-            field_value(element, "pubDate", 200)
-            or field_value(element, "published", 200)
-            or field_value(element, "updated", 200)
-        )
-        entry = FeedEntry(
-            url,
-            field_value(element, "title", 4096) or "Untitled entry",
-            field_value(element, "description", 65_536)
-            or field_value(element, "summary", 65_536)
-            or "",
-            original,
-            feed_date(original),
-        )
-        if url in entries and entries[url] != entry:
-            raise ToolsmithError("conflict", "Feed contains conflicting entries for the same URL")
-        entries[url] = entry
+    publication = selected(element, prefix + ("published" if atom else "pubDate"))
+    if publication is None and not atom:
+        publication = selected(element, DC + "date")
+    original = field_text(publication, 200)
+    update = field_text(selected(element, ATOM + "updated"), 200) if atom else None
+    excerpt = selected(element, prefix + ("summary" if atom else "description"))
+    if excerpt is None and atom:
+        excerpt = selected(element, ATOM + "content")
+    source_at, utc_at = feed_dates(original)
+    updated_source_at, updated_at = feed_dates(update)
+    return FeedEntry(
+        url,
+        title,
+        field_text(excerpt, 65536) or "",
+        original,
+        source_at,
+        utc_at,
+        update,
+        updated_source_at,
+        updated_at,
+    )
+
+
+@boundary
+def read_feed(content: bytes, source_url: str, maximum_entries: int = 100) -> Feed:
+    source = canonical_url(source_url)
+    maximum = integer(maximum_entries, 1, 1000, "Maximum entries")
+    root = bounded_xml(content)
+    if root.tag == "rss":
+        channel = selected(root, "channel")
+        if channel is None:
+            raise ToolsmithError("invalid_input", "RSS requires exactly one channel")
+        entries = channel.findall("item")
+        container, atom = channel, False
+    elif root.tag == ATOM + "feed":
+        entries = root.findall(ATOM + "entry")
+        container, atom = root, True
+    else:
+        raise ToolsmithError("invalid_input", "Only RSS and namespaced Atom are supported")
+    if len(entries) > 1000:
+        raise ToolsmithError("limit", "Feed exceeds its 1000-entry budget")
+    distinct: dict[str, FeedEntry] = {}
+    for element in entries:
+        entry = feed_entry(element, source, atom)
+        if entry.url in distinct and distinct[entry.url] != entry:
+            raise ToolsmithError("conflict", "Feed contains conflicting entries for one URL")
+        distinct[entry.url] = entry
+    truncated = len(distinct) > maximum
     warnings: tuple[str, ...] = (
         "Feed discovery does not fetch articles; supplied dates and excerpts are unverified.",
     )
     if truncated:
         warnings += ("Entry limit reached; remaining entries were not returned.",)
     return Feed(
-        field_value(container, "title", 4096) or "Untitled feed", tuple(entries.values()), warnings
+        field_text(selected(container, (ATOM if atom else "") + "title"), 1024) or "Untitled feed",
+        tuple(distinct.values())[:maximum],
+        warnings,
+        len(entries),
+        len(entries) - len(distinct),
+        truncated,
     )

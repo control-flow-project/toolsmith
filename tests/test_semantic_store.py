@@ -7,6 +7,7 @@ from semantic_support import FixtureEncoder
 from toolsmith.cli import main
 from toolsmith.operations.backup import backup_store, restore_store
 from toolsmith.operations.integrity import check_integrity
+from toolsmith.readers.models import Document, TextPart
 from toolsmith.result import Failure, Success, unwrap
 from toolsmith.retrieval import read_citation
 from toolsmith.semantic.store import (
@@ -16,7 +17,6 @@ from toolsmith.semantic.store import (
     search_semantic_text,
 )
 from toolsmith.storage.database import open_store
-from toolsmith.storage.models import Document, TextPart
 from toolsmith.storage.text import put_text
 
 
