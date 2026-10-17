@@ -172,6 +172,51 @@ def expanded_body(content: bytes, encoding: str | None, maximum_bytes: int) -> b
     return result.value
 
 
+def read_response(
+    response: http.client.HTTPResponse, maximum_bytes: int, deadline: float, clock: Clock
+) -> Response:
+    headers = tuple(response.getheaders())
+    length = one_header(headers, "content-length")
+    transfer = one_header(headers, "transfer-encoding")
+    encoding = one_header(headers, "content-encoding")
+    declared_bytes: int | None = None
+    if length is not None:
+        digits = length.lstrip("0") or "0"
+        if (
+            not length.isascii()
+            or not length.isdecimal()
+            or len(digits) > len(str(maximum_bytes))
+            or int(digits) > maximum_bytes
+        ):
+            raise ToolsmithError(
+                "limit",
+                "Declared response bytes exceed the explicit limit or are invalid",
+            )
+        declared_bytes = int(digits)
+    if transfer is not None and (transfer.lower() != "chunked" or length is not None):
+        raise ToolsmithError("http", "Response framing is ambiguous or unsupported")
+    chunks = bytearray()
+    while len(chunks) <= maximum_bytes:
+        if response.isclosed():
+            break
+        chunk = response.read1(min(65_536, maximum_bytes + 1 - len(chunks)))
+        if not chunk:
+            break
+        chunks.extend(chunk)
+    remaining(deadline, clock)
+    if len(chunks) > maximum_bytes:
+        raise ToolsmithError("limit", "Response wire bytes exceed the explicit limit")
+    if declared_bytes is not None and len(chunks) != declared_bytes:
+        raise ToolsmithError("http", "Response ended before its declared length")
+    wire = bytes(chunks)
+    return Response(
+        response.status,
+        headers,
+        expanded_body(wire, encoding, maximum_bytes),
+        len(wire),
+    )
+
+
 class NativeTransport:
     def get(
         self,
@@ -192,7 +237,7 @@ class NativeTransport:
                 "GET",
                 parts.path + ("?" + parts.query if parts.query else ""),
                 headers={
-                    "User-Agent": "Mozilla/5.0 (Toolsmith/0.3.0; approved bounded acquisition)",
+                    "User-Agent": "Mozilla/5.0 (Toolsmith/0.4.0; approved bounded acquisition)",
                     "Accept": "*/*",
                     "Accept-Encoding": "gzip",
                     "Connection": "close",
@@ -202,46 +247,7 @@ class NativeTransport:
                 connection.active_socket.settimeout(remaining(deadline, clock))
             response = connection.getresponse()
             try:
-                headers = tuple(response.getheaders())
-                length = one_header(headers, "content-length")
-                transfer = one_header(headers, "transfer-encoding")
-                encoding = one_header(headers, "content-encoding")
-                declared_bytes: int | None = None
-                if length is not None:
-                    digits = length.lstrip("0") or "0"
-                    if (
-                        not length.isascii()
-                        or not length.isdecimal()
-                        or len(digits) > len(str(maximum_bytes))
-                        or int(digits) > maximum_bytes
-                    ):
-                        raise ToolsmithError(
-                            "limit",
-                            "Declared response bytes exceed the explicit limit or are invalid",
-                        )
-                    declared_bytes = int(digits)
-                if transfer is not None and (transfer.lower() != "chunked" or length is not None):
-                    raise ToolsmithError("http", "Response framing is ambiguous or unsupported")
-                chunks = bytearray()
-                while len(chunks) <= maximum_bytes:
-                    if response.isclosed():
-                        break
-                    chunk = response.read1(min(65_536, maximum_bytes + 1 - len(chunks)))
-                    if not chunk:
-                        break
-                    chunks.extend(chunk)
-                remaining(deadline, clock)
-                if len(chunks) > maximum_bytes:
-                    raise ToolsmithError("limit", "Response wire bytes exceed the explicit limit")
-                if declared_bytes is not None and len(chunks) != declared_bytes:
-                    raise ToolsmithError("http", "Response ended before its declared length")
-                wire = bytes(chunks)
-                return Response(
-                    response.status,
-                    headers,
-                    expanded_body(wire, encoding, maximum_bytes),
-                    len(wire),
-                )
+                return read_response(response, maximum_bytes, deadline, clock)
             finally:
                 response.close()
         except ssl.SSLError as error:

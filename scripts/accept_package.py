@@ -32,6 +32,10 @@ from toolsmith.storage.text import put_text
 from toolsmith.storage.artifacts import put_file, read_file, export_file
 from toolsmith.operations.integrity import check_integrity
 from toolsmith import lexical
+from toolsmith.acquisition.budgets import BudgetPolicy, inspect_budget, reserve_budget, settle_budget
+from toolsmith.acquisition.configuration import check_budget, configure_budget, inspect_configuration
+from toolsmith.files import replace_bytes
+from toolsmith.readers import inspect_html
 from toolsmith.readers import decode_table, project_table
 from toolsmith.journal import append_record, read_journal
 import sqlite3
@@ -43,7 +47,7 @@ assert importlib.util.find_spec('onnxruntime') is None
 assert importlib.util.find_spec('tokenizers') is None
 from toolsmith.semantic import Scope, Source, encode_query, initialize_index, inspect_model
 assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
-assert importlib.metadata.version('ctlflow-toolsmith') == '0.3.0'
+assert importlib.metadata.version('ctlflow-toolsmith') == '0.4.0'
 metadata = importlib.metadata.metadata('ctlflow-toolsmith')
 assert metadata['License-Expression'] == 'MIT'
 assert metadata.get_all('License-File') == ['LICENSE']
@@ -73,6 +77,22 @@ with closing(sqlite3.connect(':memory:')) as connection:
     unwrap(lexical.index_source(connection, source, expected_digest=None))
     hits = unwrap(lexical.search(connection, '"Restricted Payments"', lexical.Scope('lexical_document')))
     assert len(hits.hits) == 1
+    matching = unwrap(lexical.matching_scope(connection, 'Restricted'))
+    assert unwrap(lexical.search(connection, 'Payments', matching)).hits[0].reference == 'source'
+    assert unwrap(lexical.indexed_scope(connection))
+settings = parent / 'acquisition'
+selected = BudgetPolicy('publisher', 60, 10, 10000, 10, 10000)
+configuration = unwrap(configure_budget(settings, (selected,), {'hosts':['example.com']}))
+assert unwrap(inspect_configuration(settings)) == configuration
+held = unwrap(reserve_budget(settings, selected, 'assignment', 100, expected_configuration_digest=configuration.digest))
+unwrap(settle_budget(settings, selected, held, 40))
+assert unwrap(inspect_budget(settings, selected, 'assignment')).task_bytes == 40
+before_audit = (settings / 'budget.json').read_bytes()
+assert unwrap(check_budget(settings, (selected,))) == 0
+assert (settings / 'budget.json').read_bytes() == before_audit
+assert unwrap(inspect_html(b'<main>Public text</main><input type="password">')).password_controls
+assert unwrap(replace_bytes(parent / 'explicit-output.txt', b'private output')) == 14
+assert not (parent / '.lock').exists()
 assert unwrap(project_table(unwrap(decode_table(b'Name,Value\\nA,10\\n')), ('Value',), {'Name':'A'})).matched == 1
 journal = parent / 'journal'
 journal.mkdir(mode=0o700)
@@ -154,11 +174,11 @@ def check_archives(wheel: Path, source: Path) -> None:
 
 def main() -> int:
     require_limits()
-    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.3.0-py3-none-*.whl"))
+    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.4.0-py3-none-*.whl"))
     if len(wheels) != 1 or wheels[0].name.endswith("-any.whl"):
         raise RuntimeError("Expected one platform-tagged native wheel")
     wheel = wheels[0]
-    source = ROOT / "dist/ctlflow_toolsmith-0.3.0.tar.gz"
+    source = ROOT / "dist/ctlflow_toolsmith-0.4.0.tar.gz"
     check_archives(wheel, source)
     uv = os.environ.get("TOOLSMITH_UV") or shutil.which("uv")
     if uv is None:

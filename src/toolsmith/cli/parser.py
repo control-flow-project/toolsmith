@@ -63,7 +63,7 @@ def make_parser() -> Parser:
     parser.add_argument("--collection", help="Exact collection identity bound to the store")
     parser.add_argument("--json", action="store_true", help="Compact structured result")
     families = parser.add_subparsers(dest="family", required=True)
-    parser.add_argument("--version", action="version", version="toolsmith 0.3.0")
+    parser.add_argument("--version", action="version", version="toolsmith 0.4.0")
     capabilities = families.add_parser("capabilities")
     capabilities.set_defaults(action="capabilities")
     store = families.add_parser("store").add_subparsers(dest="command", required=True)

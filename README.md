@@ -1,5 +1,7 @@
 # Toolsmith
 
+- [Caller-owned application integration](docs/consumer-adoption.md)
+
 The [capability mapping](docs/capability-mapping.md) records which generic parts
 GAAP, Bad Bets and other consumers can replace, the required tests and the domain
 responsibilities that stay with them. Adoption is optional; an adopting project
@@ -72,7 +74,7 @@ git clone https://github.com/control-flow-project/toolsmith.git
 cd toolsmith
 uv build --no-sources
 python3 -m venv .venv
-.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.3.0-py3-none-*.whl
+.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.4.0-py3-none-*.whl
 .venv/bin/toolsmith --json capabilities
 .venv/bin/toolsmith --root "$PWD/local-store" --collection sample store init
 ```

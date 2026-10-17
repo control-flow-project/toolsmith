@@ -3,13 +3,12 @@ from pathlib import Path
 
 from toolsmith.acquisition.budgets import (
     BudgetPolicy,
-    common_definition,
     counters,
     load,
+    policies_by_group,
     records,
     save,
     scope,
-    validate_policy,
 )
 from toolsmith.clock import Clock, SystemClock
 from toolsmith.files import directory_lock, private_directory
@@ -55,14 +54,7 @@ def import_budget(
         raise ToolsmithError(
             "invalid_input", "Supply reviewed group policies and a typed quota snapshot"
         )
-    checked = {policy.group: validate_policy(policy) for policy in policies}
-    if (
-        len(checked) != len(policies)
-        or len({common_definition(policy) for policy in checked.values()}) != 1
-    ):
-        raise ToolsmithError(
-            "invalid_input", "Group policies must have unique names and the same period/task limits"
-        )
+    checked = policies_by_group(policies)
     selected = next(iter(checked.values()))
     if (
         number(snapshot.period_seconds, 1, 31 * 86400, "Original quota period")
@@ -120,7 +112,7 @@ def import_budget(
     with private_directory(root, create=True) as directory, directory_lock(directory):
         import os
 
-        if set(os.listdir(directory.descriptor)) - {".lock"}:
+        if os.listdir(directory.descriptor):
             raise ToolsmithError("conflict", "Quota import requires an empty new state directory")
         state = load(directory, selected, actual_clock, identity(boot))
         for group_name in groups:
@@ -136,6 +128,7 @@ def import_budget(
         state["last_wall"] = max(observed, now)
         monotonic = actual_clock.monotonic()
         state["started_monotonic"] = monotonic
+        state["last_monotonic"] = monotonic
         state["elapsed_before_boot"] = now - started
         save(directory, state)
     return True

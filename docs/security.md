@@ -13,7 +13,11 @@ changes. Pipes, devices, sockets and symlinks are rejected. Private state requir
 caller ownership, private modes and single-link regular files. Descriptor-relative
 leaf operations are validated so corrupt metadata cannot become path traversal.
 
-Kernel locks coordinate invocations on the same root. They do not protect against
+Kernel locks on pinned directory descriptors coordinate state reads and writes
+without an ephemeral lock file. Journal appends lock their pinned journal file.
+Readers do not observe an unlocked replacement, and no-replace publication uses
+an atomic rename rather than a temporary hard-link alias.
+Kernel locks do not protect against
 arbitrary same-user processes ignoring locks, changing files or selecting another
 root. Namespace labels are accident prevention, not authentication. Atomic writes,
 fsync and SQLite transactions protect normal crash recovery; physical storage can

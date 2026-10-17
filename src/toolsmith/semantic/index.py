@@ -25,6 +25,12 @@ from toolsmith.validation import digest, integer, source_reference, timestamp
 SCHEMA_SQL = files("toolsmith.semantic").joinpath("schema.sql").read_text(encoding="utf-8")
 
 
+@boundary
+def prepare_connection(connection: sqlite3.Connection) -> bool:
+    load_vector_extension(connection)
+    return True
+
+
 @dataclass(frozen=True)
 class Hit:
     reference: str
@@ -266,7 +272,7 @@ def search_embeddings(
     with transaction(connection, "toolsmith_embedding"):
         validate_profile(connection)
         selected = scope_query(connection, scope)
-        candidates, indexed, missing, stale, largest = coverage(
+        candidates, indexed, missing, stale, largest, _chunks = coverage(
             connection, selected, "embedding_document"
         )
         rows = execute(

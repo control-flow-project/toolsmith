@@ -6,9 +6,11 @@ from toolsmith.lexical.index import (
     Source,
     check_index,
     index_source,
+    indexed_scope,
     initialize_index,
     inspect_index,
     invalidate_source,
+    matching_scope,
     search,
 )
 from toolsmith.lexical.passages import FindReport, Match, Region, find_text
@@ -29,8 +31,10 @@ __all__ = [
     "check_index",
     "compile_query",
     "index_source",
+    "indexed_scope",
     "initialize_index",
     "inspect_index",
     "invalidate_source",
+    "matching_scope",
     "search",
 ]

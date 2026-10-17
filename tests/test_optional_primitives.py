@@ -6,8 +6,8 @@ from unittest.mock import patch
 from conftest import ControlledClock
 from semantic_support import index_database, publish
 
-from toolsmith.files import FileStamp, copy_file, file_stamp
-from toolsmith.filesystem import inventory, publish_directory, replace_bytes, sync_directory_tree
+from toolsmith.files import FileStamp, copy_file, file_stamp, replace_bytes
+from toolsmith.filesystem import inventory, publish_directory, sync_directory_tree
 from toolsmith.journal import MAX_JOURNAL_BYTES, append_record, read_journal, record_bytes
 from toolsmith.lexical import Region, find_text
 from toolsmith.result import Failure, unwrap
@@ -70,12 +70,10 @@ def test_private_tree_and_atomic_publication_are_generic(tmp_path: Path) -> None
     unwrap(replace_bytes(root / "nested/data", b"data"))
     entries = unwrap(inventory(root))
     assert {entry.name for entry in entries} == {
-        ".lock",
-        "nested/.lock",
         "nested/data",
         "state.json",
     }
-    assert unwrap(sync_directory_tree(root)) == 4
+    assert unwrap(sync_directory_tree(root)) == 2
     destination = tmp_path / "published"
     assert unwrap(publish_directory(root, destination))
     assert (destination / "nested/data").read_bytes() == b"data"

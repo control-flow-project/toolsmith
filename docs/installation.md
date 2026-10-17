@@ -1,6 +1,6 @@
 # Installation
 
-Toolsmith 0.3.0 has public MIT-licensed source and wheel/sdist artifacts. Metadata
+Toolsmith 0.4.0 has public MIT-licensed source and wheel/sdist artifacts. Metadata
 declares the SPDX expression `MIT`; both artifacts include LICENSE. There is no
 PyPI/npm release yet and no automatic publishing workflow. Build from the public
 repository or install a built wheel:
@@ -17,21 +17,23 @@ store/network requirement. Unsupported platforms fail without a weakened path.
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.3.0-py3-none-*.whl
+.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.4.0-py3-none-*.whl
 .venv/bin/toolsmith --json capabilities
 ```
 
 For selected network acquisition:
 
 ```sh
-.venv/bin/python -m pip install "$(printf '%s' dist/ctlflow_toolsmith-0.3.0-py3-none-*.whl)[http]"
+.venv/bin/python -m pip install "$(printf '%s' dist/ctlflow_toolsmith-0.4.0-py3-none-*.whl)[http]"
 ```
 
 The `http` extra installs the pinned bounded DNS resolver `dnspython==2.8.0`.
 There are no base runtime dependencies. Nothing downloads browsers, OCR models,
 embeddings, skills or agent software. No global services or credentials are created.
 Supply an explicit private store and separate shared source-limit directory only
-for operations that need them. Parent directories must already exist.
+for operations that need them. Explicit `create=True` private-directory calls
+prepare missing parents; existing parents must satisfy their operation's ownership
+and no-follow contract.
 
 The selected state is 0700 directories/0600 files owned by the invoking user.
 Do not share one OS account with untrusted callers and then rely on collection

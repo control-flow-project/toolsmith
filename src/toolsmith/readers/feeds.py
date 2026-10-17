@@ -4,12 +4,12 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import cast
+from typing import Literal, cast
 from urllib.parse import urljoin
 
 from toolsmith.acquisition.urls import canonical_url
-from toolsmith.readers.html_dom import OMIT, content_text, normalized_text, parse_html
-from toolsmith.readers.text import decode_text
+from toolsmith.readers.html_dom import OMIT, content_text, parse_html
+from toolsmith.readers.text import decode_text, normalize_text
 from toolsmith.result import ToolsmithError, boundary
 from toolsmith.validation import integer, text
 
@@ -28,6 +28,7 @@ class FeedEntry:
     updated_original: str | None
     updated_source_at: str | None
     updated_at: str | None
+    original_url: str
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class Feed:
     total_entries: int
     duplicate_entries: int
     truncated: bool
+    format: Literal["rss", "atom"]
 
 
 def selected(parent: ET.Element, name: str) -> ET.Element | None:
@@ -68,7 +70,7 @@ def field_text(element: ET.Element | None, maximum: int) -> str | None:
     if html.unescape(value) != value:
         raise ToolsmithError("limit", "Feed field contains excessive nested escapes")
     parsed = parse_html(("<div>" + value + "</div>").encode())
-    extracted = normalized_text(content_text(parsed))
+    extracted = normalize_text(content_text(parsed))
     return text(extracted, maximum, "Feed field", allow_empty=True)
 
 
@@ -134,19 +136,21 @@ def feed_entry(element: ET.Element, source: str, atom: bool) -> FeedEntry:
         raise ToolsmithError("invalid_input", "Feed entry needs a meaningful title")
     if atom:
         links = {
-            canonical_url(urljoin(source, child.attrib.get("href", "")))
+            child.attrib.get("href", "")
             for child in element.findall(ATOM + "link")
             if child.attrib.get("rel", "alternate") == "alternate"
             and child.attrib.get("type", "text/html") in {"text/html", "application/xhtml+xml"}
         }
         if len(links) != 1:
             raise ToolsmithError("conflict", "Atom needs one unambiguous alternate article link")
-        url = next(iter(links))
+        original_link = next(iter(links))
+        url = canonical_url(urljoin(source, original_link))
     else:
         link = field_text(selected(element, "link"), 8192)
         if not link:
             raise ToolsmithError("invalid_input", "Feed entry lacks an explicit article link")
-        url = canonical_url(urljoin(source, link))
+        original_link = link
+        url = canonical_url(urljoin(source, original_link))
     publication = selected(element, prefix + ("published" if atom else "pubDate"))
     if publication is None and not atom:
         publication = selected(element, DC + "date")
@@ -167,6 +171,7 @@ def feed_entry(element: ET.Element, source: str, atom: bool) -> FeedEntry:
         update,
         updated_source_at,
         updated_at,
+        original_link,
     )
 
 
@@ -207,4 +212,5 @@ def read_feed(content: bytes, source_url: str, maximum_entries: int = 100) -> Fe
         len(entries),
         len(entries) - len(distinct),
         truncated,
+        "atom" if atom else "rss",
     )

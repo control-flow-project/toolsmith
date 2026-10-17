@@ -5,18 +5,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from toolsmith.files import (
-    MAX_READ_BYTES,
     PrivateDirectory,
     absolute_path,
     check_private,
     child_directory,
     component,
     directory_descriptor,
-    directory_lock,
     private_directory,
     private_file,
     rename_new,
-    replace_private,
     stable_identity,
 )
 from toolsmith.result import ToolsmithError, boundary
@@ -28,21 +25,6 @@ class FileEntry:
     name: str
     content_bytes: int
     identity: tuple[int, int, int, int, int]
-
-
-@boundary
-def replace_bytes(path: Path, content: bytes) -> int:
-    absolute_path(path)
-    if not isinstance(content, bytes) or len(content) > MAX_READ_BYTES:
-        raise ToolsmithError("invalid_input", "Replacement must be bounded bytes")
-    with private_directory(path.parent) as directory, directory_lock(directory):
-        try:
-            with private_file(directory, path.name):
-                pass
-        except FileNotFoundError:
-            pass
-        replace_private(directory, path.name, content)
-        return len(content)
 
 
 def walk_tree(

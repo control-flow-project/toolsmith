@@ -2,9 +2,9 @@ import sqlite3
 from dataclasses import dataclass
 
 from toolsmith.result import ToolsmithError, boundary
-from toolsmith.scopes import Scope, coverage, scope_query
+from toolsmith.scopes import Scope, coverage, scope_query, temporary_relation
 from toolsmith.semantic.index import validate_profile
-from toolsmith.semantic.profile import MAX_CHUNKS, MAX_SOURCE_BYTES, PROFILE_ID
+from toolsmith.semantic.profile import DIMENSIONS, MAX_CHUNKS, MAX_SOURCE_BYTES, PROFILE_ID
 from toolsmith.sqlite import execute, transaction
 from toolsmith.validation import canonical_json, digest, integer, source_reference, timestamp
 
@@ -25,6 +25,21 @@ class IndexCoverage:
     indexed: int
     missing: int
     stale: int
+    chunks: int
+    vector_bytes: int
+
+
+@boundary
+def indexed_scope(connection: sqlite3.Connection) -> Scope:
+    with transaction(connection, "toolsmith_semantic_relation"):
+        validate_profile(connection)
+        return temporary_relation(
+            connection,
+            "toolsmith_semantic_ready",
+            "SELECT d.reference,d.text_digest FROM main.embedding_document d "
+            "WHERE d.profile_id='" + PROFILE_ID + "' AND d.chunks="
+            "(SELECT count(*) FROM main.embedding_chunk c WHERE c.reference=d.reference)",
+        )
 
 
 @boundary
@@ -32,10 +47,10 @@ def inspect_coverage(connection: sqlite3.Connection, scope: Scope) -> IndexCover
     with transaction(connection, "toolsmith_scope_metadata"):
         validate_profile(connection)
         selected = scope_query(connection, scope)
-        entries, indexed, missing, stale, _largest = coverage(
+        entries, indexed, missing, stale, _largest, chunks = coverage(
             connection, selected, "embedding_document"
         )
-        return IndexCoverage(entries, indexed, missing, stale)
+        return IndexCoverage(entries, indexed, missing, stale, chunks, chunks * DIMENSIONS * 4)
 
 
 @boundary
