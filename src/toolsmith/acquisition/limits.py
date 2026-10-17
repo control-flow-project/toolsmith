@@ -35,8 +35,8 @@ def budget_policy(policy: SourcePolicy) -> BudgetPolicy:
         checked.window_seconds,
         checked.window_requests,
         checked.window_bytes,
-        10000,
-        64 * 1024 * 1024 * 1024,
+        2**63 - 1,
+        2**63 - 1,
         checked.minimum_interval_seconds,
         policy_hash(checked),
     )

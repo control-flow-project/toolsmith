@@ -7,7 +7,7 @@ import pytest
 from toolsmith.readers import read_feed, read_html
 from toolsmith.readers.content import validate_content
 from toolsmith.readers.json import read_json
-from toolsmith.readers.tables import decode_table, iter_table_rows, project_table, read_html_tables
+from toolsmith.readers.tables import decode_table, iter_table_rows, project_table
 from toolsmith.result import Failure, unwrap
 
 PROSE = (
@@ -53,12 +53,7 @@ def test_html_noise_is_not_article_content_and_tables_are_not_financial_models()
     content = b'<main><h1>Title</h1><p>Visible</p><div class="related">noise</div><span aria-hidden="TRUE">hidden</span><table><tr><th>Name</th><th>Value</th></tr><tr><td>A</td><td>10</td></tr></table></main>'
     result = unwrap(read_html(content))
     assert "noise" not in result.parts[0].text and "hidden" not in result.parts[0].text
-    table = unwrap(read_html_tables(content))[0]
-    assert table.rows == (("Name", "Value"), ("A", "10"))
-    assert table.warnings
-    assert isinstance(
-        read_html_tables(b'<table><tr><td colspan="2">ambiguous</td></tr></table>'), Failure
-    )
+    assert any("Table text" in warning for warning in result.parts[0].warnings)
 
 
 def test_feed_retains_publication_and_update_offsets_and_unknown_dates() -> None:
@@ -153,6 +148,19 @@ def test_invalid_table_rows_are_expected_results(body: str) -> None:
     assert results and isinstance(results[-1], Failure)
 
 
+def test_csv_explicit_budgets_are_not_corpus_or_header_position_ceilings() -> None:
+    content = "Preamble\n" * 30 + "Name,Value\nA,10\nB,20\n"
+    projected = unwrap(
+        project_table(content, ("Value",), {}, header_row=31, maximum_rows=2_000_000)
+    )
+    assert projected.scanned == 2 and projected.rows == ({"Value": "10"}, {"Value": "20"})
+    rows = iter_table_rows(content, header_row=31, maximum_rows=2**63 - 1)
+    assert [unwrap(row) for row in rows] == [
+        {"Name": "A", "Value": "10"},
+        {"Name": "B", "Value": "20"},
+    ]
+
+
 def test_tabular_unsafe_archives_and_limits_do_not_return_prefixes() -> None:
     zipped = io.BytesIO()
     with zipfile.ZipFile(zipped, "w") as archive:
@@ -175,9 +183,14 @@ def test_tabular_unsafe_archives_and_limits_do_not_return_prefixes() -> None:
         b'<table><tr><td rowspan="2">Spanning</td></tr></table>',
     ],
 )
-def test_html_table_ambiguity_requires_caller_interpretation(content: bytes) -> None:
-    result = read_html_tables(content)
-    assert isinstance(result, Failure) and result.code == "invalid_input"
+def test_html_tables_remain_source_text_without_deterministic_geometry(content: bytes) -> None:
+    from toolsmith import readers
+
+    result = unwrap(read_html(content))
+    assert result.parts[0].text
+    assert any("Table text" in warning for warning in result.parts[0].warnings)
+    assert not hasattr(readers, "read_html_tables")
+    assert not hasattr(readers, "HtmlTable")
 
 
 def test_response_formats_are_not_confused_with_login_pages_or_pdf_parsers() -> None:

@@ -1,6 +1,5 @@
 from toolsmith.lexical.index import (
     SCHEMA_SQL,
-    Candidate,
     Hit,
     IndexState,
     SearchReport,
@@ -14,9 +13,10 @@ from toolsmith.lexical.index import (
 )
 from toolsmith.lexical.passages import FindReport, Match, Region, find_text
 from toolsmith.lexical.query import compile_query
+from toolsmith.scopes import Scope
 
 __all__ = [
-    "Candidate",
+    "Scope",
     "FindReport",
     "Match",
     "Region",

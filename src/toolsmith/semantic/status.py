@@ -2,6 +2,7 @@ import sqlite3
 from dataclasses import dataclass
 
 from toolsmith.result import ToolsmithError, boundary
+from toolsmith.scopes import Scope, coverage, scope_query
 from toolsmith.semantic.index import validate_profile
 from toolsmith.semantic.profile import MAX_CHUNKS, MAX_SOURCE_BYTES, PROFILE_ID
 from toolsmith.sqlite import execute, transaction
@@ -18,12 +19,50 @@ class IndexState:
     profile: str
 
 
+@dataclass(frozen=True)
+class IndexCoverage:
+    entries: int
+    indexed: int
+    missing: int
+    stale: int
+
+
+@boundary
+def inspect_coverage(connection: sqlite3.Connection, scope: Scope) -> IndexCoverage:
+    with transaction(connection, "toolsmith_scope_metadata"):
+        validate_profile(connection)
+        selected = scope_query(connection, scope)
+        entries, indexed, missing, stale, _largest = coverage(
+            connection, selected, "embedding_document"
+        )
+        return IndexCoverage(entries, indexed, missing, stale)
+
+
+@boundary
+def pending_references(
+    connection: sqlite3.Connection, scope: Scope, maximum_records: int = 100
+) -> tuple[str, ...]:
+    maximum = integer(maximum_records, 1, 1000, "Maximum pending references")
+    with transaction(connection, "toolsmith_pending_metadata"):
+        validate_profile(connection)
+        selected = scope_query(connection, scope)
+        coverage(connection, selected, "embedding_document")
+        rows = execute(
+            connection,
+            "SELECT s.reference FROM ("
+            + selected
+            + ") s LEFT JOIN embedding_document d ON d.reference = s.reference WHERE d.reference IS NULL OR d.text_digest != s.text_digest ORDER BY s.reference LIMIT ?",
+            (maximum,),
+        )
+        return tuple(source_reference(row[0]) for row in rows)
+
+
 @boundary
 def inspect_index(
     connection: sqlite3.Connection, references: tuple[str, ...]
 ) -> tuple[IndexState, ...]:
-    if not isinstance(references, tuple) or len(references) > 100_000:
-        raise ToolsmithError("limit", "Supply at most 100000 explicit metadata references")
+    if not isinstance(references, tuple):
+        raise ToolsmithError("invalid_input", "Supply explicit metadata references")
     selected = tuple(source_reference(reference) for reference in references)
     if len(set(selected)) != len(selected):
         raise ToolsmithError("invalid_input", "Metadata references must be unique")

@@ -76,6 +76,78 @@ systemd-run --user --scope --quiet \
   --working-directory="$PWD" "$PWD/.venv/bin/pip-audit" --path "$SITE_PACKAGES" --skip-editable
 ```
 
+## Indexed corpus and limit audit — 0.3.0, 2026-10-17
+
+Integrated verification runs on Linux x86_64, an AMD Ryzen 9 5900X, with 24
+available logical CPUs. The current source passes in both environments:
+
+| Python | SQLite | Tests | Result |
+| --- | --- | ---: | --- |
+| 3.13.15 | 3.53.1 | 335 | All passed |
+| 3.14.4 | 3.46.1 | 335 | All passed |
+
+- Ruff format/check and strict Mypy pass for 99 source/test/build files. Twenty-eight
+  isolated test files run with 24 workers in verified 8 GiB/no-swap/256-task scopes.
+  Tests retain their assertions and own/dispose temporary fixtures.
+- Actual SQLite vector tests compare 400 independent random vectors against a
+  double-precision cosine oracle. Integer membership covers each packed metadata
+  representation, nulls, duplicate/empty sets, int64 edges, multiple predicates,
+  current permissions before top-k, and incomplete-vector rejection.
+- Native writes are visible before commit and preserve nested/outer rollback.
+  The loader preserves C-API and SQL extension settings on success/failure and
+  rejects a different preloaded build. Compiler scratch is per-build and disposed;
+  successful binary publication is atomic and failed builds preserve prior bytes.
+- Capacity regressions cover more than 100,000 aggregate vector chunks and lexical
+  references, 100,001 journal records, 300 quota groups/1,200 tasks, counters above
+  10,000 requests/64 GiB, more than 10,000 archive objects/source records/regions,
+  large paging offsets, and native-int64 explicit stream budgets. Input/output
+  byte bounds and actual configured quotas remain enforced.
+- A database larger than 128 MiB and a retained artifact larger than the old
+  16 MiB limit round-trip through streamed backup/restore. Manifest producer and
+  reader share one bounded metadata contract. Verified v1/v2-to-v3 copies preserve
+  originals and citations; raw-vector conversion does not call an encoder.
+- Wheel and sdist install in clean environments on both Python versions. Base
+  installs have no third-party runtime packages. Installed library/CLI, both
+  optional extras, actual MiniLM, schema/typing/license/native-binary checks and
+  source-distribution compiler inputs pass. No model weights, private data, test
+  databases, compiled source-distribution artifacts or CI workflow are packaged.
+- Actual API-30 MiniLM, complete source coverage, current generic SQLite scope
+  queries, caller-owned CLI, example texts and backup/restore pass. Installed
+  small-example query medians are approximately 7–10 ms; syscall-traced runs are
+  slower. Traces contain no network or clone/clone3 calls, and thread count stays
+  unchanged. This run uses example texts, not retained live-publisher originals.
+- Real approved DNS/TLS/HTTPS passes separately on both Python versions: one
+  example.com request and 400 wire bytes each. Python dependency audit reports no
+  known vulnerabilities, skipping the unpublished editable first-party package.
+  All sixty external `uv.lock` records are unchanged; its release-age policy stays
+  intact. This audit does not certify the vendored native C source defect-free.
+
+The synthetic capacity command creates one million 384-dimensional vectors and
+selects the strongest match at the last entry, beyond every former corpus cutoff:
+
+```sh
+systemd-run --user --scope --quiet \
+  --property=MemoryMax=8G --property=MemorySwapMax=0 --property=TasksMax=256 \
+  --working-directory="$PWD" "$PWD/.venv/bin/python" "$PWD/scripts/accept_corpus.py"
+```
+
+| Python | Build (s) | First full query (s) | Repeat full query (s) | Last-100 scope (s) | Peak process RSS (MiB) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 3.13.15 | 5.325 | 2.056 | 2.018 | 0.299 | 148.0 |
+| 3.14.4 | 5.816 | 2.191 | 2.133 | 0.299 | 151.2 |
+
+Each database is 2,024,955,904 bytes. Queries validate only the query vector and
+twenty returned vectors in Python; native SQLite performs the comparisons over
+the complete selected corpus. Peak RSS includes construction and queries, not
+only the query. The first query is not an OS-cold-cache measurement: construction
+has just written the database. These are observed runs, not latency guarantees.
+The engine is exact flat vec1 0.8, single-threaded, `toolsmith-native-1`; it is not
+ANN. Synthetic vectors establish capacity, not million-document embedding quality.
+
+The complete removed/retained restriction inventory is in [limits](limits.md).
+No consumer, fleet, production store, registry publication or deployment changes
+are part of this verification.
+
 ## Verified 0.1.0 implementation — 2026-10-11
 
 The complete integrated sequence passes on Linux x86_64 with these two actual

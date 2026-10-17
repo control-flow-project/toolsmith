@@ -23,9 +23,10 @@ worker thread exists. Toolsmith has no fleet/runtime/domain dependency.
 ```text
 src/toolsmith/
 ├── result.py, validation.py, clock.py, compression.py, sqlite.py
+├── scopes.py               Shared validated database-resident search scope
 ├── files.py, filesystem.py  Safe IO, streams, descriptors, locks and tree publication
 ├── archives.py             Exact explicitly selected files, not document manifests
-├── readers/                Parsing types, UTF-8/JSON, static HTML, feeds and tables
+├── readers/                Parsing types, UTF-8/JSON, static HTML, feeds and CSV
 ├── lexical/                Caller-owned derivatives and exact literal passages
 ├── semantic/               Offline encoder, caller-owned vectors and bulk metadata
 │   └── store.py            Optional archive composition, no second vector engine
@@ -59,8 +60,12 @@ derivative relations, use application transactions and leave its row factory and
 schema version unchanged. Initialization is explicit and requires foreign keys
 before writes. Expected failures roll back; encoding remains outside transactions.
 
-Candidates are authorized by the caller and joined with current digests before
-ranking and result limits. Missing/stale coverage is explicit. BM25 statistics
+Authorization is an explicit application-owned SQLite table/view exposing unique
+references and current digests. Lexical and semantic queries join this relation
+before ranking and output limits; no Python candidate tuple or resupplied article
+body is required. The packaged vec1 extension owns one native flat-vector index
+in the same database. Exact cosine comparison runs in native code; no Python
+scan, second vector copy, remote service or approximate fallback exists. Missing/stale coverage is explicit. BM25 statistics
 are database-wide; candidates are not statistical corpus isolation. GAAP therefore
 keeps its room-specific databases. Literal passages and indexed lexical/semantic
 queries have deliberately different semantics, never fallback behavior.
@@ -91,7 +96,7 @@ and syscalls rather than treating fixture encoders as native certification.
 
 <separately optional archive root>/
 ├── .lock
-├── toolsmith.sqlite3        Current archive schema v2, versions/files/operations
+├── toolsmith.sqlite3        Current archive schema v3, versions/files/operations
 ├── objects/<sha256>         Immutable retained file bytes
 └── tmp/.stage-<uuid>.tmp    Invocation-owned staging
 ```
@@ -118,8 +123,10 @@ resume. It calls the same HTTPS producer. Network/native effects stay outside SQ
 transactions. Status starts nothing; retries uncertain GETs are explicitly requested
 and disclosed, within remaining admission limits.
 
-Archive schema v2 replaces its old chunk writer/schema with the generic lexical
-engine. A finite offline v1-to-v2 migration verifies originals, copies into a new
+Archive schema v3 uses the generic native vector index, current-text view and
+change counter. Explicit migration preserves verified v1/v2 source stores and
+converts their derivatives into this schema. It uses the generic lexical
+engine. An explicit offline v1/v2-to-v3 migration verifies originals, copies into a new
 destination, rebuilds only derivatives and verifies before publication. The source
 remains unchanged as the rollback copy. Ordinary reads accept only the current
 schema: no dual runtime reader, automatic migration, reset or hidden fallback.

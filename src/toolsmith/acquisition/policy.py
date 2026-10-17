@@ -58,9 +58,7 @@ def validate_policy(policy: SourcePolicy) -> SourcePolicy:
     maximum_bytes = integer(
         value["maximum_response_bytes"], 1, MAX_FILE_BYTES, "Maximum response bytes"
     )
-    window_bytes = integer(
-        value["window_bytes"], maximum_bytes, 1024 * MAX_FILE_BYTES, "Window bytes"
-    )
+    window_bytes = integer(value["window_bytes"], maximum_bytes, 2**63 - 1, "Window bytes")
     return SourcePolicy(
         identity(value["group"], "Source group"),
         selected,
@@ -70,7 +68,7 @@ def validate_policy(policy: SourcePolicy) -> SourcePolicy:
         integer(value["maximum_redirects"], 0, 10, "Maximum redirects"),
         number(value["deadline_seconds"], 0.1, 60, "Deadline seconds"),
         number(value["window_seconds"], 1, 86_400, "Window seconds"),
-        integer(value["window_requests"], 1, 10_000, "Window requests"),
+        integer(value["window_requests"], 1, 2**63 - 1, "Window requests"),
         window_bytes,
         number(value["minimum_interval_seconds"], 0, 86_400, "Minimum interval"),
     )
@@ -115,12 +113,12 @@ def read_policy(content: bytes) -> SourcePolicy:
         number(value.get("deadline_seconds", defaults.deadline_seconds), 0.1, 60, "Deadline"),
         number(value.get("window_seconds", defaults.window_seconds), 1, 86_400, "Window seconds"),
         integer(
-            value.get("window_requests", defaults.window_requests), 1, 10_000, "Window requests"
+            value.get("window_requests", defaults.window_requests), 1, 2**63 - 1, "Window requests"
         ),
         integer(
             value.get("window_bytes", defaults.window_bytes),
             1,
-            1024 * MAX_FILE_BYTES,
+            2**63 - 1,
             "Window bytes",
         ),
         number(

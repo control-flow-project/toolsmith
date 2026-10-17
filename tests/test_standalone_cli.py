@@ -1,12 +1,72 @@
 import json
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from semantic_support import FixtureEncoder
 
 from toolsmith.acquisition.client import FetchResponse
 from toolsmith.cli import main
 from toolsmith.result import Success
+
+
+@pytest.mark.parametrize("engine", ("lexical", "semantic"))
+def test_query_rejects_superseded_source_body_controls(
+    engine: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert (
+        main(
+            [
+                "--json",
+                "search",
+                engine,
+                "query",
+                "question",
+                "--database",
+                str(tmp_path / "application.sqlite3"),
+                "--scope",
+                "permitted",
+                "--sources",
+                str(tmp_path / "sources.json"),
+            ]
+        )
+        == 2
+    )
+    assert not json.loads(capsys.readouterr().out)["ok"]
+    assert not list(tmp_path.iterdir())
+
+
+def test_cli_rejects_removed_deterministic_html_table_reader(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["--json", "read", "html-tables", str(tmp_path / "source.html")]) == 2
+    assert not json.loads(capsys.readouterr().out)["ok"]
+    assert not list(tmp_path.iterdir())
+
+
+def test_cli_index_batch_can_select_from_more_than_10000_explicit_sources(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    database, sources = tmp_path / "application.sqlite3", tmp_path / "sources.json"
+    sources.write_text(
+        json.dumps(
+            [{"reference": f"entry:{number}", "text": "retained text"} for number in range(10_001)]
+        )
+    )
+    common = ["--json", "search", "lexical"]
+    assert main(common + ["init", "--database", str(database)]) == 0
+    capsys.readouterr()
+    assert (
+        main(
+            common
+            + ["index", "--database", str(database), "--sources", str(sources), "--limit", "1"]
+        )
+        == 0
+    )
+    result = json.loads(capsys.readouterr().out)["result"]
+    assert result == {"indexed": 1, "unchanged": 0, "remaining": 10_000}
 
 
 def test_caller_owned_lexical_cli_uses_no_text_archive(
@@ -35,24 +95,84 @@ def test_caller_owned_lexical_cli_uses_no_text_archive(
                 '"Restricted Payments"',
                 "--database",
                 str(database),
-                "--sources",
-                str(sources),
+                "--scope",
+                "lexical_document",
             ]
         )
         == 0
     )
     result = json.loads(capsys.readouterr().out)["result"]
     assert len(result["hits"]) == 1 and result["hits"][0]["reference"] == "page:1"
-    assert main(common + ["check", "--database", str(database), "--sources", str(sources)]) == 0
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute(
+            "CREATE TABLE canonical (reference TEXT PRIMARY KEY, text_digest TEXT NOT NULL, text TEXT NOT NULL)"
+        )
+        for entry in json.loads(sources.read_text()):
+            import hashlib
+
+            connection.execute(
+                "INSERT INTO canonical VALUES (?,?,?)",
+                (
+                    entry["reference"],
+                    hashlib.sha256(entry["text"].encode()).hexdigest(),
+                    entry["text"],
+                ),
+            )
+    assert main(common + ["check", "--database", str(database), "--scope", "canonical"]) == 0
     capsys.readouterr()
     assert not list(tmp_path.rglob("objects")) and not (tmp_path / "toolsmith.sqlite3").exists()
-    references = tmp_path / "references.json"
-    references.write_text('["page:1","missing"]')
-    assert (
-        main(common + ["status", "--database", str(database), "--references", str(references)]) == 0
-    )
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute(
+            "CREATE VIEW requested AS SELECT reference, text_digest FROM lexical_document WHERE reference = 'page:1' UNION ALL SELECT 'missing', '"
+            + "b" * 64
+            + "'"
+        )
+    assert main(common + ["status", "--database", str(database), "--scope", "requested"]) == 0
     states = json.loads(capsys.readouterr().out)["result"]
-    assert states[0]["digest"] is not None and states[1]["digest"] is None
+    assert states == {"entries": 2, "indexed": 1, "missing": 1, "stale": 0}
+
+
+def test_semantic_cli_status_uses_index_owned_profile_validation(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    database = tmp_path / "application.sqlite3"
+    common = ["--json", "search", "semantic"]
+    assert main(common + ["init", "--database", str(database)]) == 0
+    capsys.readouterr()
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute("INSERT INTO embedding_profile VALUES ('invalid', '{}')")
+    assert (
+        main(common + ["status", "--database", str(database), "--scope", "embedding_document"]) == 9
+    )
+    assert json.loads(capsys.readouterr().out)["error"]["code"] == "integrity"
+
+
+def test_semantic_cli_uses_the_library_query_byte_and_token_bounds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    database = tmp_path / "application.sqlite3"
+    common = ["--json", "search", "semantic"]
+    assert main(common + ["init", "--database", str(database)]) == 0
+    capsys.readouterr()
+    query = "wet" + " " * 3000
+    with patch("toolsmith.semantic.load_model", return_value=Success(FixtureEncoder())):
+        assert (
+            main(
+                common
+                + [
+                    "query",
+                    query,
+                    "--database",
+                    str(database),
+                    "--scope",
+                    "embedding_document",
+                    "--model-directory",
+                    str(tmp_path / "model"),
+                ]
+            )
+            == 0
+        )
+    assert json.loads(capsys.readouterr().out)["result"]["candidates"] == 0
 
 
 def test_generic_raw_http_cli_returns_receipt_and_explicit_file_without_archive(

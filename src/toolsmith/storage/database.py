@@ -17,11 +17,11 @@ from toolsmith.files import (
     private_file,
 )
 from toolsmith.result import ToolsmithError, boundary
+from toolsmith.semantic.vector import load_vector_extension
 from toolsmith.validation import identity, integer, text
 
 APPLICATION_ID = 1414745393
-SCHEMA_VERSION = 2
-MAX_DATABASE_BYTES = 128 * 1024 * 1024
+SCHEMA_VERSION = 3
 DATABASE_NAME = "toolsmith.sqlite3"
 
 
@@ -67,13 +67,16 @@ def database_failure(error: sqlite3.Error) -> ToolsmithError:
 
 
 def configure(connection: sqlite3.Connection) -> None:
+    if sqlite3.sqlite_version_info < (3, 44, 0):
+        raise ToolsmithError(
+            "unavailable", "SQLite 3.44 or newer is required for native FTS integrity verification"
+        )
+    load_vector_extension(connection)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA trusted_schema = OFF")
     connection.execute("PRAGMA busy_timeout = 0")
     connection.execute("PRAGMA synchronous = FULL")
-    page_size = connection.execute("PRAGMA page_size").fetchone()[0]
-    connection.execute(f"PRAGMA max_page_count = {MAX_DATABASE_BYTES // page_size}")
 
 
 def info(store: Store) -> StoreInfo:
@@ -88,9 +91,8 @@ def info(store: Store) -> StoreInfo:
 def open_store(root: Path, collection: str, *, write: bool = False) -> Iterator[Store]:
     selected = identity(collection, "Collection")
     with private_directory(root) as directory, directory_lock(directory, shared=not write):
-        with private_file(directory, DATABASE_NAME) as descriptor:
-            if os.fstat(descriptor).st_size > MAX_DATABASE_BYTES:
-                raise ToolsmithError("limit", "Store database exceeds its byte limit")
+        with private_file(directory, DATABASE_NAME):
+            pass
         uri = f"file:/proc/self/fd/{directory.descriptor}/{DATABASE_NAME}?mode={'rw' if write else 'ro'}"
         try:
             connection = sqlite3.connect(uri, uri=True, timeout=0)

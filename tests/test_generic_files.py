@@ -9,6 +9,14 @@ from toolsmith.files import copy_file, hash_file
 from toolsmith.result import Failure, unwrap
 
 
+def test_streaming_accepts_explicit_native_int64_budgets(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.write_bytes(b"selected bytes")
+    expected = unwrap(hash_file(source, 2**63 - 1))
+    assert unwrap(copy_file(source, tmp_path / "copy", 2**63 - 1)) == expected
+    assert expected.content_bytes == len(b"selected bytes")
+
+
 def test_large_file_copy_is_streamed_exact_and_private(tmp_path: Path) -> None:
     source = tmp_path / "large.pdf"
     with source.open("wb") as stream:

@@ -19,11 +19,11 @@ from toolsmith.files import (
 )
 from toolsmith.operations.integrity import (
     validate_database,
-    validate_embeddings,
     validate_objects,
     validate_retained,
 )
 from toolsmith.result import ToolsmithError, boundary, unwrap
+from toolsmith.semantic import migrate_index
 from toolsmith.storage.database import (
     APPLICATION_ID,
     DATABASE_NAME,
@@ -58,16 +58,44 @@ VERSION_ONE_TABLES = {
 
 def verify_source(store: Store, collection: str) -> None:
     connection = store.connection
-    if (
-        connection.execute("PRAGMA application_id").fetchone()[0] != APPLICATION_ID
-        or connection.execute("PRAGMA user_version").fetchone()[0] != 1
-    ):
-        raise ToolsmithError("integrity", "Migration requires the verified version-one archive")
+    if connection.execute("PRAGMA application_id").fetchone()[
+        0
+    ] != APPLICATION_ID or connection.execute("PRAGMA user_version").fetchone()[0] not in {1, 2}:
+        raise ToolsmithError(
+            "integrity", "Migration requires a verified version-one or version-two archive"
+        )
+    version = connection.execute("PRAGMA user_version").fetchone()[0]
+    expected = (
+        VERSION_ONE_TABLES
+        if version == 1
+        else (
+            VERSION_ONE_TABLES
+            - {
+                "chunk",
+                "chunk_search",
+                "chunk_search_data",
+                "chunk_search_idx",
+                "chunk_search_content",
+                "chunk_search_docsize",
+                "chunk_search_config",
+            }
+        )
+        | {
+            "lexical_document",
+            "lexical_chunk",
+            "lexical_search",
+            "lexical_search_data",
+            "lexical_search_idx",
+            "lexical_search_content",
+            "lexical_search_docsize",
+            "lexical_search_config",
+        }
+    )
     tables = {
         row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
     if (
-        tables != VERSION_ONE_TABLES
+        tables != expected
         or connection.execute(
             "SELECT 1 FROM sqlite_master WHERE type IN ('trigger','view') LIMIT 1"
         ).fetchone()
@@ -78,16 +106,15 @@ def verify_source(store: Store, collection: str) -> None:
     if binding is None or binding[0] != collection:
         raise ToolsmithError("denied", "Source belongs to another exact collection")
     validate_retained(store)
-    validate_embeddings(store)
     validate_objects(store)
 
 
 @boundary
 def migrate_store(
-    source: Path, collection: str, destination: Path, maximum_bytes: int = 256 * 1024 * 1024
+    source: Path, collection: str, destination: Path, maximum_bytes: int = 20 * 1024**3
 ) -> StoreInfo:
     selected = identity(collection, "Collection")
-    maximum = integer(maximum_bytes, 1, 2 * 1024 * 1024 * 1024, "Migration byte budget")
+    maximum = integer(maximum_bytes, 1, 20 * 1024**3, "Migration byte budget")
     if (
         not isinstance(source, Path)
         or not isinstance(destination, Path)
@@ -156,21 +183,45 @@ def migrate_store(
                             verify_source(migrated, selected)
                             with target:
                                 target.execute("BEGIN IMMEDIATE")
-                                target.execute("DROP TABLE chunk_search")
-                                target.execute("DROP TABLE chunk")
-                                unwrap(lexical.initialize_index(target))
-                                for part in target.execute(
-                                    "SELECT p.id, p.text, v.title FROM part p JOIN text_version v ON v.id=p.version_id ORDER BY p.id"
-                                ):
-                                    unwrap(
-                                        lexical.index_source(
-                                            target,
-                                            lexical.Source(
-                                                "part:" + str(part[0]), part[1], part[2]
-                                            ),
-                                            expected_digest=None,
+                                if target.execute("PRAGMA user_version").fetchone()[0] == 1:
+                                    target.execute("DROP TABLE chunk_search")
+                                    target.execute("DROP TABLE chunk")
+                                    unwrap(lexical.initialize_index(target))
+                                    for part in target.execute(
+                                        "SELECT p.id, p.text, v.title FROM part p JOIN text_version v ON v.id=p.version_id ORDER BY p.id"
+                                    ):
+                                        unwrap(
+                                            lexical.index_source(
+                                                target,
+                                                lexical.Source(
+                                                    "part:" + str(part[0]), part[1], part[2]
+                                                ),
+                                                expected_digest=None,
+                                            )
                                         )
-                                    )
+
+                                def canonical(reference: str) -> str | None:
+                                    row = target.execute(
+                                        "SELECT text FROM part WHERE 'part:' || id = ?",
+                                        (reference,),
+                                    ).fetchone()
+                                    return None if row is None else row[0]
+
+                                unwrap(migrate_index(target, canonical))
+                                target.execute(
+                                    "ALTER TABLE collection ADD COLUMN generation INTEGER NOT NULL DEFAULT 0 CHECK (generation >= 0)"
+                                )
+                                from importlib.resources import files
+
+                                current_schema = (
+                                    files("toolsmith.storage").joinpath("schema.sql").read_text()
+                                )
+                                view = current_schema[
+                                    current_schema.index("CREATE VIEW current_text") :
+                                ]
+                                view_statement, trigger_statement = view.split("CREATE TRIGGER", 1)
+                                target.execute(view_statement)
+                                target.execute("CREATE TRIGGER" + trigger_statement)
                                 target.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
                             validate_database(migrated)
                             validate_objects(migrated)

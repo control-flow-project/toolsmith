@@ -86,34 +86,29 @@ def search_text(
     root: Path, collection: str, query: str, maximum_records: int = 20, offset: int = 0
 ) -> tuple[SearchHit, ...]:
     maximum = integer(maximum_records, 1, 100, "Maximum records")
-    start = integer(offset, 0, 1_000_000, "Offset")
+    start = integer(offset, 0, 2**63 - 1, "Offset")
     with open_store(root, collection) as store:
-        parts = store.connection.execute(
-            "SELECT p.id AS part_id, p.text_digest, p.ordinal, p.physical_page, "
-            "v.item_id, v.id AS version, v.title FROM part p "
-            "JOIN text_version v ON v.id = p.version_id JOIN item i ON i.latest_version = v.id"
-        ).fetchall()
-        selected = {"part:" + str(row["part_id"]): row for row in parts}
         report = unwrap(
             lexical.search(
                 store.connection,
                 query,
-                tuple(
-                    lexical.Candidate(reference, digest(row["text_digest"]))
-                    for reference, row in selected.items()
-                ),
+                lexical.Scope("current_text"),
                 maximum,
                 offset=start,
             )
         )
         output: list[SearchHit] = []
         for hit in report.hits:
-            row = selected[hit.reference]
+            row = store.connection.execute(
+                "SELECT * FROM current_text WHERE reference = ?", (hit.reference,)
+            ).fetchone()
+            if row is None:
+                raise ToolsmithError("conflict", "Current text changed during lexical search")
             output.append(
                 SearchHit(
                     store.collection,
                     row_text(row, "item_id"),
-                    row_text(row, "version"),
+                    row_text(row, "version_id"),
                     row_integer(row, "ordinal"),
                     None
                     if row["physical_page"] is None

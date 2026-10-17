@@ -13,9 +13,9 @@ from uuid import uuid4
 from toolsmith.result import ToolsmithError, boundary
 from toolsmith.validation import integer
 
-MAX_FILE_BYTES = 16 * 1024 * 1024
+MAX_FILE_BYTES = 128 * 1024 * 1024
 MAX_READ_BYTES = 128 * 1024 * 1024
-MAX_STREAM_BYTES = 1024 * 1024 * 1024
+MAX_STREAM_BYTES = 2**63 - 1
 
 
 @dataclass(frozen=True)

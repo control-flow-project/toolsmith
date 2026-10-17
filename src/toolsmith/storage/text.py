@@ -191,7 +191,7 @@ def list_text(
     item: str | None = None,
 ) -> tuple[TextReference, ...]:
     maximum = integer(maximum_records, 1, 100, "Maximum records")
-    start = integer(offset, 0, 1_000_000, "Offset")
+    start = integer(offset, 0, 2**63 - 1, "Offset")
     selected = None if item is None else identity(item, "Item")
     with open_store(root, collection) as store:
         rows: list[sqlite3.Row]

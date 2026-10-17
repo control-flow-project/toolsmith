@@ -4,10 +4,38 @@ from pathlib import Path
 import pytest
 from conftest import ControlledClock
 
-from toolsmith.acquisition.limits import inspect_limits, reserve, settle
+from toolsmith.acquisition.budget_import import BudgetSnapshot, GroupUsage, Usage, import_budget
+from toolsmith.acquisition.budgets import boot_identity
+from toolsmith.acquisition.client import HttpPolicy, validate_http_policy
+from toolsmith.acquisition.limits import budget_policy, inspect_limits, reserve, settle
 from toolsmith.acquisition.policy import SourcePolicy, read_policy, validate_policy
 from toolsmith.acquisition.urls import canonical_url, public_address
 from toolsmith.result import Failure, ToolsmithError, unwrap
+
+
+def test_archive_http_limits_do_not_reintroduce_hidden_counter_ceilings(
+    tmp_path: Path, clock: ControlledClock
+) -> None:
+    source = SourcePolicy(
+        "large", ("example.com",), "text_only", window_requests=20_000, window_bytes=128 * 1024**3
+    )
+    policy = budget_policy(source)
+    assert policy.task_requests == policy.task_bytes == 2**63 - 1
+    snapshot = BudgetSnapshot(
+        60,
+        clock.wall(),
+        clock.wall(),
+        (GroupUsage("large", 10_001, 65 * 1024**3),),
+        (Usage("http", 10_001, 65 * 1024**3),),
+    )
+    root = tmp_path / "large-quotas"
+    unwrap(import_budget(root, (policy,), snapshot, clock=clock, boot=boot_identity()))
+    reservation = reserve(root, source, clock)
+    settle(root, source, clock, reservation, 10)
+    current = unwrap(inspect_limits(root, source, clock=clock))
+    assert current.requests == 10_002 and current.reserved_bytes == 65 * 1024**3 + 10
+    http = validate_http_policy(HttpPolicy(("example.com",), maximum_total_bytes=2**63 - 1))
+    assert http.maximum_total_bytes == 2**63 - 1
 
 
 @pytest.mark.parametrize(

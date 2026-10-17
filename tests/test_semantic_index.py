@@ -3,11 +3,11 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from semantic_support import FixtureEncoder, index_database, publish
+from semantic_support import FixtureEncoder, ScopeEntry, index_database, publish, selected_scope
 
 from toolsmith.result import Failure, unwrap
 from toolsmith.semantic import (
-    Candidate,
+    Scope,
     Source,
     check_index,
     encode_query,
@@ -31,16 +31,22 @@ def test_generic_sources_ranking_candidates_and_idempotent_reuse() -> None:
             assert publish(connection, source)
             assert not publish(connection, source)
         candidates = tuple(
-            Candidate(source.reference, fingerprint(source.text)) for source in sources
+            ScopeEntry(source.reference, fingerprint(source.text)) for source in sources
         )
         result = unwrap(
-            search_embeddings(connection, unwrap(encode_query("wet", FixtureEncoder())), candidates)
+            search_embeddings(
+                connection,
+                unwrap(encode_query("wet", FixtureEncoder())),
+                selected_scope(connection, candidates),
+            )
         )
         assert [hit.reference for hit in result.hits] == ["weather", "bank"]
         assert (result.indexed, result.missing, result.stale) == (2, 0, 0)
         restricted = unwrap(
             search_embeddings(
-                connection, unwrap(encode_query("wet", FixtureEncoder())), candidates[1:]
+                connection,
+                unwrap(encode_query("wet", FixtureEncoder())),
+                selected_scope(connection, candidates[1:]),
             )
         )
         assert [hit.reference for hit in restricted.hits] == ["bank"]
@@ -56,11 +62,15 @@ def test_stale_and_missing_sources_are_reported_and_not_searched() -> None:
     with index_database() as connection:
         publish(connection, Source("changed", "previous words"))
         candidates = (
-            Candidate("changed", fingerprint("new words")),
-            Candidate("missing", fingerprint("not indexed")),
+            ScopeEntry("changed", fingerprint("new words")),
+            ScopeEntry("missing", fingerprint("not indexed")),
         )
         result = unwrap(
-            search_embeddings(connection, unwrap(encode_query("wet", FixtureEncoder())), candidates)
+            search_embeddings(
+                connection,
+                unwrap(encode_query("wet", FixtureEncoder())),
+                selected_scope(connection, candidates),
+            )
         )
         assert result.hits == ()
         assert (result.candidates, result.indexed, result.missing, result.stale) == (2, 0, 1, 1)
@@ -110,7 +120,7 @@ def test_expected_digest_rejects_concurrent_replacement_without_losing_vectors()
     "corruption",
     [
         "DELETE FROM embedding_chunk",
-        "UPDATE embedding_chunk SET vector = zeroblob(1536)",
+        "UPDATE embedding_vector SET vector = zeroblob(1536)",
         "UPDATE embedding_chunk SET start_offset = 1",
         "UPDATE embedding_chunk SET text_digest = 'invalid'",
         "UPDATE embedding_document SET chunks = 2",
@@ -128,7 +138,7 @@ def test_corruption_never_becomes_a_successful_search_or_audit(corruption: str) 
             search_embeddings(
                 connection,
                 unwrap(encode_query("words", FixtureEncoder())),
-                (Candidate("doc", fingerprint(source.text)),),
+                selected_scope(connection, (ScopeEntry("doc", fingerprint(source.text)),)),
             ),
             Failure,
         )
@@ -184,10 +194,12 @@ def test_database_constraints_rollback_replacement_and_preserve_outer_work() -> 
 
 def test_duplicate_candidates_invalid_schema_and_disabled_foreign_keys() -> None:
     with index_database() as connection:
-        candidate = Candidate("doc", fingerprint("text"))
+        candidate = ScopeEntry("doc", fingerprint("text"))
         assert isinstance(
             search_embeddings(
-                connection, unwrap(encode_query("words", FixtureEncoder())), (candidate, candidate)
+                connection,
+                unwrap(encode_query("words", FixtureEncoder())),
+                selected_scope(connection, (candidate, candidate)),
             ),
             Failure,
         )
@@ -243,16 +255,43 @@ def test_busy_commit_rolls_back_the_entire_index_write(tmp_path: Path) -> None:
         first.close()
 
 
-def test_selected_vector_scan_limit_is_not_a_silent_partial_search(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_large_selection_is_searched_without_a_candidate_cutoff() -> None:
     with index_database() as connection:
-        source = Source("doc", "original text")
+        source = Source("original", "ordinary bank text")
         publish(connection, source)
-        monkeypatch.setattr("toolsmith.semantic.index.MAX_SEARCH_CHUNKS", 0)
-        result = search_embeddings(
-            connection,
-            unwrap(encode_query("text", FixtureEncoder())),
-            (Candidate("doc", fingerprint(source.text)),),
+        checksum = fingerprint(source.text)
+        vector = connection.execute("SELECT vector FROM embedding_vector").fetchone()[0]
+        with connection:
+            connection.executemany(
+                "INSERT INTO embedding_document VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    (
+                        f"entry:{number}",
+                        connection.execute("SELECT id FROM embedding_profile").fetchone()[0],
+                        checksum,
+                        len(source.text),
+                        1,
+                        "2026-10-17T00:00:00Z",
+                    )
+                    for number in range(10_001)
+                ),
+            )
+            connection.executemany(
+                "INSERT INTO embedding_chunk (reference, ordinal, start_offset, end_offset, text_digest) VALUES (?,0,0,?,?)",
+                ((f"entry:{number}", len(source.text), checksum) for number in range(10_001)),
+            )
+            connection.execute(
+                "INSERT INTO embedding_vector(rowid,vector,chunk_id) SELECT id, ?, id FROM embedding_chunk WHERE reference != 'original'",
+                (vector,),
+            )
+        publish(connection, Source("last-entry", "rain on wet roads"))
+        report = unwrap(
+            search_embeddings(
+                connection,
+                unwrap(encode_query("wet", FixtureEncoder())),
+                Scope("embedding_document"),
+                1,
+            )
         )
-        assert isinstance(result, Failure) and result.code == "limit"
+        assert report.indexed == 10_003
+        assert report.hits[0].reference == "last-entry"

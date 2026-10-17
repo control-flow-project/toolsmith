@@ -1,3 +1,4 @@
+from toolsmith.scopes import Scope
 from toolsmith.semantic.assets import ModelInfo, inspect_model
 from toolsmith.semantic.chunks import Encoder, encode_query, prepare_embedding
 from toolsmith.semantic.index import (
@@ -14,18 +15,26 @@ from toolsmith.semantic.index import (
     relocate_embedding,
     search_embeddings,
 )
+from toolsmith.semantic.migration import migrate_index
 from toolsmith.semantic.model import MiniLM, load_model
-from toolsmith.semantic.profile import PROFILE_ID, Candidate, Prepared, Source, fingerprint
-from toolsmith.semantic.status import IndexState, inspect_index
+from toolsmith.semantic.profile import PROFILE_ID, Prepared, Source, fingerprint
+from toolsmith.semantic.status import (
+    IndexCoverage,
+    IndexState,
+    inspect_coverage,
+    inspect_index,
+    pending_references,
+)
 
 __all__ = [
     "SCHEMA_SQL",
     "PROFILE_ID",
-    "Candidate",
+    "Scope",
     "Encoder",
     "Hit",
     "IndexReport",
     "IndexState",
+    "IndexCoverage",
     "MiniLM",
     "ModelInfo",
     "Prepared",
@@ -39,10 +48,13 @@ __all__ = [
     "initialize_index",
     "inspect_model",
     "inspect_index",
+    "inspect_coverage",
     "invalidate_embedding",
     "load_model",
+    "migrate_index",
     "prepare_embedding",
     "publish_embedding",
+    "pending_references",
     "relocate_embedding",
     "search_embeddings",
 ]

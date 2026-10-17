@@ -27,7 +27,7 @@ from toolsmith.validation import digest, integer, text
 
 MAX_MEMBERS = 10000
 MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024
-MAX_MEMBER_BYTES = 512 * 1024 * 1024
+MAX_MEMBER_BYTES = 128 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,11 @@ def member_name(value: object) -> str:
 
 @boundary
 def pack_files(
-    sources: tuple[MemberSource, ...], destination: Path, maximum_bytes: int = MAX_ARCHIVE_BYTES
+    sources: tuple[MemberSource, ...],
+    destination: Path,
+    maximum_bytes: int = MAX_ARCHIVE_BYTES,
+    *,
+    expected: tuple[MemberDigest, ...] | None = None,
 ) -> ArchiveReport:
     absolute_path(destination)
     maximum = integer(maximum_bytes, 1, MAX_ARCHIVE_BYTES, "Archive byte budget")
@@ -91,6 +95,24 @@ def pack_files(
         if str(parent) != "."
     ):
         raise ToolsmithError("conflict", "Archive file names collide with parent directories")
+    identities: dict[str, MemberDigest] | None = None
+    if expected is not None:
+        if not isinstance(expected, tuple) or any(
+            not isinstance(member, MemberDigest) for member in expected
+        ):
+            raise ToolsmithError("invalid_input", "Supply typed exact expected member identities")
+        identities = {}
+        for expected_member in expected:
+            name = member_name(expected_member.name)
+            digest(expected_member.sha256)
+            integer(expected_member.content_bytes, 0, MAX_MEMBER_BYTES, "Member bytes")
+            if name in identities:
+                raise ToolsmithError("conflict", "Expected member names must be unique")
+            identities[name] = expected_member
+        if set(identities) != names:
+            raise ToolsmithError(
+                "conflict", "Expected identities must match the exact selected files"
+            )
     with directory_descriptor(destination.parent) as parent:
         staged = ".stage-" + uuid4().hex + ".tmp"
         descriptor = os.open(
@@ -124,6 +146,13 @@ def pack_files(
                         )
                 stream.flush()
             os.fsync(descriptor)
+            if identities is not None and any(
+                identities[member.name] != member for member in members
+            ):
+                raise ToolsmithError(
+                    "conflict",
+                    "Archive source differs from its expected identity; nothing was published",
+                )
             os.lseek(descriptor, 0, os.SEEK_SET)
             archive_digest = stream_file(descriptor, maximum)
             try:
@@ -172,6 +201,55 @@ def central_directory(stream: io.BufferedReader) -> None:
             "denied", "Archive directory exceeds the single-volume structural budget"
         )
     stream.seek(0)
+
+
+@boundary
+def read_archive_member(source: Path, name: str, maximum_bytes: int = 4 * 1024 * 1024) -> bytes:
+    selected = member_name(name)
+    maximum = integer(maximum_bytes, 1, MAX_MEMBER_BYTES, "Maximum member bytes")
+    with regular_descriptor(source) as descriptor:
+        before = os.fstat(descriptor)
+        try:
+            with os.fdopen(os.dup(descriptor), "rb") as stream:
+                central_directory(stream)
+                with zipfile.ZipFile(stream) as archive:
+                    records = archive.infolist()
+                    names: set[str] = set()
+                    requested = None
+                    for record in records:
+                        current = member_name(record.filename)
+                        if (
+                            current in names
+                            or record.is_dir()
+                            or record.flag_bits & 1
+                            or stat.S_IFMT(record.external_attr >> 16) not in {0, stat.S_IFREG}
+                            or record.compress_type
+                            not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}
+                            or record.file_size > MAX_MEMBER_BYTES
+                        ):
+                            raise ToolsmithError(
+                                "denied", "Archive contains unsafe, duplicate or oversized members"
+                            )
+                        names.add(current)
+                        if current == selected:
+                            requested = record
+                    if requested is None:
+                        raise ToolsmithError("not_found", "Exact archive member was not found")
+                    if requested.file_size > maximum:
+                        raise ToolsmithError(
+                            "limit", "Selected archive member exceeds its explicit byte budget"
+                        )
+                    with archive.open(requested) as member:
+                        content = member.read(maximum + 1)
+                    if len(content) > maximum or len(content) != requested.file_size:
+                        raise ToolsmithError(
+                            "limit", "Selected archive member exceeds its declared size"
+                        )
+                if stable_identity(before) != stable_identity(os.fstat(descriptor)):
+                    raise ToolsmithError("conflict", "Archive changed during member inspection")
+                return content
+        except (zipfile.BadZipFile, RuntimeError, EOFError, NotImplementedError) as error:
+            raise ToolsmithError("integrity", "Archive member or checksum is invalid") from error
 
 
 @boundary

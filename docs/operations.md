@@ -68,19 +68,28 @@ Collection backup does **not** replace/reset the shared source-limit directory.
 Retain that private directory unchanged, including policy bindings and outstanding
 conservative reservations, when restoring operations that might be resumed.
 
+The default and maximum aggregate backup budget is 20 GiB. There is no 10,000-object
+cutoff. Database hashes/copies use 64 KiB buffers; restore opens the verified
+snapshot read-only instead of deserializing it into RAM. Individual retained
+artifacts are bounded to 128 MiB; database/index files are not artifact files.
+The manifest has a separate 128 MiB metadata bound shared by backup and restore.
+Backup streams its object records instead of building a whole-manifest Python
+list. No successful backup can exceed the reader's manifest byte budget.
+
 ## Integrity and lexical rebuild
 
 `check_integrity` checks SQLite/foreign keys, exact text/provenance/file-version
 identities, complete deterministic chunk coverage, index content/postings and
 referenced object bytes.
-Index checking uses a bounded in-memory snapshot, not an extra persistent store.
+SQLite 3.44+ performs FTS virtual-table checking directly through `PRAGMA
+integrity_check`. No whole-database serialization or in-memory duplicate is made.
 These full checks are explicit maintenance, not repeated whole-store work on each
 agent read. Normal artifact reads verify the selected object's size/identity.
 
 `rebuild_index` transactionally regenerates chunks and the one FTS index from
 canonical retained text parts using the same chunking implementation as ordinary
 writes, and verifies it after commit; SQLite FTS pending postings must be committed
-before snapshot verification. This can repair the index, not damaged source text,
+before verification. This can repair the index, not damaged source text,
 lost originals or forged provenance. An integrity failure never substitutes a
 different version. Preserve backups and diagnose damaged canonical data separately.
 
@@ -100,10 +109,11 @@ of filesystem deletion. Retained originals/objects are never cleanup targets.
 
 ## Schema
 
-Current archive schema v2 uses the same generic lexical index as caller-owned
-databases. Ordinary reads reject other schemas. `migrate_store` explicitly verifies
-the reviewed v1 schema, canonical provenance and objects, forward-copies to a new
-destination, replaces only obsolete lexical derivatives and verifies the result
+Current archive schema v3 uses the generic lexical/native vector indexes and a
+current-text generation counter. Ordinary reads reject other schemas.
+`migrate_store` explicitly verifies reviewed v1/v2 schemas, canonical provenance
+and objects, forward-copies to a new destination, converts retained vectors
+without inference, adds the current view/counter and verifies the result
 before atomic publication. The source remains unchanged as the rollback copy.
 Unknown schema shapes, destination collisions or verification failures abort;
 there is no dual runtime reader, in-place reset or automatic migration.

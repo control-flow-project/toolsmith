@@ -41,9 +41,9 @@ assert Path(toolsmith.__file__).resolve().is_relative_to(Path(sys.prefix).resolv
 assert importlib.util.find_spec('dns') is None
 assert importlib.util.find_spec('onnxruntime') is None
 assert importlib.util.find_spec('tokenizers') is None
-from toolsmith.semantic import Candidate, Source, encode_query, initialize_index, inspect_model
+from toolsmith.semantic import Scope, Source, encode_query, initialize_index, inspect_model
 assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
-assert importlib.metadata.version('ctlflow-toolsmith') == '0.2.0'
+assert importlib.metadata.version('ctlflow-toolsmith') == '0.3.0'
 metadata = importlib.metadata.metadata('ctlflow-toolsmith')
 assert metadata['License-Expression'] == 'MIT'
 assert metadata.get_all('License-File') == ['LICENSE']
@@ -71,7 +71,7 @@ with closing(sqlite3.connect(':memory:')) as connection:
     unwrap(lexical.initialize_index(connection))
     source = lexical.Source('source', 'Restricted Payments mean dividends')
     unwrap(lexical.index_source(connection, source, expected_digest=None))
-    hits = unwrap(lexical.search(connection, '"Restricted Payments"', (lexical.Candidate(source.reference, hashlib.sha256(source.text.encode()).hexdigest()),)))
+    hits = unwrap(lexical.search(connection, '"Restricted Payments"', lexical.Scope('lexical_document')))
     assert len(hits.hits) == 1
 assert unwrap(project_table(unwrap(decode_table(b'Name,Value\\nA,10\\n')), ('Value',), {'Name':'A'})).matched == 1
 journal = parent / 'journal'
@@ -108,6 +108,8 @@ def check_archives(wheel: Path, source: Path) -> None:
         assert "toolsmith/semantic/schema.sql" in names
         assert "toolsmith/lexical/schema.sql" in names
         assert "toolsmith/py.typed" in names
+        native_suffixes = ("/_vec1.so", "/_vec1.dylib", "/_vec1.dll")
+        assert sum(name.endswith(native_suffixes) for name in names) == 1
         license_path = next(name for name in names if name.endswith("/licenses/LICENSE"))
         assert not any(name.startswith(("tests/", "scripts/", "docs/")) for name in names)
         metadata = archive.read(next(name for name in names if name.endswith("/METADATA"))).decode()
@@ -131,6 +133,15 @@ def check_archives(wheel: Path, source: Path) -> None:
         assert any(name.endswith("/tests/test_http.py") for name in source_names)
         assert any(name.endswith("/docs/specification.md") for name in source_names)
         assert any(name.endswith("/src/toolsmith/storage/schema.sql") for name in source_names)
+        for required in (
+            "/hatch_build.py",
+            "/vendor/sqlite/vec1.c",
+            "/vendor/sqlite/sqlite3.h",
+            "/vendor/sqlite/sqlite3ext.h",
+            "/vendor/sqlite/README.md",
+        ):
+            assert any(name.endswith(required) for name in source_names), required
+        assert not any(name.endswith((".so", ".dll", ".dylib", ".o")) for name in source_names)
         names += source_names
     assert not any(
         part in {".analysis", ".venv", ".temp", ".data", ".verification", "__pycache__"}
@@ -143,8 +154,11 @@ def check_archives(wheel: Path, source: Path) -> None:
 
 def main() -> int:
     require_limits()
-    wheel = ROOT / "dist/ctlflow_toolsmith-0.2.0-py3-none-any.whl"
-    source = ROOT / "dist/ctlflow_toolsmith-0.2.0.tar.gz"
+    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.3.0-py3-none-*.whl"))
+    if len(wheels) != 1 or wheels[0].name.endswith("-any.whl"):
+        raise RuntimeError("Expected one platform-tagged native wheel")
+    wheel = wheels[0]
+    source = ROOT / "dist/ctlflow_toolsmith-0.3.0.tar.gz"
     check_archives(wheel, source)
     uv = os.environ.get("TOOLSMITH_UV") or shutil.which("uv")
     if uv is None:

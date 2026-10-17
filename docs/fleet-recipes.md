@@ -15,7 +15,9 @@ reference, e.g. `article:<id>:headline`, `article:<id>:body`, `article:<id>:summ
 Preserve the distinction between acquired original text and summary navigation.
 
 The generic library in `toolsmith.semantic` operates directly on the owner's
-connection. Install its three tables as part of that owner's single schema.
+connection. Initialize its derivative tables and native vector index as part of that owner's
+single schema. The packaged extension is registered by `initialize_index`; no
+separate process, index file or server exists.
 Prepare `Source`/vectors outside transactions. At publication, in the same
 transaction, compare the current article text digest with the prepared digest,
 then call `publish_embedding` with the index's expected previous digest. Reject
@@ -37,8 +39,8 @@ The first function is deliberately **consumer-owned**, not a Toolsmith API. It
 also applies Bad Bets' existing summary/tag/claim rules. Only unchanged current
 inputs may reuse vectors. Headlines and summaries can be separate sources with
 the same primitive API; a summary must not be presented as original evidence.
-At query time, choose authorized article/representation candidates first, supply
-current digests to `search_embeddings`, and read exact hit spans from canonical
+At query time, expose permitted current references/digests in an application-owned
+SQLite table/view and pass `Scope("permitted_text")` to `search_embeddings`, and read exact hit spans from canonical
 original text. Report missing/stale coverage. Do not broaden a private query to
 another user's corpus or use a stale summary digest to claim body completeness.
 
@@ -67,10 +69,10 @@ from toolsmith.result import unwrap
 unwrap(lexical.initialize_index(case_connection))
 source = lexical.Source(page_reference, canonical_page_text, source_title)
 unwrap(lexical.index_source(case_connection, source, expected_digest=previous_digest))
-matches = unwrap(lexical.search(case_connection, '"Restricted Payments"', authorized_pages))
+matches = unwrap(lexical.search(case_connection, '"Restricted Payments"', lexical.Scope("authorized_pages")))
 ```
 
-The case connection, canonical text and authorized candidate tuple are deliberately
+The case connection, canonical text and authorized table/view are deliberately
 consumer-owned. Enable foreign keys before writes. Apply corrections/invalidation
 inside its transaction and unwrap failures there. Query hit offsets address the
 original page text; short snippets do not replace full page reads. For document

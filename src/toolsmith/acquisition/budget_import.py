@@ -51,11 +51,7 @@ def import_budget(
     clock: Clock | None = None,
     boot: str,
 ) -> bool:
-    if (
-        not isinstance(policies, tuple)
-        or not 1 <= len(policies) <= 256
-        or not isinstance(snapshot, BudgetSnapshot)
-    ):
+    if not isinstance(policies, tuple) or not policies or not isinstance(snapshot, BudgetSnapshot):
         raise ToolsmithError(
             "invalid_input", "Supply reviewed group policies and a typed quota snapshot"
         )
@@ -81,12 +77,7 @@ def import_budget(
         raise ToolsmithError(
             "conflict", "Snapshot period already expired; supply the current reviewed counters"
         )
-    if (
-        not isinstance(snapshot.groups, tuple)
-        or len(snapshot.groups) > 256
-        or not isinstance(snapshot.tasks, tuple)
-        or len(snapshot.tasks) > 1024
-    ):
+    if not isinstance(snapshot.groups, tuple) or not isinstance(snapshot.tasks, tuple):
         raise ToolsmithError("invalid_input", "Quota snapshot exceeds its scope bounds")
     groups: dict[str, JsonValue] = {}
     tasks: dict[str, JsonValue] = {}
@@ -115,12 +106,12 @@ def import_budget(
         )
     for column in ("requests", "bytes"):
         group_total = sum(
-            integer(counters(value["usage"])[column], 0, 64 * 1024**3, "Usage")
+            integer(counters(value["usage"])[column], 0, 2**63 - 1, "Usage")
             for value in groups.values()
             if isinstance(value, dict)
         )
         task_total = sum(
-            integer(counters(value)[column], 0, 64 * 1024**3, "Usage") for value in tasks.values()
+            integer(counters(value)[column], 0, 2**63 - 1, "Usage") for value in tasks.values()
         )
         if group_total != task_total:
             raise ToolsmithError(
@@ -134,7 +125,7 @@ def import_budget(
         state = load(directory, selected, actual_clock, identity(boot))
         for group_name in groups:
             scope(state, checked[group_name], "import")
-            group_record = records(state["groups"], 256)[group_name]
+            group_record = records(state["groups"])[group_name]
             if not isinstance(group_record, dict) or not isinstance(groups[group_name], dict):
                 raise ToolsmithError("integrity", "Imported group state is malformed")
             value = groups[group_name]

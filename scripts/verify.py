@@ -44,9 +44,13 @@ def command(arguments: list[str]) -> None:
 def main() -> int:
     require_limits()
     binary = Path(sys.executable).parent
-    command([str(binary / "ruff"), "format", "--check", "src", "tests", "scripts"])
-    command([str(binary / "ruff"), "check", "src", "tests", "scripts"])
+    command(
+        [str(binary / "ruff"), "format", "--check", "src", "tests", "scripts", "hatch_build.py"]
+    )
+    command([str(binary / "ruff"), "check", "src", "tests", "scripts", "hatch_build.py"])
     command([str(binary / "mypy")])
+    command([sys.executable, "-m", "build", "--no-isolation", "--wheel"])
+    command([sys.executable, "-m", "build", "--no-isolation", "--sdist"])
     files = sorted((ROOT / "tests").glob("test_*.py"))
     workers = min(len(files), len(os.sched_getaffinity(0)))
     reports: list[dict[str, str | int | float]] = []
@@ -107,7 +111,6 @@ def main() -> int:
         )
         if any(report["exit_code"] != 0 for report in reports):
             return 1
-    command([sys.executable, "-m", "build", "--no-isolation"])
     return 0
 
 

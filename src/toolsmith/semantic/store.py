@@ -3,25 +3,28 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 from toolsmith.clock import Clock, SystemClock, utc_now
 from toolsmith.result import ToolsmithError, boundary, unwrap
 from toolsmith.retrieval import Citation, read_citation
 from toolsmith.semantic import (
     PROFILE_ID,
-    Candidate,
     Encoder,
+    Scope,
     Source,
     clear_index,
     encode_query,
+    inspect_coverage,
     inspect_index,
     load_model,
+    pending_references,
     prepare_embedding,
     publish_embedding,
     search_embeddings,
 )
 from toolsmith.storage.database import Store, open_store, row_integer, row_text
-from toolsmith.validation import integer
+from toolsmith.validation import canonical_json, integer
 
 
 @dataclass(frozen=True)
@@ -64,26 +67,19 @@ def selected_encoder(directory: Path, encoder: Encoder | None) -> Iterator[Encod
             yield loaded
 
 
-def current_parts(store: Store) -> list[sqlite3.Row]:
-    return store.connection.execute(
-        "SELECT p.id, p.text_digest FROM part p JOIN item i ON i.latest_version=p.version_id "
-        "WHERE p.has_text=1 ORDER BY p.id"
-    ).fetchall()
+def current_scope(store: Store) -> Scope:
+    name = "semantic_current_" + uuid4().hex
+    store.connection.execute(
+        'CREATE TEMP VIEW "' + name + '" AS SELECT * FROM main.current_text WHERE has_text = 1'
+    )
+    return Scope(name, schema="temp")
 
 
 def current_status(store: Store) -> TextIndexStatus:
-    rows = current_parts(store)
-    states = {
-        state.reference: state.digest
-        for state in unwrap(
-            inspect_index(
-                store.connection,
-                tuple("part:" + str(row["id"]) for row in rows),
-            )
-        )
-    }
-    indexed = sum(states["part:" + str(row["id"])] == row["text_digest"] for row in rows)
-    return TextIndexStatus(len(rows), indexed, len(rows) - indexed, PROFILE_ID)
+    observed = unwrap(inspect_coverage(store.connection, current_scope(store)))
+    return TextIndexStatus(
+        observed.entries, observed.indexed, observed.missing + observed.stale, PROFILE_ID
+    )
 
 
 @boundary
@@ -104,19 +100,11 @@ def index_text(
 ) -> TextIndexReport:
     maximum = integer(maximum_parts, 1, 100, "Maximum indexed parts")
     with open_store(root, collection) as store:
-        rows = current_parts(store)
-        states = {
-            state.reference: state.digest
-            for state in unwrap(
-                inspect_index(
-                    store.connection,
-                    tuple("part:" + str(row["id"]) for row in rows),
-                )
-            )
-        }
-        selected = [row for row in rows if states["part:" + str(row["id"])] != row["text_digest"]][
-            :maximum
-        ]
+        references = unwrap(pending_references(store.connection, current_scope(store), maximum))
+        selected = store.connection.execute(
+            "SELECT p.part_id AS id, p.text_digest FROM current_text p JOIN json_each(?) requested ON requested.value = p.reference ORDER BY p.part_id",
+            (canonical_json(references).decode(),),
+        ).fetchall()
         if not selected:
             return TextIndexReport(0, current_status(store))
     with selected_encoder(model_directory, encoder) as actual:
@@ -180,60 +168,39 @@ def search_semantic_text(
     maximum = integer(maximum_records, 1, 100, "Maximum records")
     selected = None if item is None else identity(item, "Item")
     with open_store(root, collection) as store:
-        rows = store.connection.execute(
-            "SELECT p.id, p.version_id, p.ordinal, p.text_digest FROM part p JOIN item i ON i.latest_version = p.version_id WHERE p.has_text = 1 AND (? IS NULL OR i.id = ?) ORDER BY p.id LIMIT 10001",
-            (selected, selected),
-        ).fetchall()
-        if len(rows) > 10_000:
-            raise ToolsmithError(
-                "limit", "Select an item to keep semantic candidates within 10000 parts"
-            )
+        generation = store.connection.execute(
+            "SELECT generation FROM collection WHERE id = 1"
+        ).fetchone()[0]
     with selected_encoder(model_directory, encoder) as actual:
-        return search_parts(root, collection, query, selected, rows, actual, maximum)
-
-
-def search_parts(
-    root: Path,
-    collection: str,
-    query: str,
-    selected: str | None,
-    rows: list[sqlite3.Row],
-    actual: Encoder,
-    maximum: int,
-) -> TextSearchReport:
-    encoded = unwrap(encode_query(query, actual))
+        encoded = unwrap(encode_query(query, actual))
     with open_store(root, collection) as store:
-        current_rows = store.connection.execute(
-            "SELECT p.id, p.version_id, p.ordinal, p.text_digest FROM part p JOIN item i ON i.latest_version = p.version_id WHERE p.has_text = 1 AND (? IS NULL OR i.id = ?) ORDER BY p.id LIMIT 10001",
-            (selected, selected),
-        ).fetchall()
-        if [tuple(row) for row in current_rows] != [tuple(row) for row in rows]:
+        if (
+            store.connection.execute("SELECT generation FROM collection WHERE id = 1").fetchone()[0]
+            != generation
+        ):
             raise ToolsmithError(
-                "conflict", "Current candidates changed while encoding the query; retry explicitly"
+                "conflict", "Current text changed while encoding the query; retry explicitly"
             )
+        condition = (
+            "" if selected is None else " AND item_id = '" + selected.replace("'", "''") + "'"
+        )
+        store.connection.execute(
+            "CREATE TEMP VIEW requested_text AS SELECT * FROM main.current_text WHERE has_text = 1"
+            + condition
+        )
         report = unwrap(
             search_embeddings(
-                store.connection,
-                encoded,
-                tuple(
-                    Candidate("part:" + str(row["id"]), row_text(row, "text_digest"))
-                    for row in rows
-                ),
-                maximum,
+                store.connection, encoded, Scope("requested_text", schema="temp"), maximum
             )
         )
         citations: list[SemanticCitation] = []
-        by_reference = {"part:" + str(row["id"]): row for row in rows}
         for hit in report.hits:
-            row = by_reference[hit.reference]
-            current = store.connection.execute(
-                "SELECT 1 FROM part p JOIN item i ON i.latest_version = p.version_id WHERE p.id = ? AND p.text_digest = ?",
-                (row["id"], hit.digest),
+            row = store.connection.execute(
+                "SELECT version_id, ordinal FROM current_text WHERE reference = ? AND text_digest = ?",
+                (hit.reference, hit.digest),
             ).fetchone()
-            if current is None:
-                raise ToolsmithError(
-                    "conflict", "Current text changed during semantic search; retry explicitly"
-                )
+            if row is None:
+                raise ToolsmithError("conflict", "Current text changed during semantic search")
             citation = unwrap(
                 read_citation(
                     root,

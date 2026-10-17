@@ -12,7 +12,7 @@ inside publication's write transaction and pass the exact previous digest. Calle
 schema versions and row factories remain unchanged.
 
 `lexical.find_text` preserves punctuation and caller-owned regions.
-`lexical.search` performs explicit indexed FTS matching over authorized references.
+`lexical.search` performs explicit indexed FTS matching over authorized database scopes.
 These are distinct query semantics, never fallback paths. Semantic `inspect_index`
 is cheap bulk metadata; full vector/source validation is a separate explicit audit.
 
@@ -30,11 +30,11 @@ HTTP client for a Toolsmith service, skill installation or fleet integration.
 | `toolsmith.result` | `Success`, `Failure`, `Result` |
 | `toolsmith.files` | `read_bytes`, `write_new_bytes`, `hash_file`, `copy_file`, `file_stamp`, `FileDigest`, `FileStamp` |
 | `toolsmith.filesystem` | `replace_bytes`, `inventory`, `sync_directory_tree`, `publish_directory`, `FileEntry` |
-| `toolsmith.archives` | `pack_files`, `unpack_files`, `MemberSource`, `MemberDigest`, `ArchiveReport` |
-| `toolsmith.readers` | `Document`, `TextPart`, `read_text`, `read_json`, `read_html`, `read_feed`, `Feed`, `FeedEntry`, `decode_table`, `iter_table_rows`, `project_table`, `read_html_tables` |
+| `toolsmith.archives` | `pack_files`, `unpack_files`, `read_archive_member`, `MemberSource`, `MemberDigest`, `ArchiveReport` |
+| `toolsmith.readers` | `Document`, `TextPart`, `read_text`, `read_json`, `read_html`, `read_feed`, `Feed`, `FeedEntry`, `decode_table`, `iter_table_rows`, `project_table` |
 | `toolsmith.readers.content` | `validate_content`; PDF signature only, not extraction |
-| `toolsmith.lexical` | `Source`, `Candidate`, `initialize_index`, `inspect_index`, `index_source`, `invalidate_source`, `search`, `check_index`, `compile_query`, `Region`, `find_text` |
-| `toolsmith.semantic` | `load_model`, `inspect_model`, `Source`, `Candidate`, `prepare_embedding`, `encode_query`, `initialize_index`, `inspect_index`, `publish_embedding`, `invalidate_embedding`, `relocate_embedding`, `clear_index`, `search_embeddings`, `check_index`, `indexed_digest` |
+| `toolsmith.lexical` | `Source`, `Scope`, `initialize_index`, `inspect_index`, `index_source`, `invalidate_source`, `search`, `check_index`, `compile_query`, `Region`, `find_text` |
+| `toolsmith.semantic` | `load_model`, `inspect_model`, `Source`, `Scope`, `prepare_embedding`, `encode_query`, `initialize_index`, `inspect_index`, `inspect_coverage`, `pending_references`, `publish_embedding`, `invalidate_embedding`, `relocate_embedding`, `clear_index`, `search_embeddings`, `check_index`, `indexed_digest`, `migrate_index` |
 | `toolsmith.acquisition.client` | `HttpPolicy`, `FetchResponse`, `fetch_http` without an archive |
 | `toolsmith.acquisition.config` | `read_http_policy`, `read_budget_policy` |
 | `toolsmith.acquisition.budgets` | `BudgetPolicy`, `Reservation`, `BudgetStatus`, `inspect_budget`, `reserve_budget`, `settle_budget` |
@@ -112,13 +112,14 @@ with sqlite3.connect(":memory:") as connection:
     unwrap(lexical.initialize_index(connection))
     source = lexical.Source("opaque-reference", "Exact source words", "Source")
     unwrap(lexical.index_source(connection, source, expected_digest=None))
-    candidates = (lexical.Candidate(source.reference, hashlib.sha256(source.text.encode()).hexdigest()),)
-    matches = unwrap(lexical.search(connection, '"source words"', candidates))
+    connection.execute("CREATE TABLE permitted_text (reference TEXT PRIMARY KEY, text_digest TEXT NOT NULL)")
+    connection.execute("INSERT INTO permitted_text VALUES (?, ?)", (source.reference, hashlib.sha256(source.text.encode()).hexdigest()))
+    matches = unwrap(lexical.search(connection, '"source words"', lexical.Scope("permitted_text")))
 ```
 
 Initialization owns only derivative relations, not the application's canonical
 tables or schema version. Both index initializers reject existing or partial
-schemas rather than silently adopting or repairing them. Candidate selection is caller-owned authorization;
+schemas rather than silently adopting or repairing them. The selected database table/view is caller-owned authorization;
 digests exclude stale derivatives before ranking and limits. BM25 uses DB-wide
 statistics, so separate room/tenant databases remain necessary for statistical
 isolation. Cheap bulk status does not perform a full integrity audit.

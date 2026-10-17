@@ -21,7 +21,7 @@ from toolsmith.operations.backup import backup_store, restore_store
 from toolsmith.operations.integrity import check_integrity
 from toolsmith.result import Failure, unwrap
 from toolsmith.semantic import (
-    Candidate,
+    Scope,
     Source,
     check_index,
     encode_query,
@@ -75,8 +75,22 @@ def verify_caller_cli(model: Path) -> None:
                 ]
             )
         )
-        references = parent / "references.json"
-        references.write_text('["permitted"]')
+        from contextlib import closing
+
+        with closing(sqlite3.connect(database)) as connection, connection:
+            connection.execute(
+                "CREATE TABLE canonical (reference TEXT PRIMARY KEY, text_digest TEXT NOT NULL, text TEXT NOT NULL)"
+            )
+            for entry in json.loads(sources.read_text()):
+                connection.execute(
+                    "INSERT INTO canonical VALUES (?,?,?)",
+                    (
+                        entry["reference"],
+                        hashlib.sha256(entry["text"].encode()).hexdigest(),
+                        entry["text"],
+                    ),
+                )
+        database.chmod(0o600)
         for command in (
             ["init", "--database", str(database)],
             [
@@ -88,18 +102,18 @@ def verify_caller_cli(model: Path) -> None:
                 "--model-directory",
                 str(model),
             ],
-            ["status", "--database", str(database), "--references", str(references)],
+            ["status", "--database", str(database), "--scope", "embedding_document"],
             [
                 "query",
                 "Wet weather",
                 "--database",
                 str(database),
-                "--sources",
-                str(sources),
+                "--scope",
+                "embedding_document",
                 "--model-directory",
                 str(model),
             ],
-            ["check", "--database", str(database), "--sources", str(sources)],
+            ["check", "--database", str(database), "--scope", "canonical"],
         ):
             output = io.StringIO()
             with redirect_stdout(output):
@@ -244,9 +258,14 @@ def main() -> int:
                     if options.retained_news
                     else [("borrower transfers assets", 0)]
                 )
-                candidates = tuple(
-                    Candidate(source.reference, fingerprint(source.text)) for source in sources
+                connection.execute(
+                    "CREATE TABLE requested (reference TEXT PRIMARY KEY, text_digest TEXT NOT NULL)"
                 )
+                connection.executemany(
+                    "INSERT INTO requested VALUES (?, ?)",
+                    ((source.reference, fingerprint(source.text)) for source in sources),
+                )
+                candidates = Scope("requested")
                 for query, ordinal in queries:
                     generic_hits = unwrap(
                         search_embeddings(

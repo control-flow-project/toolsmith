@@ -5,14 +5,12 @@ from dataclasses import dataclass
 from importlib.resources import files
 
 from toolsmith.result import ToolsmithError, boundary
+from toolsmith.scopes import Scope, coverage, scope_query
 from toolsmith.semantic.profile import (
-    MAX_CANDIDATES,
     MAX_CHUNKS,
-    MAX_SEARCH_CHUNKS,
     MAX_SOURCE_BYTES,
     PROFILE_ID,
     PROFILE_JSON,
-    Candidate,
     Chunk,
     Prepared,
     Source,
@@ -20,6 +18,7 @@ from toolsmith.semantic.profile import (
     unpack_vector,
     validate_source,
 )
+from toolsmith.semantic.vector import load_vector_extension
 from toolsmith.sqlite import execute, transaction
 from toolsmith.validation import digest, integer, source_reference, timestamp
 
@@ -88,13 +87,14 @@ def retained_chunks(
     ordinal = 0
     for row in execute(
         connection,
-        "SELECT ordinal, start_offset, end_offset, text_digest, vector FROM embedding_chunk WHERE reference = ? ORDER BY ordinal",
+        "SELECT c.ordinal, c.start_offset, c.end_offset, c.text_digest, v.vector, v.chunk_id, c.id FROM embedding_chunk c LEFT JOIN embedding_vector v ON v.rowid = c.id WHERE c.reference = ? ORDER BY c.ordinal",
         (reference,),
     ):
         start = integer(row[1], 0, characters, "Chunk start")
         end = integer(row[2], 1, characters, "Chunk end")
         if (
             row[0] != ordinal
+            or row[5] != row[6]
             or ordinal >= count
             or not previous_start <= start <= previous_end < end
         ):
@@ -112,6 +112,7 @@ def retained_chunks(
 
 @boundary
 def initialize_index(connection: sqlite3.Connection) -> IndexReport:
+    load_vector_extension(connection)
     with transaction(connection, "toolsmith_embedding", write=True):
         for statement in SCHEMA_SQL.split(";"):
             if statement.strip():
@@ -121,6 +122,7 @@ def initialize_index(connection: sqlite3.Connection) -> IndexReport:
 
 @boundary
 def indexed_digest(connection: sqlite3.Connection, reference: str) -> str | None:
+    load_vector_extension(connection)
     with transaction(connection, "toolsmith_embedding"):
         row = document_row(connection, reference)
         if row is None:
@@ -175,6 +177,7 @@ def publish_embedding(
     *,
     expected_digest: str | None,
 ) -> bool:
+    load_vector_extension(connection)
     validate_prepared(prepared, source)
     recorded = timestamp(indexed_at)
     if recorded is None:
@@ -193,9 +196,7 @@ def publish_embedding(
             raise ToolsmithError(
                 "conflict", "Indexed source changed while encoding; publication was rolled back"
             )
-        execute(
-            connection, "DELETE FROM embedding_document WHERE reference = ?", (source.reference,)
-        )
+        remove_embedding(connection, source.reference)
         execute(
             connection,
             "INSERT OR IGNORE INTO embedding_profile (id, definition) VALUES (?, ?)",
@@ -213,100 +214,116 @@ def publish_embedding(
                 recorded,
             ),
         )
-        connection.executemany(
-            "INSERT INTO embedding_chunk (reference, ordinal, start_offset, end_offset, text_digest, vector) VALUES (?, ?, ?, ?, ?, ?)",
-            [
-                (
-                    source.reference,
-                    chunk.ordinal,
-                    chunk.start,
-                    chunk.end,
-                    chunk.digest,
-                    chunk.vector,
-                )
-                for chunk in prepared.chunks
-            ],
-        )
+        for chunk in prepared.chunks:
+            cursor = execute(
+                connection,
+                "INSERT INTO embedding_chunk (reference, ordinal, start_offset, end_offset, text_digest) VALUES (?, ?, ?, ?, ?)",
+                (source.reference, chunk.ordinal, chunk.start, chunk.end, chunk.digest),
+            )
+            execute(
+                connection,
+                "INSERT INTO embedding_vector (rowid, vector, chunk_id) VALUES (?, ?, ?)",
+                (cursor.lastrowid, chunk.vector, cursor.lastrowid),
+            )
     return True
+
+
+def remove_embedding(connection: sqlite3.Connection, reference: str) -> bool:
+    execute(
+        connection,
+        "DELETE FROM embedding_vector WHERE rowid IN (SELECT id FROM embedding_chunk WHERE reference = ?)",
+        (reference,),
+    )
+    return (
+        execute(
+            connection, "DELETE FROM embedding_document WHERE reference = ?", (reference,)
+        ).rowcount
+        > 0
+    )
 
 
 @boundary
 def invalidate_embedding(connection: sqlite3.Connection, reference: str) -> bool:
+    load_vector_extension(connection)
     selected = source_reference(reference)
     with transaction(connection, "toolsmith_embedding", write=True):
         validate_profile(connection)
-        cursor = execute(
-            connection, "DELETE FROM embedding_document WHERE reference = ?", (selected,)
-        )
-        return cursor.rowcount > 0
+        return remove_embedding(connection, selected)
 
 
 @boundary
 def search_embeddings(
     connection: sqlite3.Connection,
     query: bytes,
-    candidates: tuple[Candidate, ...],
+    scope: Scope,
     maximum_records: int = 20,
 ) -> SearchReport:
     maximum = integer(maximum_records, 1, 100, "Maximum records")
-    values = unpack_vector(query)
-    if not isinstance(candidates, tuple) or len(candidates) > MAX_CANDIDATES:
-        raise ToolsmithError("limit", "Supply at most 10000 explicit authorized candidates")
+    unpack_vector(query)
+    load_vector_extension(connection)
     seen: set[str] = set()
-    for candidate in candidates:
-        if not isinstance(candidate, Candidate):
-            raise ToolsmithError("invalid_input", "Supply typed authorized semantic candidates")
-        reference = source_reference(candidate.reference)
-        digest(candidate.digest)
-        if reference in seen:
-            raise ToolsmithError("invalid_input", "Semantic candidates must have unique references")
-        seen.add(reference)
-    missing, stale = 0, 0
-    scanned_chunks = 0
     winners: list[Hit] = []
     with transaction(connection, "toolsmith_embedding"):
         validate_profile(connection)
-        for candidate in candidates:
-            row = document_row(connection, candidate.reference)
-            if row is None:
-                missing += 1
-                continue
-            if row[0] != candidate.digest:
-                stale += 1
-                continue
-            scanned_chunks += row[2]
-            if scanned_chunks > MAX_SEARCH_CHUNKS:
-                raise ToolsmithError(
-                    "limit",
-                    "Selected semantic candidates exceed 100000 chunks; select a smaller authorized set",
+        selected = scope_query(connection, scope)
+        candidates, indexed, missing, stale, largest = coverage(
+            connection, selected, "embedding_document"
+        )
+        rows = execute(
+            connection,
+            "SELECT c.id, c.reference, d.text_digest, c.start_offset, c.end_offset, c.text_digest, v.distance FROM embedding_vector(?, ?) v CROSS JOIN embedding_chunk c CROSS JOIN embedding_document d CROSS JOIN ("
+            + selected
+            + ") s WHERE v.chunk_id IN (SELECT allowed.id FROM embedding_chunk allowed JOIN embedding_document current ON current.reference = allowed.reference JOIN ("
+            + selected
+            + ") permitted ON permitted.reference = current.reference AND permitted.text_digest = current.text_digest) AND c.id = v.rowid AND v.chunk_id = c.id AND d.reference = c.reference AND s.reference = d.reference AND s.text_digest = d.text_digest",
+            (query, '{"K":' + str(maximum * max(1, largest)) + "}"),
+        )
+        try:
+            for row in rows:
+                reference = source_reference(row[1])
+                if reference in seen:
+                    continue
+                metadata = document_row(connection, reference)
+                if metadata is None:
+                    raise ToolsmithError("integrity", "Vector hit has no indexed source")
+                spans = execute(
+                    connection,
+                    "SELECT count(*), min(start_offset), max(end_offset) FROM embedding_chunk WHERE reference = ?",
+                    (reference,),
+                ).fetchone()
+                if tuple(spans) != (metadata[2], 0, metadata[1]):
+                    raise ToolsmithError(
+                        "integrity", "Indexed source has incomplete chunk metadata"
+                    )
+                start = integer(row[3], 0, metadata[1], "Match start")
+                end = integer(row[4], start + 1, metadata[1], "Match end")
+                digest(row[5])
+                vector = execute(
+                    connection, "SELECT vector FROM embedding_vector WHERE rowid = ?", (row[0],)
+                ).fetchone()
+                if vector is None:
+                    raise ToolsmithError("integrity", "Vector hit has no retained vector")
+                unpack_vector(vector[0])
+                if type(row[6]) not in {float, int} or not math.isfinite(row[6]):
+                    raise ToolsmithError("integrity", "Native vector distance is not finite")
+                winners.append(
+                    Hit(reference, digest(row[2]), max(-1.0, min(1.0, 1.0 - row[6])), start, end)
                 )
-            best: Hit | None = None
-            for chunk, chunk_values in retained_chunks(
-                connection, candidate.reference, row[1], row[2]
-            ):
-                score = math.fsum(
-                    left * right for left, right in zip(values, chunk_values, strict=True)
-                )
-                hit = Hit(
-                    candidate.reference, row[0], max(-1.0, min(1.0, score)), chunk.start, chunk.end
-                )
-                if best is None or hit.score > best.score:
-                    best = hit
-            if best is None:
-                raise ToolsmithError("integrity", "Indexed source has no vector chunks")
-            winners.append(best)
-            winners.sort(key=lambda hit: (-hit.score, hit.reference))
-            if len(winners) > maximum:
-                winners.pop()
-    return SearchReport(
-        tuple(winners), len(candidates), len(candidates) - missing - stale, missing, stale
-    )
+                seen.add(reference)
+                if len(winners) == min(maximum, indexed):
+                    break
+        finally:
+            rows.close()
+        if len(winners) != min(maximum, indexed):
+            raise ToolsmithError("integrity", "Indexed scope has incomplete retained vector hits")
+    return SearchReport(tuple(winners), candidates, indexed, missing, stale)
 
 
 @boundary
 def relocate_embedding(
     connection: sqlite3.Connection, old_reference: str, source: Source, *, expected_digest: str
 ) -> bool:
+    load_vector_extension(connection)
     previous_reference = source_reference(old_reference)
     validate_source(source)
     expected = digest(expected_digest)
@@ -337,8 +354,10 @@ def relocate_embedding(
 
 @boundary
 def clear_index(connection: sqlite3.Connection) -> int:
+    load_vector_extension(connection)
     with transaction(connection, "toolsmith_embedding", write=True):
         count = execute(connection, "SELECT count(*) FROM embedding_document").fetchone()[0]
+        execute(connection, "DELETE FROM embedding_vector")
         execute(connection, "DELETE FROM embedding_document")
         execute(connection, "DELETE FROM embedding_profile")
         return integer(count, 0, 2**63 - 1, "Cleared source count")
@@ -348,6 +367,7 @@ def clear_index(connection: sqlite3.Connection) -> int:
 def check_index(
     connection: sqlite3.Connection, source_text: Callable[[str], str | None]
 ) -> IndexReport:
+    load_vector_extension(connection)
     with transaction(connection, "toolsmith_embedding"):
         validate_profile(connection)
         documents, chunks = 0, 0
@@ -359,6 +379,14 @@ def check_index(
             is not None
         ):
             raise ToolsmithError("integrity", "Index contains orphan vector chunks")
+        if (
+            execute(
+                connection,
+                "SELECT 1 FROM embedding_vector v LEFT JOIN embedding_chunk c ON c.id = v.rowid WHERE c.id IS NULL LIMIT 1",
+            ).fetchone()
+            is not None
+        ):
+            raise ToolsmithError("integrity", "Native vector index contains orphan vectors")
         for document in execute(
             connection, "SELECT reference FROM embedding_document ORDER BY reference"
         ):

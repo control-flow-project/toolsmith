@@ -36,8 +36,8 @@ class Arguments(argparse.Namespace):
     model_directory: Path | None = None
     database: Path | None = None
     sources: Path | None = None
-    references: Path | None = None
     reference: str | None = None
+    scope: str | None = None
     mode: QueryMode = "literal"
     selection: str = "text"
     format: str = "csv"
@@ -63,14 +63,14 @@ def make_parser() -> Parser:
     parser.add_argument("--collection", help="Exact collection identity bound to the store")
     parser.add_argument("--json", action="store_true", help="Compact structured result")
     families = parser.add_subparsers(dest="family", required=True)
-    parser.add_argument("--version", action="version", version="toolsmith 0.2.0")
+    parser.add_argument("--version", action="version", version="toolsmith 0.3.0")
     capabilities = families.add_parser("capabilities")
     capabilities.set_defaults(action="capabilities")
     store = families.add_parser("store").add_subparsers(dest="command", required=True)
     for name in ("init", "inspect"):
         store.add_parser(name).set_defaults(action="store." + name)
     readers = families.add_parser("read").add_subparsers(dest="command", required=True)
-    for name in ("text", "html", "feed", "json", "table", "html-tables"):
+    for name in ("text", "html", "feed", "json", "table"):
         command = readers.add_parser(name)
         command.set_defaults(action="read." + name)
         command.add_argument("file", type=Path)
@@ -103,10 +103,14 @@ def make_parser() -> Parser:
             command = commands.add_parser(name)
             command.set_defaults(action="search." + kind + "." + name)
             command.add_argument("--database", type=Path, required=True)
-            if name not in {"init", "delete", "status"}:
+            if name == "index":
                 command.add_argument("--sources", type=Path, required=True)
-            if name == "status":
-                command.add_argument("--references", type=Path, required=True)
+            if name in {"status", "query", "check"}:
+                command.add_argument(
+                    "--scope",
+                    required=True,
+                    help="Application-owned table/view exposing reference and text_digest",
+                )
             if name in {"index", "query"}:
                 command.add_argument("--limit", type=int, default=20)
                 if kind == "semantic":
@@ -220,5 +224,5 @@ def make_parser() -> Parser:
             command.add_argument(
                 "destination", type=Path, help="New private destination; never overwritten"
             )
-            command.add_argument("--maximum-bytes", type=int, default=256 * 1024 * 1024)
+            command.add_argument("--maximum-bytes", type=int, default=20 * 1024**3)
     return parser

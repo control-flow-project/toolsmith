@@ -49,8 +49,8 @@ def find_text(
     if not isinstance(case_sensitive, bool):
         raise ToolsmithError("invalid_input", "Case sensitivity must be Boolean")
     selected = (Region(0, len(supplied)),) if regions is None else regions
-    if not isinstance(selected, tuple) or len(selected) > 10000:
-        raise ToolsmithError("invalid_input", "Supply bounded explicit text regions")
+    if not isinstance(selected, tuple):
+        raise ToolsmithError("invalid_input", "Supply explicit text regions")
     end_previous = 0
     for region in selected:
         if not isinstance(region, Region):
