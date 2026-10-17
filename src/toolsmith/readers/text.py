@@ -3,6 +3,11 @@ from toolsmith.result import ToolsmithError, boundary
 from toolsmith.validation import integer, text
 
 
+def normalize_text(value: str) -> str:
+    supplied = text(value, MAX_TEXT_BYTES, "Text", allow_empty=True)
+    return "\n".join(" ".join(line.split()) for line in supplied.splitlines() if line.strip())
+
+
 def decode_text(content: bytes, maximum_bytes: int = 4 * 1024 * 1024) -> str:
     maximum = integer(maximum_bytes, 1, MAX_TEXT_BYTES, "Maximum text bytes")
     if not isinstance(content, bytes):

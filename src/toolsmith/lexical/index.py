@@ -8,7 +8,7 @@ from importlib.resources import files
 from toolsmith.lexical.chunks import text_chunks
 from toolsmith.lexical.query import QueryMode, compile_query
 from toolsmith.result import ToolsmithError, boundary, unwrap
-from toolsmith.scopes import Scope, coverage, scope_query
+from toolsmith.scopes import Scope, coverage, scope_query, temporary_relation
 from toolsmith.sqlite import execute, transaction
 from toolsmith.validation import canonical_json, digest, integer, source_reference, text
 
@@ -118,6 +118,37 @@ def inspect_index(
         )
 
 
+@boundary
+def indexed_scope(connection: sqlite3.Connection) -> Scope:
+    with transaction(connection, "toolsmith_lexical_relation"):
+        return temporary_relation(
+            connection,
+            "toolsmith_lexical_ready",
+            "SELECT d.reference,d.text_digest FROM main.lexical_document d "
+            "WHERE d.chunks=(SELECT count(*) FROM main.lexical_chunk c WHERE c.reference=d.reference)",
+        )
+
+
+@boundary
+def matching_scope(
+    connection: sqlite3.Connection, query: str, *, mode: QueryMode = "literal"
+) -> Scope:
+    expression = unwrap(compile_query(query, mode))
+    name = "toolsmith_lexical_match_" + hashlib.sha256(expression.encode()).hexdigest()
+    with transaction(connection, "toolsmith_lexical_matches"):
+        quoted = execute(connection, "SELECT quote(?)", (expression,)).fetchone()[0]
+        relation = temporary_relation(
+            connection,
+            name,
+            "SELECT DISTINCT document.reference,document.text_digest "
+            "FROM main.lexical_search JOIN main.lexical_chunk chunk "
+            "ON chunk.id=lexical_search.rowid JOIN main.lexical_document document "
+            "ON document.reference=chunk.reference WHERE lexical_search MATCH " + quoted,
+        )
+        execute(connection, 'SELECT 1 FROM temp."' + name + '" LIMIT 1').fetchone()
+        return relation
+
+
 def remove_source(connection: sqlite3.Connection, reference: str) -> bool:
     execute(
         connection,
@@ -194,7 +225,7 @@ def search(
     beginning = integer(offset, 0, 2**63 - 1, "Offset")
     with transaction(connection, "toolsmith_lexical"):
         selected = scope_query(connection, scope)
-        candidates, indexed, missing, stale, _largest = coverage(
+        candidates, indexed, missing, stale, _largest, _chunks = coverage(
             connection, selected, "lexical_document"
         )
         rows = execute(

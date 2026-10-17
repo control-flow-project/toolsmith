@@ -155,18 +155,7 @@ def pack_files(
                 )
             os.lseek(descriptor, 0, os.SEEK_SET)
             archive_digest = stream_file(descriptor, maximum)
-            try:
-                os.link(
-                    staged,
-                    destination.name,
-                    src_dir_fd=parent,
-                    dst_dir_fd=parent,
-                    follow_symlinks=False,
-                )
-            except FileExistsError as error:
-                raise ToolsmithError(
-                    "conflict", "Archive destination exists; nothing was overwritten"
-                ) from error
+            rename_new(PrivateDirectory(parent), staged, destination.name)
             os.fsync(parent)
             return ArchiveReport(tuple(members), archive_digest)
         finally:

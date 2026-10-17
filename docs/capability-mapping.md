@@ -1,6 +1,6 @@
 # Consumer capability mapping
 
-Reviewed 2026-10-13/14. Toolsmith implementation target: **0.3.0**. Consumer
+Reviewed 2026-10-13/14. Toolsmith implementation target: **0.4.0**. Consumer
 snapshots: GAAP agents `52c2cc7`; Bad Bets agents `08e4461`. Neither consumer is
 modified, installed or deployed by this work. Inspection covers their local tool
 interfaces and owning modules, not a certification of every provider or analysis.
@@ -30,9 +30,10 @@ Tests without a live provider establish contracts, not publisher certification.
 | F02 | Stream large originals without loading the entire file; GAAP PDF / both backups | `files.hash_file`, `files.copy_file` | `test_large_file_copy_is_streamed_exact_and_private`; read-size/mutation/collision controls |
 | F03 | Match the inventory snapshot before copying; Bad Bets backup mechanics | `files.file_stamp`, `copy_file(expected_stamp=...)` | `test_inventory_snapshot_does_not_copy_changed_sources` |
 | F04 | Private descriptor-pinned directories, file permissions, hard-link/symlink/special-file denial | `files.private_directory`, `private_file`, `directory_lock` | `test_files.py`, `test_tree_rejects_symlinks_special_files_and_unbounded_directory_count` |
-| F05 | Explicit atomic mutable state writes, not artifact overwrite | `filesystem.replace_bytes` | `test_private_tree_and_atomic_publication_are_generic` |
+| F05 | Explicit atomic mutable state writes, not artifact overwrite | `files.replace_bytes` | `test_private_tree_and_atomic_publication_are_generic` |
 | F06 | Bounded metadata-only directory inventory; application chooses included areas | `filesystem.inventory` | Private tree, special files and directory-count tests; no content hashing |
 | F07 | Explicit tree durability and atomic no-replace publication | `filesystem.sync_directory_tree`, `publish_directory` | Publication/collision tests; Linux `renameat2`, no weakened fallback |
+| F08 | Canonical private descendant paths and checked writable descriptors | `paths.relative_components`, `relative_parent`, `relative_file`; `files.open_private` | `test_paths.py`; links, traversal, hard links and validation before truncation |
 | A01 | Exact selected-file ZIP creation, not a document-specific bundle schema | `archives.pack_files` | `test_archives.py`: Unicode/blank pages, paths, collisions, streaming |
 | A02 | Exact expected file set, digests, member types and byte-bounded ZIP extraction | `archives.unpack_files` | Corrupt/encrypted/symlink/unexpected/digest/prefix/expansion controls; no partial publication |
 | P01 | Strict UTF-8, JSON uniqueness, finite numbers and bounded structures | `readers.read_text`, `read_json`; `validation` | `test_readers.py`, `test_validation.py`, `test_generic_readers.py` |
@@ -46,12 +47,15 @@ Tests without a live provider establish contracts, not publisher certification.
 | P09 | Bounded row iterator, headers, widths, exact filters/projection and complete scan counts | `iter_table_rows`, `project_table` | Bad rows/headers/row limits and `scanned/matched/truncated` assertions |
 | P10 | HTML/PDF/image table interpretation stays with the consumer LLM | No deterministic HTML table extraction API or CLI remains | Ordinary source text and original artifacts remain available; removed table form is rejected |
 | P11 | Wrong-format HTML, access screens, finite JSON and PDF signature-only checks | `readers.content.validate_content` | Response-format tests; PDF parsing is explicitly not claimed |
+| P12 | Visible-text inspection and resource/password signals without a browser | `readers.inspect_html`, `normalize_text` | Consumer relation/readers tests; signals are not executed request counts |
+| P13 | Preserve original and source-resolved feed URLs and RSS/Atom identity | `Feed`, `FeedEntry` | Feed fixtures; caller owns canonicalization, acceptance and deduplication |
 | L01 | Punctuation-preserving literal occurrences and exact offsets; Bad Bets document search | `lexical.find_text` | `test_literal_search_preserves_punctuation_regions_counts_and_offsets` |
 | L02 | Caller-selected regions so context does not cross a page/region boundary | `lexical.Region` | Same test; physical-page interpretation remains caller-owned |
 | L03 | Caller-owned SQLite lexical derivatives, complete Unicode chunks, blank pages | `lexical.initialize_index`, `index_source` | `test_caller_indexes.py`: pages/amendments/blank/full-source tests |
 | L04 | Distinguish literal terms, quoted phrases and explicit FTS5 syntax | `lexical.compile_query`, `search` | Phrase vs separated words; the archive calls the same engine |
 | L05 | Authorized current candidate refs/digests before ranking, limits and offsets | `lexical.Scope`, `search` | Higher-ranked unauthorized source is excluded before `LIMIT 1`; missing/stale counts |
 | L06 | Expected-previous-digest publication, invalidation and explicit integrity checks | `index_source`, `invalidate_source`, `check_index` | Stale worker, corruption and outer-transaction rollback tests |
+| L07 | Uncapped lexical-match and complete-metadata relations before application counts/pagination | `matching_scope`, `indexed_scope` | `test_consumer_relations.py`; namespace collisions, transactions and over 1,000 matches |
 | S01 | Pinned offline English MiniLM, one CPU calling thread, no worker/download/GPU fallback | `semantic.load_model`, `inspect_model` | `test_semantic_model.py`, `test_semantic_native.py`, native acceptance |
 | S02 | Complete 256-token chunks with overlap and exact canonical spans | `semantic.prepare_embedding`, `encode_query` | Chunk tests, actual-model long-source coverage and oversized-query rejection |
 | S03 | Generic exact cosine retrieval over caller-authorized current representations | `semantic.search_embeddings` | Filtered headline/body/summary-shaped tests, missing/stale/corrupt controls |
@@ -59,16 +63,19 @@ Tests without a live provider establish contracts, not publisher certification.
 | S05 | Metadata/reference changes reuse existing vectors without inference | `semantic.relocate_embedding` | Public relocation tests and existing archive metadata-only reuse tests |
 | S06 | Invalidate corrections, compare expected digest, clear only derivatives | `invalidate_embedding`, `publish_embedding`, `clear_index` | Outer rollback, stale worker, application data survives clear |
 | S07 | Full vector/profile/span/source audit is a distinct explicit operation | `semantic.check_index`, `indexed_digest` | Corrupt vectors/profiles/spans/source tests; readiness deliberately is not an audit |
+| S08 | Prepare a caller connection and inspect complete metadata/chunk/payload coverage without loading vectors | `prepare_connection`, `indexed_scope`, `inspect_coverage` | Consumer relation and index tests; preserve schema versions, row factories and caller transactions |
 | D01 | Do not commit/rollback unrelated writes or change schema version/row factory; reject existing/partial derivative schemas | Shared SQLite savepoints and cursor ownership | Atomic source/derivative rollback, arbitrary row-factory, initialization symmetry and busy-commit tests |
 | H01 | Archive-independent bounded approved HTTPS; both public-source workflows | `acquisition.client.fetch_http` | `test_independent_http_uses_canonical_routing_without_archive`; native HTTPS acceptance |
 | H02 | Public DNS, pinned address, original-host TLS, redirect rechecks, no proxy/cookie/credential forwarding | Same transport/URL owner | `test_http.py`, `test_transport.py`, `test_policy_limits.py`; native approved source |
 | H03 | One deadline, compressed/expanded/total byte limits and no automatic retry loop | `HttpPolicy`, transport | Slow-read/gzip/framing/deadline/redirect/request-cap tests |
 | H04 | Durable admission hook lets the consumer keep its existing job/receipt owner | `fetch_http(before_request=...)` | Failure increments admission before I/O; existing archive recovery/replay tests |
+| H05 | Native transports reuse pinned DNS/TLS and bounded framing/decompression while owning their headers | `transport.NativeResolver`, `PinnedConnection`, `read_response` | Transport tests and consumer native browser tests; high-level public HTTP remains cookie-free |
 | Q01 | Shared group and task request/byte reservations for HTTP and external browser operations | `acquisition.budgets` | Cross-source task conservation and exhaustion tests |
 | Q02 | Reserve before I/O; uncertain usage stays charged; settle only known received bytes | `reserve_budget`, `settle_budget` | Crash/unknown-charge/reservation-mismatch/counter-corruption tests |
 | Q03 | Source spacing and server cooldowns, including unknown/unrepresentable ends | Same budget owner | Long Retry-After/unknown cooldown/window rollover tests |
 | Q04 | Reboot/clock rollback do not reset allowances or shorten the original period | Same budget owner, controlled clocks | Reboot/elapsed-period/rollback tests |
 | Q05 | Adoption carries existing reviewed counters/cooldowns without clearing quotas | `budget_import.import_budget` | Quiesced import, conservation, current-period and empty-destination tests |
+| Q06 | Caller configuration and limit changes publish atomically with conserved charges | `configuration.configure_budget`, `inspect_configuration`, `check_budget` | `test_budget_configuration.py`; shared directory lock, stale approval rejection at reservation, no audit writes, no shortened periods |
 | J01 | Generic bounded hash-linked JSON journal; caller owns event validation/retention | `journal.read_journal`, `append_record` | Domain-neutral Unicode event, tamper/tail and partial-write rollback tests |
 | T01 | Optional text/file archive, exact immutable versions, citations, permissions and operation IDs | `storage`, `retrieval`; higher-level composition | Existing store/CLI/maintenance/recovery tests; no duplicated lexical engine |
 | T02 | Verified backup/restore/integrity/rebuild/preview-bound staging cleanup | `operations` | Existing maintenance/corruption/restore/change/symlink tests |

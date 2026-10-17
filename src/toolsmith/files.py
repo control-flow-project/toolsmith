@@ -67,7 +67,13 @@ def component(name: str) -> str:
     return name
 
 
-def rename_new(directory: PrivateDirectory, source: str, destination: str) -> None:
+def rename_new(
+    directory: PrivateDirectory,
+    source: str,
+    destination: str,
+    *,
+    source_directory: PrivateDirectory | None = None,
+) -> None:
     require_filesystem()
     component(source)
     component(destination)
@@ -87,7 +93,7 @@ def rename_new(directory: PrivateDirectory, source: str, destination: str) -> No
     function.restype = ctypes.c_int
     if (
         function(
-            directory.descriptor,
+            (source_directory or directory).descriptor,
             os.fsencode(source),
             directory.descriptor,
             os.fsencode(destination),
@@ -106,12 +112,20 @@ def rename_new(directory: PrivateDirectory, source: str, destination: str) -> No
 
 
 @contextmanager
-def directory_descriptor(path: Path) -> Iterator[int]:
+def directory_descriptor(path: Path, *, create: bool = False) -> Iterator[int]:
     require_filesystem()
     absolute_path(path)
+    if type(create) is not bool:
+        raise ToolsmithError("invalid_input", "Directory creation must be explicit Boolean intent")
     descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     try:
         for component in path.parts[1:]:
+            if create:
+                try:
+                    os.mkdir(component, 0o700, dir_fd=descriptor)
+                    os.fsync(descriptor)
+                except FileExistsError:
+                    pass
             replacement = os.open(
                 component,
                 os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
@@ -148,7 +162,7 @@ def private_directory(path: Path, *, create: bool = False) -> Iterator[PrivateDi
         raise ToolsmithError(
             "invalid_input", "The filesystem root cannot be a private state directory"
         )
-    with directory_descriptor(path.parent) as parent:
+    with directory_descriptor(path.parent, create=create) as parent:
         if create:
             try:
                 os.mkdir(path.name, 0o700, dir_fd=parent)
@@ -209,35 +223,68 @@ def child_directory(
 
 @contextmanager
 def private_file(directory: PrivateDirectory, name: str, *, create: bool = False) -> Iterator[int]:
+    flags = os.O_RDWR | os.O_CREAT if create else os.O_RDONLY
+    with open_private(directory, name, flags) as descriptor:
+        yield descriptor
+
+
+@contextmanager
+def open_private(directory: PrivateDirectory, name: str, flags: int) -> Iterator[int]:
     component(name)
-    flags = (os.O_RDWR if create else os.O_RDONLY) | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC
-    if create:
-        flags |= os.O_CREAT
-    descriptor = os.open(name, flags, 0o600, dir_fd=directory.descriptor)
+    allowed = os.O_ACCMODE | os.O_CREAT | os.O_EXCL | os.O_APPEND | os.O_TRUNC
+    if (
+        type(flags) is not int
+        or flags < 0
+        or flags & ~allowed
+        or flags & os.O_ACCMODE not in {os.O_RDONLY, os.O_WRONLY, os.O_RDWR}
+        or flags & (os.O_TRUNC | os.O_APPEND)
+        and flags & os.O_ACCMODE == os.O_RDONLY
+        or flags & os.O_EXCL
+        and not flags & os.O_CREAT
+    ):
+        raise ToolsmithError(
+            "invalid_input", "Private file access requires supported explicit flags"
+        )
+    selected = flags & ~os.O_TRUNC | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC
+    descriptor = os.open(name, selected, 0o600, dir_fd=directory.descriptor)
     try:
         check_private(descriptor)
+        if flags & os.O_TRUNC:
+            os.ftruncate(descriptor, 0)
         yield descriptor
     finally:
         os.close(descriptor)
 
 
 @contextmanager
-def directory_lock(
-    directory: PrivateDirectory, name: str = ".lock", *, shared: bool = False
-) -> Iterator[None]:
+def directory_lock(directory: PrivateDirectory, *, shared: bool = False) -> Iterator[None]:
+    with descriptor_lock(directory.descriptor, shared=shared):
+        yield
+
+
+@contextmanager
+def file_lock(descriptor: int, *, shared: bool = False) -> Iterator[None]:
+    check_private(descriptor)
+    with descriptor_lock(descriptor, shared=shared):
+        yield
+
+
+@contextmanager
+def descriptor_lock(descriptor: int, *, shared: bool) -> Iterator[None]:
     import fcntl
 
-    with private_file(directory, name, create=True) as descriptor:
-        try:
-            fcntl.flock(descriptor, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | fcntl.LOCK_NB)
-        except BlockingIOError as error:
-            raise ToolsmithError(
-                "deferred", "Another invocation is using the selected state", 0.1
-            ) from error
-        try:
-            yield
-        finally:
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
+    if type(shared) is not bool:
+        raise ToolsmithError("invalid_input", "Lock sharing must be Boolean")
+    try:
+        fcntl.flock(descriptor, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | fcntl.LOCK_NB)
+    except BlockingIOError as error:
+        raise ToolsmithError(
+            "deferred", "Another invocation is using the selected state", 0.1
+        ) from error
+    try:
+        yield
+    finally:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
 
 
 def read_descriptor(descriptor: int, maximum: int) -> bytes:
@@ -355,18 +402,7 @@ def copy_file(
                 )
             result = stream_file(incoming, maximum, outgoing)
             os.fsync(outgoing)
-            try:
-                os.link(
-                    staged,
-                    destination.name,
-                    src_dir_fd=parent,
-                    dst_dir_fd=parent,
-                    follow_symlinks=False,
-                )
-            except FileExistsError as error:
-                raise ToolsmithError(
-                    "conflict", "Destination exists; nothing was overwritten"
-                ) from error
+            rename_new(PrivateDirectory(parent), staged, destination.name)
             os.fsync(parent)
             return result
         finally:
@@ -430,20 +466,17 @@ def put_object(objects: PrivateDirectory, temporary: PrivateDirectory, content: 
     try:
         new_private(temporary, staged, content)
         try:
-            os.link(
-                staged,
-                checksum,
-                src_dir_fd=temporary.descriptor,
-                dst_dir_fd=objects.descriptor,
-                follow_symlinks=False,
-            )
-        except FileExistsError as error:
+            rename_new(objects, staged, checksum, source_directory=temporary)
+        except ToolsmithError as error:
+            if error.failure.code != "conflict":
+                raise
             existing = read_private(objects, checksum, MAX_FILE_BYTES)
             if existing != content:
                 raise ToolsmithError(
                     "integrity", "Stored object does not match its immutable content identity"
                 ) from error
         os.fsync(objects.descriptor)
+        os.fsync(temporary.descriptor)
     finally:
         try:
             os.unlink(staged, dir_fd=temporary.descriptor)
@@ -471,16 +504,30 @@ def write_new_bytes(path: Path, content: bytes) -> dict[str, int | bool]:
         staged = ".stage-" + uuid4().hex + ".tmp"
         try:
             new_private(directory, staged, content)
-            try:
-                os.link(
-                    staged, path.name, src_dir_fd=parent, dst_dir_fd=parent, follow_symlinks=False
-                )
-            except FileExistsError as error:
-                raise ToolsmithError(
-                    "conflict", "Destination already exists; no file was overwritten"
-                ) from error
+            rename_new(directory, staged, path.name)
             os.fsync(parent)
         finally:
             with suppress(FileNotFoundError):
                 os.unlink(staged, dir_fd=parent)
     return {"exported": True, "bytes": len(content)}
+
+
+@boundary
+def replace_bytes(path: Path, content: bytes) -> int:
+    absolute_path(path)
+    if not isinstance(content, bytes) or len(content) > MAX_READ_BYTES:
+        raise ToolsmithError("invalid_input", "Replacement must be bounded bytes")
+    with directory_descriptor(path.parent) as parent:
+        metadata = os.fstat(parent)
+        if metadata.st_uid != os.getuid() or metadata.st_mode & 0o022:
+            raise ToolsmithError(
+                "denied", "Output parent must be caller-owned and not writable by other users"
+            )
+        directory = PrivateDirectory(parent)
+        try:
+            with private_file(directory, path.name):
+                pass
+        except FileNotFoundError:
+            pass
+        replace_private(directory, path.name, content)
+        return len(content)

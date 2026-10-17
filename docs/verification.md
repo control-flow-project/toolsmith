@@ -76,6 +76,32 @@ systemd-run --user --scope --quiet \
   --working-directory="$PWD" "$PWD/.venv/bin/pip-audit" --path "$SITE_PACKAGES" --skip-editable
 ```
 
+## Consumer adoption — 0.4.0, 2026-10-17
+
+Local source verification passes 359 tests on each of Python 3.13.15 and 3.14.4.
+Both runs use 31 isolated files with 24 workers in the required 8 GiB/no-swap/
+256-task groups. Ruff lint/format and strict Mypy pass for 104 files. Caller-owned
+relations, paths, configured quotas, concurrent locking, import clocks and
+replacement publication are covered alongside the existing archive/search tests.
+
+Clean wheel and sdist acceptance pass for base, HTTP and semantic installations.
+The installed native API-30 encoder completes caller-owned SQLite, CLI, original/
+summary/agreement examples, backup/restore and long-source checks with no added
+worker threads or inference network calls. The measured installed warm medians
+are about 10 milliseconds on the small acceptance corpus; these measurements
+are not million-document performance or domain-answer-quality certification.
+The explicitly approved native example.com HTTPS request passes with 400 wire
+bytes. The installed Python dependency audit finds no known vulnerabilities;
+it excludes the editable first-party package and does not certify native C.
+All sixty third-party lock records remain unchanged.
+
+Consumer source, exact-revision locks and clean installed integration are separate
+gates; a Toolsmith test run does not certify a fleet deployment. GAAP applies its
+own 32 MiB PDF input limit, below the unchanged generic 128 MiB ZIP-member ceiling.
+Bad Bets adoption is deferred and is not part of the current consumer sign-off.
+No registry release, production data migration, controller activation or deployment
+has occurred.
+
 ## Indexed corpus and limit audit — 0.3.0, 2026-10-17
 
 Integrated verification runs on Linux x86_64, an AMD Ryzen 9 5900X, with 24

@@ -24,7 +24,7 @@ worker thread exists. Toolsmith has no fleet/runtime/domain dependency.
 src/toolsmith/
 ├── result.py, validation.py, clock.py, compression.py, sqlite.py
 ├── scopes.py               Shared validated database-resident search scope
-├── files.py, filesystem.py  Safe IO, streams, descriptors, locks and tree publication
+├── files.py, paths.py, filesystem.py  Safe IO, relative paths, streams, locks and tree publication
 ├── archives.py             Exact explicitly selected files, not document manifests
 ├── readers/                Parsing types, UTF-8/JSON, static HTML, feeds and CSV
 ├── lexical/                Caller-owned derivatives and exact literal passages
@@ -35,6 +35,7 @@ src/toolsmith/
 │   ├── transport.py        One DNS/TLS/HTTPS implementation
 │   ├── urls.py, config.py   Boundary validation and generic policy parsing
 │   ├── budgets.py          Shared durable group/task reservations and cooldowns
+│   ├── configuration.py    Atomic caller configuration, limit changes and read-only checks
 │   ├── budget_import.py    Explicit reviewed quota transfer, original state retained
 │   └── http.py, policy.py, limits.py
 │                           Optional archive receipts/retention composition
@@ -87,15 +88,12 @@ and syscalls rather than treating fixture encoders as native certification.
 └── Toolsmith lexical/semantic derivative relations, only if selected
 
 <explicit shared network-state root>/
-├── .lock                    Cooperating-caller kernel lock
-└── budget.json              One group/task period, reservations, spacing/cooldowns
+└── budget.json              Format 2: caller configuration, charges, reservations and cooldowns
 
 <explicit journal root>/
-├── .lock
 └── journal.jsonl            Bounded generic JSON events; application-owned retention
 
 <separately optional archive root>/
-├── .lock
 ├── toolsmith.sqlite3        Current archive schema v3, versions/files/operations
 ├── objects/<sha256>         Immutable retained file bytes
 └── tmp/.stage-<uuid>.tmp    Invocation-owned staging

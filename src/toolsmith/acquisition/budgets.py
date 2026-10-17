@@ -58,6 +58,7 @@ class BudgetStatus:
     task_requests: int
     task_bytes: int
     next_request_at: float | None
+    pending_reservations: int
 
 
 def validate_policy(policy: BudgetPolicy) -> BudgetPolicy:
@@ -108,6 +109,25 @@ def common_definition(policy: BudgetPolicy) -> str:
     ).hexdigest()
 
 
+def configuration_digest(value: JsonValue) -> str:
+    return hashlib.sha256(canonical_json(value)).hexdigest()
+
+
+def policies_by_group(policies: tuple[BudgetPolicy, ...]) -> dict[str, BudgetPolicy]:
+    if not isinstance(policies, tuple) or not policies:
+        raise ToolsmithError("invalid_input", "Supply explicit nonempty reviewed budget policies")
+    validated = tuple(validate_policy(policy) for policy in policies)
+    selected = {policy.group: policy for policy in validated}
+    if (
+        len(selected) != len(validated)
+        or len({common_definition(policy) for policy in validated}) != 1
+    ):
+        raise ToolsmithError(
+            "invalid_input", "Budgets require unique groups and shared period/task limits"
+        )
+    return selected
+
+
 def load(
     directory: PrivateDirectory, policy: BudgetPolicy, clock: Clock, boot: str
 ) -> dict[str, JsonValue]:
@@ -121,7 +141,8 @@ def load(
                 "conflict", "Existing quota state requires an explicit reviewed migration"
             ) from None
         return {
-            "format": 1,
+            "format": 2,
+            "configuration": None,
             "common": common_definition(policy),
             "period": uuid4().hex,
             "started_wall": wall,
@@ -138,6 +159,7 @@ def load(
         parse_json(encoded, MAX_STATE_BYTES),
         {
             "format",
+            "configuration",
             "common",
             "period",
             "started_wall",
@@ -151,10 +173,13 @@ def load(
             "reservations",
         },
     )
-    integer(state["format"], 1, 1, "Budget format")
+    integer(state["format"], 2, 2, "Budget format")
     if state["common"] != common_definition(policy):
         raise ToolsmithError("conflict", "Shared period/task policy changed; quotas were not reset")
     identity(state["period"], "Period")
+    period = str(state["period"])
+    if len(period) != 32 or any(character not in "0123456789abcdef" for character in period):
+        raise ToolsmithError("integrity", "Stored quota period has an invalid generated identity")
     identity(state["boot"], "Boot identity")
     began = number(state["started_wall"], 0, 2**53, "Period start")
     began_monotonic = number(state["started_monotonic"], 0, 2**53, "Period monotonic start")
@@ -296,6 +321,7 @@ def status(state: dict[str, JsonValue], policy: BudgetPolicy, task: str) -> Budg
         else max(
             number(group["next"], 0, 2**53, "Next"), number(group["cooldown"], 0, 2**53, "Cooldown")
         ),
+        len(records(state["reservations"])),
     )
 
 
@@ -325,12 +351,17 @@ def reserve_budget(
     *,
     clock: Clock | None = None,
     boot: str | None = None,
+    expected_configuration_digest: str | None = None,
 ) -> Reservation:
     checked, selected = validate_policy(policy), identity(task, "Task")
     charged = integer(maximum_bytes, 1, 128 * 1024 * 1024, "Reservation bytes")
     actual_clock = clock or SystemClock()
     with private_directory(root, create=True) as directory, directory_lock(directory):
         state = load(directory, checked, actual_clock, identity(boot or boot_identity()))
+        if (state["configuration"] is not None or expected_configuration_digest is not None) and (
+            expected_configuration_digest != configuration_digest(state["configuration"])
+        ):
+            raise ToolsmithError("conflict", "Configuration changed before request reservation")
         observed = status(state, checked, selected)
         now = actual_clock.wall()
         if observed.next_request_at is None or observed.next_request_at > now:

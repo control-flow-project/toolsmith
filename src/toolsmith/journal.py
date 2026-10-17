@@ -6,7 +6,7 @@ from pathlib import Path
 
 from toolsmith.clock import Clock, SystemClock, utc_now
 from toolsmith.files import (
-    directory_lock,
+    file_lock,
     private_directory,
     private_file,
     read_descriptor,
@@ -87,9 +87,9 @@ def named_identity(directory: int, name: str, descriptor: int) -> None:
 
 @boundary
 def read_journal(root: Path, name: str = "journal.jsonl") -> tuple[Record, ...]:
-    with private_directory(root) as directory, directory_lock(directory, shared=True):
+    with private_directory(root) as directory:
         try:
-            with private_file(directory, name) as descriptor:
+            with private_file(directory, name) as descriptor, file_lock(descriptor, shared=True):
                 result = records(descriptor)
                 named_identity(directory.descriptor, name, descriptor)
                 return result
@@ -106,8 +106,8 @@ def append_record(
         raise ToolsmithError("limit", "Journal event exceeds 64 KiB")
     with (
         private_directory(root) as directory,
-        directory_lock(directory),
         private_file(directory, name, create=True) as descriptor,
+        file_lock(descriptor),
     ):
         existing = records(descriptor)
         named_identity(directory.descriptor, name, descriptor)

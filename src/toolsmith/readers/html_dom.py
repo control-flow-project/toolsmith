@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 
-from toolsmith.readers.text import decode_text
+from toolsmith.readers.text import decode_text, normalize_text
 from toolsmith.result import ToolsmithError
 
 OMIT = {
@@ -184,12 +184,8 @@ def content_text(node: Node, *, include_forms: bool = False) -> str:
     return "".join(parts)
 
 
-def normalized_text(value: str) -> str:
-    return "\n".join(" ".join(line.split()) for line in value.splitlines() if line.strip())
-
-
 def titles(nodes: list[Node]) -> list[str]:
-    values = [normalized_text(content_text(node)) for node in nodes if node.tag == "title"]
+    values = [normalize_text(content_text(node)) for node in nodes if node.tag == "title"]
     values.extend(
         node.attributes.get("content", "")
         for node in nodes
@@ -216,7 +212,7 @@ def check_access(root: Node) -> None:
                 or any(
                     re.fullmatch(r"h[1-6]", child.tag)
                     and ACCESS_HEADING.fullmatch(
-                        normalized_text(content_text(child, include_forms=True)).strip(" .!")
+                        normalize_text(content_text(child, include_forms=True)).strip(" .!")
                     )
                     for child in region
                 )
@@ -224,11 +220,14 @@ def check_access(root: Node) -> None:
                 raise ToolsmithError(
                     "denied", "HTML contains an active access dialog; do not bypass it"
                 )
-    headings = [normalized_text(content_text(node)) for node in nodes if node.tag == "h1"]
+    headings = [normalize_text(content_text(node)) for node in nodes if node.tag == "h1"]
     if any(ACCESS_HEADING.fullmatch(value.strip(" .!")) for value in headings):
         raise ToolsmithError("denied", "HTML is an access/login/challenge screen; do not bypass it")
-    if not any(node.tag in {"article", "main"} for node in nodes) and any(
-        node.tag == "input" and node.attributes.get("type", "").lower() == "password"
-        for node in nodes
+    if not any(node.tag in {"article", "main"} for node in nodes) and (
+        any(
+            node.tag == "input" and node.attributes.get("type", "").lower() == "password"
+            for node in nodes
+        )
+        or ACCESS_BODY.search(content_text(root))
     ):
         raise ToolsmithError("denied", "HTML is an active login form; do not bypass it")

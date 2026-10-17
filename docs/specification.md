@@ -69,7 +69,15 @@ not isolation from arbitrary full-access processes under the same OS account.
 
 Persistent source-limit state lives in a separately explicit private network-state
 directory, shared by every cooperating caller using the same upstream quota. One
-bounded `budget.json` holds group/task charges, reservations, pacing and cooldowns.
+bounded format-two `budget.json` holds group/task charges, reservations, pacing,
+cooldowns and optional caller-owned JSON configuration. Configuration replacement
+and allowance changes publish together under the same directory lock; readers
+share that lock without creating files. Compare-and-swap uses the inspected
+configuration digest. A request against a configured budget must supply that
+same digest to reserve its charge, so a simultaneous approval edit cannot authorize
+a request under stale settings. Outstanding reservations prevent limit changes;
+charged groups cannot disappear and a reviewed period cannot be shortened.
+Read-only budget checking never saves or rolls over state on disk.
 It uses validated files and kernel locks, not another database or process. Boot,
 wall and monotonic observations preserve elapsed quota periods and reject clock
 rollback. Changing a policy cannot silently clear charges. Explicit quiesced
@@ -88,6 +96,12 @@ scope and file ownership at public boundaries. Regular-file input never follows
 symlinks or opens special files. Local private storage uses pinned directory
 descriptors, no-follow opens, private modes and cooperating-caller kernel locks.
 No tool interprets source text as instructions or executes stored content.
+Explicit standalone file output may use an owned, non-group-writable parent;
+collection roots and persistent quota/journal state remain private. Outputs are
+private files, not permission changes to an existing parent. Replacement owns
+atomic publication only; callers own coordination and compare-and-swap semantics.
+No implicit lock file is added to an artifact directory. No-replace publication
+uses one pinned-descriptor rename, never a transient hard-link alias.
 
 Network access is HTTPS port 443 only, with exact reviewed DNS hosts. Reject URL
 credentials, secret-like query keys, fragments and control characters. Resolve with
@@ -132,6 +146,12 @@ collections or silent lexical fallback. Text imports invalidate old derivatives
 without deleting citable originals. Semantic clear deletes only derivatives.
 Integrity and verified backups include vector profiles, finite unit vectors,
 complete spans and canonical source bindings; no inference is required.
+Bulk readiness and lexical matching return database-resident reference/digest
+relations, not bounded candidate lists or source bodies. Canonical authorization,
+freshness and application filters intersect those relations before counts and
+pagination. Temporary relation names cannot overwrite another definition.
+Preparing the semantic extension on a caller connection does not create schema,
+change row factories or commit the caller's transaction.
 
 Return completed/partial/failed outcomes, warnings, exact versions and bounded
 references. Publication, supplied observation and recording times remain distinct;
