@@ -1,5 +1,4 @@
 import hashlib
-import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -142,13 +141,6 @@ def validate_database(store: Store) -> int:
         raise ToolsmithError(
             "integrity", "Lexical title or source binding differs from retained text"
         )
-    probe = sqlite3.connect(":memory:")
-    try:
-        probe.deserialize(store.connection.serialize())
-        probe.execute("PRAGMA trusted_schema = OFF")
-        probe.execute("INSERT INTO lexical_search (lexical_search) VALUES ('integrity-check')")
-    finally:
-        probe.close()
     return int(store.connection.execute("SELECT count(*) FROM lexical_chunk").fetchone()[0])
 
 

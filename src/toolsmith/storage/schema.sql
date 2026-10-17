@@ -1,7 +1,8 @@
 CREATE TABLE collection (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     identity TEXT NOT NULL UNIQUE,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    generation INTEGER NOT NULL DEFAULT 0 CHECK (generation >= 0)
 );
 CREATE TABLE item (
     id TEXT PRIMARY KEY,
@@ -57,3 +58,14 @@ CREATE TABLE operation (
     updated_at TEXT NOT NULL,
     requests INTEGER NOT NULL DEFAULT 0 CHECK (requests >= 0)
 );
+CREATE VIEW current_text AS
+SELECT 'part:' || p.id AS reference, p.text_digest, p.id AS part_id,
+       p.version_id, p.ordinal, p.physical_page, p.has_text,
+       v.item_id, v.title
+FROM part p JOIN text_version v ON v.id = p.version_id
+JOIN item i ON i.latest_version = v.id;
+CREATE TRIGGER current_text_generation AFTER UPDATE OF latest_version ON item
+WHEN OLD.latest_version IS NOT NEW.latest_version
+BEGIN
+    UPDATE collection SET generation = generation + 1 WHERE id = 1;
+END;

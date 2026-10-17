@@ -24,7 +24,7 @@ from toolsmith.validation import (
 )
 
 MAX_STATE_BYTES = 4 * 1024 * 1024
-MAX_BYTES = 64 * 1024 * 1024 * 1024
+MAX_BYTES = 2**63 - 1
 
 
 @dataclass(frozen=True)
@@ -67,8 +67,8 @@ def validate_policy(policy: BudgetPolicy) -> BudgetPolicy:
     identity(policy.definition, "Policy definition")
     number(policy.period_seconds, 1, 31 * 86400, "Period seconds")
     number(policy.minimum_interval_seconds, 0, 31 * 86400, "Minimum interval")
-    integer(policy.group_requests, 1, 10000, "Group requests")
-    integer(policy.task_requests, 1, 10000, "Task requests")
+    integer(policy.group_requests, 1, MAX_BYTES, "Group requests")
+    integer(policy.task_requests, 1, MAX_BYTES, "Task requests")
     integer(policy.group_bytes, 1, MAX_BYTES, "Group bytes")
     integer(policy.task_bytes, 1, MAX_BYTES, "Task bytes")
     return BudgetPolicy(
@@ -87,15 +87,15 @@ def boot_identity() -> str:
     return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
 
 
-def records(value: JsonValue, maximum: int) -> dict[str, JsonValue]:
-    if not isinstance(value, dict) or len(value) > maximum:
-        raise ToolsmithError("integrity", "Budget record capacity or storage type is invalid")
+def records(value: JsonValue) -> dict[str, JsonValue]:
+    if not isinstance(value, dict):
+        raise ToolsmithError("integrity", "Budget record storage type is invalid")
     return value
 
 
 def counters(value: JsonValue) -> dict[str, JsonValue]:
     output = fields(value, {"requests", "bytes"})
-    requests = integer(output["requests"], 0, 10000, "Stored requests")
+    requests = integer(output["requests"], 0, MAX_BYTES, "Stored requests")
     used = integer(output["bytes"], 0, MAX_BYTES, "Stored bytes")
     if used and not requests:
         raise ToolsmithError("integrity", "Budget bytes have no charged request")
@@ -160,9 +160,9 @@ def load(
     began_monotonic = number(state["started_monotonic"], 0, 2**53, "Period monotonic start")
     last = number(state["last_wall"], began, 2**53, "Last wall time")
     last_monotonic = number(state["last_monotonic"], began_monotonic, 2**53, "Last monotonic time")
-    groups = records(state["groups"], 256)
-    tasks = records(state["tasks"], 1024)
-    pending = records(state["reservations"], 10000)
+    groups = records(state["groups"])
+    tasks = records(state["tasks"])
+    pending = records(state["reservations"])
     group_usage: dict[str, dict[str, JsonValue]] = {}
     task_usage = {identity(key): counters(value) for key, value in tasks.items()}
     for key, value in groups.items():
@@ -190,7 +190,7 @@ def load(
     for usage, held in ((group_usage, held_groups), (task_usage, held_tasks)):
         for key, total in held.items():
             if (
-                integer(usage[key]["requests"], 0, 10000, "Requests") < total[0]
+                integer(usage[key]["requests"], 0, MAX_BYTES, "Requests") < total[0]
                 or integer(usage[key]["bytes"], 0, MAX_BYTES, "Bytes") < total[1]
             ):
                 raise ToolsmithError("integrity", "Pending usage exceeds charged counters")
@@ -263,11 +263,9 @@ def save(directory: PrivateDirectory, state: dict[str, JsonValue]) -> None:
 def scope(
     state: dict[str, JsonValue], policy: BudgetPolicy, task: str
 ) -> tuple[dict[str, JsonValue], dict[str, JsonValue]]:
-    groups, tasks = records(state["groups"], 256), records(state["tasks"], 1024)
+    groups, tasks = records(state["groups"]), records(state["tasks"])
     definition = hashlib.sha256(canonical_json(policy)).hexdigest()
     if policy.group not in groups:
-        if len(groups) >= 256:
-            raise ToolsmithError("limit", "Budget group capacity is exhausted")
         groups[policy.group] = {
             "definition": definition,
             "usage": {"requests": 0, "bytes": 0},
@@ -278,8 +276,6 @@ def scope(
     if group["definition"] != definition:
         raise ToolsmithError("conflict", "Group policy changed; quotas were not reset")
     if task not in tasks:
-        if len(tasks) >= 1024:
-            raise ToolsmithError("limit", "Budget task capacity is exhausted until the next period")
         tasks[task] = {"requests": 0, "bytes": 0}
     return group, counters(tasks[task])
 
@@ -291,9 +287,9 @@ def status(state: dict[str, JsonValue], policy: BudgetPolicy, task: str) -> Budg
         policy.group,
         task,
         number(state["started_wall"], 0, 2**53, "Period start"),
-        integer(usage["requests"], 0, 10000, "Requests"),
+        integer(usage["requests"], 0, MAX_BYTES, "Requests"),
         integer(usage["bytes"], 0, MAX_BYTES, "Bytes"),
-        integer(task_usage["requests"], 0, 10000, "Task requests"),
+        integer(task_usage["requests"], 0, MAX_BYTES, "Task requests"),
         integer(task_usage["bytes"], 0, MAX_BYTES, "Task bytes"),
         None
         if group["cooldown"] is None
@@ -354,16 +350,14 @@ def reserve_budget(
                 "Group or task allowance is exhausted",
                 max(0.1, observed.period_started + checked.period_seconds - now),
             )
-        pending = records(state["reservations"], 10000)
-        if len(pending) >= 10000:
-            raise ToolsmithError("limit", "Reservation capacity is exhausted")
+        pending = records(state["reservations"])
         reservation = Reservation(
             uuid4().hex, identity(state["period"]), checked.group, selected, charged
         )
         group, task_usage = scope(state, checked, selected)
         usage = counters(group["usage"])
         for counter in (usage, task_usage):
-            counter["requests"] = integer(counter["requests"], 0, 9999, "Requests") + 1
+            counter["requests"] = integer(counter["requests"], 0, MAX_BYTES - 1, "Requests") + 1
             counter["bytes"] = integer(counter["bytes"], 0, MAX_BYTES - charged, "Bytes") + charged
         group["usage"] = usage
         group["next"] = now + checked.minimum_interval_seconds
@@ -372,8 +366,8 @@ def reserve_budget(
             "task": reservation.task,
             "bytes": charged,
         }
-        records(state["groups"], 256)[checked.group] = group
-        records(state["tasks"], 1024)[selected] = task_usage
+        records(state["groups"])[checked.group] = group
+        records(state["tasks"])[selected] = task_usage
         save(directory, state)
         return reservation
 
@@ -409,7 +403,7 @@ def settle_budget(
             group["cooldown"] = None
         elif group["cooldown"] is not None and cooldown:
             group["cooldown"] = max(number(group["cooldown"], 0, 2**53, "Cooldown"), now + cooldown)
-        pending = records(state["reservations"], 10000)
+        pending = records(state["reservations"])
         completed = False
         if state["period"] == reservation.period and reservation.identity in pending:
             if pending[reservation.identity] != {
@@ -427,8 +421,8 @@ def settle_budget(
                     integer(counter["bytes"], charged, MAX_BYTES, "Bytes") - charged + used
                 )
             group["usage"] = usage
-            records(state["tasks"], 1024)[reservation.task] = task_usage
+            records(state["tasks"])[reservation.task] = task_usage
             completed = True
-        records(state["groups"], 256)[checked.group] = group
+        records(state["groups"])[checked.group] = group
         save(directory, state)
         return completed

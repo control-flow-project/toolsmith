@@ -5,6 +5,8 @@ __pycache__/
 
 # C extensions
 *.so
+/src/toolsmith/semantic/_vec1.dylib
+/src/toolsmith/semantic/_vec1.dll
 
 # Distribution / packaging
 .Python

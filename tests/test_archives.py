@@ -6,8 +6,45 @@ from pathlib import Path
 
 import pytest
 
-from toolsmith.archives import MemberDigest, MemberSource, pack_files, unpack_files
+from toolsmith.archives import (
+    MemberDigest,
+    MemberSource,
+    pack_files,
+    read_archive_member,
+    unpack_files,
+)
 from toolsmith.result import Failure, unwrap
+
+
+def test_manifest_bootstrap_and_expected_identities_precede_zip_publication(tmp_path: Path) -> None:
+    manifest = tmp_path / "manifest.json"
+    manifest.write_bytes(b'{"format":"consumer-owned"}')
+    source = MemberSource("manifest.json", manifest)
+    expected = (
+        MemberDigest(
+            source.name, hashlib.sha256(manifest.read_bytes()).hexdigest(), manifest.stat().st_size
+        ),
+    )
+    report = unwrap(pack_files((source,), tmp_path / "valid.zip", expected=expected))
+    assert report.members == expected
+    assert (
+        unwrap(read_archive_member(tmp_path / "valid.zip", "manifest.json"))
+        == manifest.read_bytes()
+    )
+    assert isinstance(read_archive_member(tmp_path / "valid.zip", "manifest.json", 1), Failure)
+    assert isinstance(read_archive_member(tmp_path / "valid.zip", "missing"), Failure)
+    manifest.write_bytes(b"changed after manifest creation")
+    assert isinstance(pack_files((source,), tmp_path / "invalid.zip", expected=expected), Failure)
+    assert not (tmp_path / "invalid.zip").exists()
+    assert not list(tmp_path.glob(".stage-*"))
+
+
+def test_bootstrap_rejects_an_unsafe_other_member_without_extracting_it(tmp_path: Path) -> None:
+    with zipfile.ZipFile(tmp_path / "unsafe.zip", "w") as archive:
+        archive.writestr("manifest.json", b"{}")
+        archive.writestr("../outside", b"unsafe")
+    assert isinstance(read_archive_member(tmp_path / "unsafe.zip", "manifest.json"), Failure)
+    assert not (tmp_path / "outside").exists()
 
 
 def test_generic_archive_preserves_exact_explicit_files_and_empty_pages(tmp_path: Path) -> None:

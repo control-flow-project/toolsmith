@@ -2,9 +2,27 @@ import re
 import sqlite3
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
+from uuid import uuid4
 
 from toolsmith.result import unwrap
+from toolsmith.scopes import Scope
 from toolsmith.semantic import Source, initialize_index, prepare_embedding, publish_embedding
+
+
+@dataclass(frozen=True)
+class ScopeEntry:
+    reference: str
+    digest: str
+
+
+def selected_scope(connection: sqlite3.Connection, entries: tuple[ScopeEntry, ...]) -> Scope:
+    name = "selection_" + uuid4().hex
+    connection.execute(f'CREATE TEMP TABLE "{name}" (reference TEXT, text_digest TEXT)')
+    connection.executemany(
+        f'INSERT INTO "{name}" VALUES (?,?)', ((entry.reference, entry.digest) for entry in entries)
+    )
+    return Scope(name, schema="temp")
 
 
 class FixtureEncoder:

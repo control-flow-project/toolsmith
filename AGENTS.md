@@ -35,6 +35,9 @@ Registry publication requires a separate explicit instruction. Owned npm package
 if ever separately approved, use @ctlflow. Third-party rights remain intact.
 
 Maintain docs/specification.md and the current task's dated necessity ledger.
+The million-entry search task uses .analysis/20261017-indexed-corpus-search/necessity-ledger.md.
+Do not impose corpus-count or scanned-chunk cutoffs on indexed searches. Keep
+returned-output, untrusted-input and model-capacity bounds explicit and separate.
 The consumer-coverage task uses .analysis/20261013-consumer-capabilities/necessity-ledger.md;
 the initial implementation record is .analysis/20261011-toolsmith/necessity-ledger.md.
 Verify affected behavior, package contents and installed CLI/library parity.

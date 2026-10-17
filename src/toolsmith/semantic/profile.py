@@ -13,8 +13,6 @@ MAX_TOKENS = 256
 OVERLAP_TOKENS = 32
 MAX_SOURCE_BYTES = 4 * 1024 * 1024
 MAX_CHUNKS = 20_000
-MAX_CANDIDATES = 10_000
-MAX_SEARCH_CHUNKS = 100_000
 ASSETS = {
     "model.onnx": (90_405_214, "6fd5d72fe4589f189f8ebc006442dbb529bb7ce38f8082112682524616046452"),
     "tokenizer.json": (466_247, "be50c3628f2bf5bb5e3a7f17b1f74611b2561a3a27eeab05e5aa30f411572037"),
@@ -42,12 +40,6 @@ class Source:
     reference: str
     text: str
     language: str = "en"
-
-
-@dataclass(frozen=True)
-class Candidate:
-    reference: str
-    digest: str
 
 
 @dataclass(frozen=True)

@@ -7,13 +7,6 @@ from dataclasses import dataclass
 from typing import Literal
 
 from toolsmith.compression import expand_gzip
-from toolsmith.readers.html_dom import (
-    check_access,
-    content_text,
-    descendants,
-    normalized_text,
-    parse_html,
-)
 from toolsmith.readers.text import decode_text
 from toolsmith.result import Result, Success, ToolsmithError, boundary, unwrap
 from toolsmith.validation import integer, text
@@ -30,13 +23,6 @@ class Projection:
     scanned: int
     matched: int
     truncated: bool
-
-
-@dataclass(frozen=True)
-class HtmlTable:
-    ordinal: int
-    rows: tuple[tuple[str, ...], ...]
-    warnings: tuple[str, ...]
 
 
 @boundary
@@ -91,8 +77,8 @@ def validated_rows(
     body: str, header_row: int, required_columns: tuple[str, ...], maximum_rows: int
 ) -> Iterator[dict[str, str]]:
     text(body, MAX_EXPANDED_BYTES, "Table text")
-    ordinal = integer(header_row, 1, 20, "Header row")
-    maximum = integer(maximum_rows, 1, 1_000_000, "Maximum rows")
+    ordinal = integer(header_row, 1, 2**63 - 1, "Header row")
+    maximum = integer(maximum_rows, 1, 2**63 - 1, "Maximum rows")
     if not isinstance(required_columns, tuple) or len(required_columns) > 256:
         raise ToolsmithError("invalid_input", "Supply bounded required column names")
     for name in required_columns:
@@ -179,50 +165,3 @@ def project_table(
             if len(selected) < maximum:
                 selected.append({column: row[column] for column in columns})
     return Projection(columns, tuple(selected), scanned, matched, matched > maximum)
-
-
-@boundary
-def read_html_tables(content: bytes, maximum_tables: int = 20) -> tuple[HtmlTable, ...]:
-    maximum = integer(maximum_tables, 1, 100, "Maximum tables")
-    root = parse_html(content)
-    check_access(root)
-    tables = [node for node in descendants(root) if node.tag == "table"]
-    if len(tables) > maximum:
-        raise ToolsmithError("limit", "HTML exceeds its explicit table count")
-    output: list[HtmlTable] = []
-    for ordinal, table in enumerate(tables, 1):
-        if any(node.tag == "table" for node in descendants(table)[1:]):
-            raise ToolsmithError(
-                "invalid_input", "Nested tables need explicit application interpretation"
-            )
-        rows: list[tuple[str, ...]] = []
-        for row in (node for node in descendants(table) if node.tag == "tr"):
-            cells = [node for node in descendants(row) if node.tag in {"td", "th"}]
-            if len(cells) > 256 or len(rows) >= 10000:
-                raise ToolsmithError("limit", "HTML table exceeds its row or column budget")
-            if any(
-                node.attributes.get(key, "1") != "1"
-                for node in cells
-                for key in ("colspan", "rowspan")
-            ):
-                raise ToolsmithError(
-                    "invalid_input", "Spanning cells need explicit application interpretation"
-                )
-            values = tuple(
-                text(normalized_text(content_text(node)), 65536, "Cell", allow_empty=True)
-                for node in cells
-            )
-            if rows and len(values) != len(rows[0]):
-                raise ToolsmithError("invalid_input", "HTML table is not rectangular")
-            if values:
-                rows.append(values)
-        output.append(
-            HtmlTable(
-                ordinal,
-                tuple(rows),
-                (
-                    "Cells are source text; header meaning, types, dates, units and correctness remain application-owned.",
-                ),
-            )
-        )
-    return tuple(output)

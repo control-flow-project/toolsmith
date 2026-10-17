@@ -18,7 +18,7 @@ from toolsmith.operations.cleanup import (
 from toolsmith.operations.integrity import check_integrity, rebuild_index
 from toolsmith.readers import read_feed, read_html, read_text
 from toolsmith.readers.json import read_json
-from toolsmith.readers.tables import TableFormat, decode_table, project_table, read_html_tables
+from toolsmith.readers.tables import TableFormat, decode_table, project_table
 from toolsmith.result import Result, Success, ToolsmithError, unwrap
 from toolsmith.retrieval import read_citation, search_text
 from toolsmith.semantic import inspect_model
@@ -114,8 +114,6 @@ def execute(arguments: Arguments) -> Result[object]:
             )
         if action == "read.json":
             return read_json(content)
-        if action == "read.html-tables":
-            return read_html_tables(content)
         if arguments.format not in {"csv", "zip-csv", "gzip-csv"}:
             raise ToolsmithError("invalid_input", "Choose an explicit CSV format")
         selected_format: TableFormat = (

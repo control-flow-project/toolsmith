@@ -11,13 +11,13 @@ HTTP, search, journals and the optional text archive; it is a proposal, not alia
 
 No Toolsmith archive is needed for parsing, public HTTPS or caller-owned indexes.
 Create a private working directory explicitly; then use the included generic
-source/reference examples with the installed package:
+source examples and an application-owned `permitted_text` table/view with the installed package:
 
 ```sh
 toolsmith --json search lexical init --database /absolute/private/application.sqlite3
 toolsmith --json search lexical index --database /absolute/private/application.sqlite3 --sources /absolute/caller-owned-sources.json
-toolsmith --json search lexical query '"Restricted Payments"' --database /absolute/private/application.sqlite3 --sources /absolute/caller-owned-sources.json
-toolsmith --json search lexical status --database /absolute/private/application.sqlite3 --references /absolute/caller-owned-references.json
+toolsmith --json search lexical query '"Restricted Payments"' --database /absolute/private/application.sqlite3 --scope permitted_text
+toolsmith --json search lexical status --database /absolute/private/application.sqlite3 --scope permitted_text
 ```
 
 The library uses the same functions. Consumers keep canonical text, page/article
@@ -42,8 +42,8 @@ The CLI calls the same validated library functions that applications import.
 ## Available tools
 
 - Streaming regular-file hash/copy, private tree inventory/publication and exact-file ZIPs.
-- UTF-8/strict JSON, static HTML/articles/tables, CSV/ZIP-CSV/GZIP-CSV and RSS/Atom readers.
-- Literal passages and lexical indexes over caller-owned sources and authorized candidates.
+- UTF-8/strict JSON, static HTML/articles, CSV/ZIP-CSV/GZIP-CSV and RSS/Atom readers.
+- Literal passages and lexical indexes over caller-owned sources and authorized database scopes.
 - Optional offline English MiniLM embeddings and semantic search, with complete
   token-aware chunks, exact source spans and caller-owned SQLite integration.
 - Optional approved HTTPS responses with bounded DNS/TLS, redirects, compressed
@@ -59,18 +59,20 @@ their existing owners.
 
 ## Install and use
 
-Python 3.13+ is required. Linux and SQLite FTS5 are required only for persistence
+Python 3.13+ is required. Linux and SQLite 3.44+ with FTS5 are required only for persistence
 and safe filesystem operations. The base distribution has **no runtime dependencies**.
 The distribution is `ctlflow-toolsmith`; the command and import are `toolsmith`.
 Source and built artifacts are MIT-licensed. There is no PyPI or npm release yet;
-build from the public repository or install a built wheel.
+build from the public repository or install a built platform-specific wheel.
+Source builds require a C compiler. The native extension is compiled at build
+time, never by importing or invoking the package.
 
 ```sh
 git clone https://github.com/control-flow-project/toolsmith.git
 cd toolsmith
 uv build --no-sources
 python3 -m venv .venv
-.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.2.0-py3-none-any.whl
+.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.3.0-py3-none-*.whl
 .venv/bin/toolsmith --json capabilities
 .venv/bin/toolsmith --root "$PWD/local-store" --collection sample store init
 ```
@@ -95,6 +97,7 @@ else:
 - [Specification](docs/specification.md)
 - [Architecture](docs/architecture.md)
 - [Tool contracts](docs/tools.md)
+- [Capacity and limit audit](docs/limits.md)
 - [CLI](docs/cli.md)
 - [Library interfaces](docs/library.md)
 - [Installation](docs/installation.md)
@@ -125,7 +128,13 @@ model files as described in [the semantic guide](docs/semantic.md). No implicit
 download, network inference, silent truncation or lexical fallback. Bad Bets can
 also embed the generic SQLite functions directly in its own database; it need
 not create a Toolsmith store or copy its article archive. Read the fleet recipes
-for atomic correction/invalidation and authorized candidate selection.
+for atomic correction/invalidation and database-resident authorization scopes.
+
+Search has no corpus-count or scanned-chunk cutoff. SQLite owns exact cosine
+ranking through the packaged single-threaded vec1 engine; no Python per-vector
+comparison or remote service is used. A flat index still performs a native scan,
+not approximate pruning. See [search and capacity contracts](docs/semantic.md)
+and the [limit audit](docs/limits.md).
 
 ## Development
 

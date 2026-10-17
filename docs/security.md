@@ -87,3 +87,22 @@ or silently substituted lexical results. Corrections/invalidation are atomic,
 encoding is outside transactions, and commit contention rolls back owned writes.
 Semantic scores locate text; they do not establish truth, rights, legal compliance
 or authentic execution of an external summary model.
+
+## SQLite vector extension
+
+Semantic indexes use the packaged, pinned vec1 native library in the caller's
+SQLite process. Product code never downloads or compiles an extension and never
+accepts an extension path from a request or stored source. It temporarily enables
+only SQLite's C-API loading capability, loads the packaged binary, and restores
+the caller's prior setting even on failure. It does not enable SQL-level
+`load_extension()`. Existing caller-enabled SQL loading remains the caller's
+setting; Toolsmith does not silently change it.
+The native build marker is checked as well as the upstream version and thread
+mode. A different preloaded vec1 build is rejected, never silently reused.
+
+The extension has worker threads disabled. Authorized current references and
+digests are selected by an application-owned relation before native top-k
+selection, not filtered from an already truncated global hit list. Scope names
+are validated SQL identifiers; source values remain parameters or table data.
+Private database ownership is still required: arbitrary malicious database files
+and native libraries are not treated as sandboxed untrusted code.

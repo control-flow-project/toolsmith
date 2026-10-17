@@ -1,6 +1,6 @@
 # Consumer capability mapping
 
-Reviewed 2026-10-13/14. Toolsmith implementation target: **0.2.0**. Consumer
+Reviewed 2026-10-13/14. Toolsmith implementation target: **0.3.0**. Consumer
 snapshots: GAAP agents `52c2cc7`; Bad Bets agents `08e4461`. Neither consumer is
 modified, installed or deployed by this work. Inspection covers their local tool
 interfaces and owning modules, not a certification of every provider or analysis.
@@ -44,13 +44,13 @@ Tests without a live provider establish contracts, not publisher certification.
 | P07 | Discovery counts, identical lead deduplication and explicit truncation | `Feed` | `test_feed_duplicate_counts_truncation_and_omitted_entry_validation`; no article fetching or inferred dates |
 | P08 | CSV, single-member ZIP-CSV and single-member GZIP-CSV; Bad Bets reports | `readers.decode_table` | Archive path/encryption/format/extra-member/expansion tests |
 | P09 | Bounded row iterator, headers, widths, exact filters/projection and complete scan counts | `iter_table_rows`, `project_table` | Bad rows/headers/row limits and `scanned/matched/truncated` assertions |
-| P10 | Plain rectangular HTML table cells without assumed financial units/types | `readers.read_html_tables` | Table/cell tests and `test_html_table_ambiguity_requires_caller_interpretation`; spanning/nested/irregular tables fail explicitly |
+| P10 | HTML/PDF/image table interpretation stays with the consumer LLM | No deterministic HTML table extraction API or CLI remains | Ordinary source text and original artifacts remain available; removed table form is rejected |
 | P11 | Wrong-format HTML, access screens, finite JSON and PDF signature-only checks | `readers.content.validate_content` | Response-format tests; PDF parsing is explicitly not claimed |
 | L01 | Punctuation-preserving literal occurrences and exact offsets; Bad Bets document search | `lexical.find_text` | `test_literal_search_preserves_punctuation_regions_counts_and_offsets` |
 | L02 | Caller-selected regions so context does not cross a page/region boundary | `lexical.Region` | Same test; physical-page interpretation remains caller-owned |
 | L03 | Caller-owned SQLite lexical derivatives, complete Unicode chunks, blank pages | `lexical.initialize_index`, `index_source` | `test_caller_indexes.py`: pages/amendments/blank/full-source tests |
 | L04 | Distinguish literal terms, quoted phrases and explicit FTS5 syntax | `lexical.compile_query`, `search` | Phrase vs separated words; the archive calls the same engine |
-| L05 | Authorized current candidate refs/digests before ranking, limits and offsets | `lexical.Candidate`, `search` | Higher-ranked unauthorized source is excluded before `LIMIT 1`; missing/stale counts |
+| L05 | Authorized current candidate refs/digests before ranking, limits and offsets | `lexical.Scope`, `search` | Higher-ranked unauthorized source is excluded before `LIMIT 1`; missing/stale counts |
 | L06 | Expected-previous-digest publication, invalidation and explicit integrity checks | `index_source`, `invalidate_source`, `check_index` | Stale worker, corruption and outer-transaction rollback tests |
 | S01 | Pinned offline English MiniLM, one CPU calling thread, no worker/download/GPU fallback | `semantic.load_model`, `inspect_model` | `test_semantic_model.py`, `test_semantic_native.py`, native acceptance |
 | S02 | Complete 256-token chunks with overlap and exact canonical spans | `semantic.prepare_embedding`, `encode_query` | Chunk tests, actual-model long-source coverage and oversized-query rejection |
@@ -72,7 +72,7 @@ Tests without a live provider establish contracts, not publisher certification.
 | J01 | Generic bounded hash-linked JSON journal; caller owns event validation/retention | `journal.read_journal`, `append_record` | Domain-neutral Unicode event, tamper/tail and partial-write rollback tests |
 | T01 | Optional text/file archive, exact immutable versions, citations, permissions and operation IDs | `storage`, `retrieval`; higher-level composition | Existing store/CLI/maintenance/recovery tests; no duplicated lexical engine |
 | T02 | Verified backup/restore/integrity/rebuild/preview-bound staging cleanup | `operations` | Existing maintenance/corruption/restore/change/symlink tests |
-| T03 | Explicit archive-v1 to v2 copy migration, original unchanged, exact versions preserved | `storage.migration.migrate_store` | `test_archive_migration.py`; bad schema/object/scope/collision tests |
+| T03 | Explicit archive-v1/v2 to v3 copy migration, original unchanged, exact versions preserved | `storage.migration.migrate_store` | `test_archive_migration.py`; bad schema/object/scope/collision tests |
 | C01 | Same library in installed CLI, with caller-owned `--database/--sources`, metadata-only `--references` and no archive | `cli.indexes`, `search lexical/semantic` | `test_standalone_cli.py` and installed wheel/sdist acceptance |
 | C02 | Standalone raw HTTPS receipt/file, readers and streaming filesystem commands | CLI composition only | Generic CLI tests and installed acceptance; source paths not echoed in receipts |
 | X01 | Optional zero-dependency base, selected extras, no services/threads/helper processes/domain code/CI | Package boundaries and metadata | Architecture tests, clean installs, native thread checks and artifact audit |
@@ -101,19 +101,20 @@ implementations to copy into Toolsmith.
 
 ## Capacity, safety and evidence limits
 
-- Explicit streamed files support up to 1 GiB; GAAP's 512 MiB originals fit. Buffered
-  reads support up to 128 MiB. ZIP member/total limits are 512 MiB/1 GiB, 10,000
+- Streaming requires an explicit signed-64-bit byte budget. Buffered
+  reads support up to 128 MiB. ZIP member/total limits are 128 MiB/1 GiB, 10,000
   members and 4 MiB central directory. No prefix is silently returned on overflow.
-- Generic tabular compressed/expanded input is 32/64 MiB; up to 1,000,000 rows,
+- Generic CSV compressed/expanded input is 32/64 MiB; default 1,000,000 rows with larger explicit budgets,
   256 columns and explicitly bounded projections. Data remains strings.
-- Generic lexical sources support 8 MiB, 100,000 authorized candidates; physical
+- Generic lexical sources support 8 MiB and database-resident authorized scopes without a corpus-count cutoff; physical
   pages and full canonical text remain caller-owned. Search hits are exact spans.
   BM25 uses database-wide statistics: a candidate list is not corpus-statistical
   isolation. GAAP must retain its exact-room database boundary.
-- Semantic sources remain 4 MiB, queries 256 tokens, up to 10,000 candidates and
-  100,000 selected chunks with up to 100 representation hits. Bad Bets applies its
-  own article deduplication/pagination to that window. This is not global ranking
-  of an unlimited corpus or multilingual-model certification.
+- Semantic sources remain 4 MiB and queries 256 tokens. A native SQLite exact
+  vector index searches the complete authorized relation, including million-entry
+  corpora, without candidate/chunk scan ceilings. Output remains at most 100
+  references. Consumer article grouping remains consumer-owned. The synthetic
+  capacity check is not million-document semantic-quality or multilingual certification.
 - Readiness is metadata-only. Full integrity audits intentionally cost more.
   Hashing is a tool-side intake/transfer/audit operation, not repetitive model-led
   bookkeeping. Directory inventory does not hash contents; CLI source changes

@@ -20,6 +20,13 @@ toolsmith/
 ├── README.md
 ├── pyproject.toml
 ├── uv.lock
+├── hatch_build.py
+├── vendor/
+│   └── sqlite/
+│       ├── README.md
+│       ├── vec1.c
+│       ├── sqlite3.h
+│       └── sqlite3ext.h
 ├── src/
 │   └── toolsmith/
 │       ├── __init__.py
@@ -62,6 +69,7 @@ toolsmith/
 │       │   └── budget_import.py
 │       ├── search/
 │       │   ├── __init__.py
+│       │   ├── scopes.py
 │       │   ├── lexical/
 │       │   │   ├── __init__.py
 │       │   │   ├── chunks.py
@@ -78,6 +86,8 @@ toolsmith/
 │       │       ├── chunks.py
 │       │       ├── index.py
 │       │       ├── status.py
+│       │       ├── migration.py
+│       │       ├── vector.py
 │       │       └── schema.sql
 │       ├── journal/
 │       │   ├── __init__.py
@@ -118,6 +128,10 @@ toolsmith/
 │   ├── test_generic_files.py
 │   ├── test_archives.py
 │   ├── test_capacity_boundaries.py
+│   ├── test_corpus_capacity.py
+│   ├── test_search_scopes.py
+│   ├── test_vector_native.py
+│   ├── test_packaging.py
 │   ├── test_optional_primitives.py
 │   ├── test_readers.py
 │   ├── test_generic_readers.py
@@ -140,6 +154,7 @@ toolsmith/
 │   ├── verify.py
 │   ├── accept_package.py
 │   ├── accept_https.py
+│   ├── accept_corpus.py
 │   └── accept_semantic.py
 ├── docs/
 │   ├── specification.md
@@ -150,6 +165,7 @@ toolsmith/
 │   ├── installation.md
 │   ├── library.md
 │   ├── tools.md
+│   ├── limits.md
 │   ├── cli.md
 │   ├── filesystem.md
 │   ├── parsing.md
@@ -164,7 +180,6 @@ toolsmith/
 │   └── verification.md
 └── examples/
     ├── caller-owned-sources.json
-    ├── caller-owned-references.json
     ├── http-policy.json
     ├── budget-policy.json
     ├── agreement.json

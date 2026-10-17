@@ -16,7 +16,7 @@ selected implicitly.
 ## Capabilities
 
 The 2026-10-13 consumer-coverage extension also requires archive-independent
-parsing types, streaming regular-file hash/copy, bounded generic tabular reading,
+parsing types, streaming regular-file hash/copy, bounded CSV-format reading,
 article/access-screen and feed-date fidelity, caller-owned lexical indexes,
 cheap bulk semantic index state, independent approved HTTP responses and shared
 group/task acquisition budgets. Every addition needs a concrete consumer call,
@@ -126,8 +126,8 @@ Generic derivatives retain only references, source digest/length, profile, index
 time and bounded vector/span records, not a second source archive. Consumers own
 canonical text, authorization, summaries and source corrections. They invalidate
 derivatives in the same transaction as a correction and publish with an expected
-previous digest after encoding outside transactions. Search accepts an explicit
-bounded authorized candidate set and reports missing/stale coverage, never other
+previous digest after encoding outside transactions. Search accepts an explicit database-resident authorized table/view and reports
+missing/stale coverage without any corpus-count or scanned-chunk cutoff, never other
 collections or silent lexical fallback. Text imports invalidate old derivatives
 without deleting citable originals. Semantic clear deletes only derivatives.
 Integrity and verified backups include vector profiles, finite unit vectors,
@@ -140,13 +140,14 @@ credentials. Export destinations are explicit and cannot overwrite existing file
 
 Backup is consistent under the selected store lock. Restore verifies the complete
 backup before creating a new destination; it never overwrites production. Reject
-unsupported schemas. The current optional archive schema is version two: its
-lexical derivatives use the same caller-owned index implementation, not a second
-archive-specific engine. Explicit version-one migration verifies the reviewed
-source schema, canonical provenance and objects, copies to a new destination,
-verifies the copy, replaces only its derivative relations and verifies the result.
+unsupported schemas. The current optional archive schema is version three: its lexical derivatives
+and native vector index use the same caller-owned implementations, not other
+archive engines. Explicit v1/v2 migration verifies the reviewed source schema,
+canonical provenance and objects, copies to a new destination, converts vector
+derivatives without inference, creates the current-text view/change counter and
+verifies the result.
 The original remains unchanged as the preserved rollback copy. There is no
-ordinary version-one reader, automatic migration or reset. Neither adopting
+ordinary older-schema reader, automatic migration or reset. Neither adopting
 consumer is required to use this archive or its migration.
 
 Cleanup requires a preview describing exact eligible inactive staging files and
@@ -154,6 +155,24 @@ their identities, then verifies the plan before deletion. Unknown files, symlink
 changed files, active work, credentials and retained objects are never cleanup
 targets. Integrity checks are explicit operations, not repeated whole-archive work
 on ordinary agent reads.
+
+## Search capacity and resource budgets
+
+SQLite owns vector comparison through the packaged public-domain vec1 0.8 extension,
+compiled with worker threads disabled. The current configuration is an exact flat
+index, not approximate nearest-neighbor pruning. Vectors are stored once inside
+the native index; application references/spans remain normalized metadata. An
+integer chunk-key filter is pushed into native selection before top-k. Each
+indexed reference contributes its best chunk; returned records remain bounded.
+No Python distance loop, candidate/chunk scan ceiling or hidden fallback exists.
+Whole-index audits are separate from ordinary search and status.
+
+The database has no Toolsmith byte ceiling. Backup/restore have an explicit
+20 GiB aggregate budget and no object-count ceiling; databases are streamed, not
+loaded wholesale into memory. Individual retained artifacts remain at most
+128 MiB. HTML/PDF/image table meaning and geometry are interpreted by the
+consumer LLM; no deterministic HTML table extraction API remains. CSV is format
+parsing only. See limits.md for remaining bounds and their reasons.
 
 ## Verification
 

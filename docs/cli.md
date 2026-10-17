@@ -4,13 +4,16 @@
 
 `search lexical/semantic` uses an explicit caller-owned `--database`. `init` adds
 derivatives, not a canonical source database or application schema version.
-`index/query/check` take `--sources FILE`, a JSON array of
-`{reference,text,language?}`. `status` takes `--references FILE`, an array of source
-references only, with no model, source-body or vector reads. `delete REFERENCE`
+`index` takes one bounded `--sources FILE` JSON batch of `{reference,text,language?}`.
+`query` and `status` take `--scope TABLE_OR_VIEW` in the selected database, exposing
+unique `reference` and current `text_digest` columns. No source bodies or million-ID
+JSON list are resupplied for a query. `status` returns aggregate coverage without
+reading vectors. `check` uses `--scope` with an additional canonical `text` column
+and streams the complete audit without a whole-corpus JSON file. `delete REFERENCE`
 removes one exact derivative. Semantic index/query require `--model-directory`;
 init/status/check/delete do not activate a model.
 
-`read json`, `read table --column NAME [--filter COLUMN=VALUE]`, `read html-tables`
+`read json`, `read table --column NAME [--filter COLUMN=VALUE]`
 and `read html --selection article [--title INTENDED]` use generic parsers.
 Table output includes complete scan/match counts and explicit truncation.
 `filesystem hash/copy FILE --maximum-bytes N` streams selected regular files.
@@ -22,7 +25,7 @@ receipt storage/recovery. `http fetch/resume` is optional text-archive compositi
 over the same HTTPS producer, not another implementation.
 
 `maintenance migrate DESTINATION` with explicit `--root/--collection` verifies
-and forward-copies an archive-v1 store to v2; the original remains unchanged.
+and forward-copies a verified archive-v1/v2 store to v3; the original remains unchanged.
 Regular backup/restore commands are specific to the optional text archive.
 
 `toolsmith --help` and each subcommand's `--help` define the current syntax.
@@ -38,14 +41,13 @@ toolsmith read html FILE [--title TITLE]
 toolsmith read feed FILE --source-url URL [--limit N]
 toolsmith read json FILE
 toolsmith read table FILE --column COLUMN [--filter COLUMN=VALUE] [--format csv|zip-csv|gzip-csv]
-toolsmith read html-tables FILE
 toolsmith filesystem hash FILE --maximum-bytes N
 toolsmith filesystem copy FILE DESTINATION --maximum-bytes N
 toolsmith search lexical|semantic init --database FILE
 toolsmith search lexical|semantic index --database FILE --sources FILE [--limit N]
-toolsmith search lexical|semantic query QUERY --database FILE --sources FILE [--limit N]
-toolsmith search lexical|semantic status --database FILE --references FILE
-toolsmith search lexical|semantic check --database FILE --sources FILE
+toolsmith search lexical|semantic query QUERY --database FILE --scope TABLE_OR_VIEW [--limit N]
+toolsmith search lexical|semantic status --database FILE --scope TABLE_OR_VIEW
+toolsmith search lexical|semantic check --database FILE --scope TABLE_OR_VIEW
 toolsmith search lexical|semantic delete REFERENCE --database FILE
 toolsmith text put DOCUMENT_JSON --item ITEM --request-id ID
 toolsmith text inspect VERSION

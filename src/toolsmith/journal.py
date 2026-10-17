@@ -57,7 +57,7 @@ def records(descriptor: int) -> tuple[Record, ...]:
         value = fields(
             parse_json(line, MAX_RECORD_BYTES), {"sequence", "at", "previous", "event", "sha256"}
         )
-        sequence = integer(value["sequence"], 1, 100000, "Sequence")
+        sequence = integer(value["sequence"], 1, 2**63 - 1, "Sequence")
         at = value["at"]
         if not isinstance(at, str) or timestamp(at) is None:
             raise ToolsmithError("integrity", "Journal record needs a timezone-aware timestamp")
@@ -123,11 +123,7 @@ def append_record(
         value["sha256"] = checksum
         encoded = record_bytes(value) + b"\n"
         size = os.fstat(descriptor).st_size
-        if (
-            len(encoded) > MAX_RECORD_BYTES
-            or size + len(encoded) > MAX_JOURNAL_BYTES
-            or len(existing) >= 100000
-        ):
+        if len(encoded) > MAX_RECORD_BYTES or size + len(encoded) > MAX_JOURNAL_BYTES:
             raise ToolsmithError(
                 "limit", "Journal capacity requires explicit caller retention/maintenance"
             )

@@ -8,12 +8,12 @@ from importlib.resources import files
 from toolsmith.lexical.chunks import text_chunks
 from toolsmith.lexical.query import QueryMode, compile_query
 from toolsmith.result import ToolsmithError, boundary, unwrap
+from toolsmith.scopes import Scope, coverage, scope_query
 from toolsmith.sqlite import execute, transaction
 from toolsmith.validation import canonical_json, digest, integer, source_reference, text
 
 SCHEMA_SQL = files("toolsmith.lexical").joinpath("schema.sql").read_text(encoding="utf-8")
 MAX_SOURCE_BYTES = 8 * 1024 * 1024
-MAX_CANDIDATES = 100_000
 
 
 @dataclass(frozen=True)
@@ -21,12 +21,6 @@ class Source:
     reference: str
     text: str
     title: str = ""
-
-
-@dataclass(frozen=True)
-class Candidate:
-    reference: str
-    digest: str
 
 
 @dataclass(frozen=True)
@@ -97,8 +91,8 @@ def state(connection: sqlite3.Connection, reference: str) -> IndexState:
 def inspect_index(
     connection: sqlite3.Connection, references: tuple[str, ...]
 ) -> tuple[IndexState, ...]:
-    if not isinstance(references, tuple) or len(references) > MAX_CANDIDATES:
-        raise ToolsmithError("limit", "Supply at most 100000 source references")
+    if not isinstance(references, tuple):
+        raise ToolsmithError("invalid_input", "Supply explicit source references")
     checked = tuple(source_reference(reference) for reference in references)
     if len(set(checked)) != len(checked):
         raise ToolsmithError("invalid_input", "Source references must be unique")
@@ -189,7 +183,7 @@ def invalidate_source(connection: sqlite3.Connection, reference: str) -> bool:
 def search(
     connection: sqlite3.Connection,
     query: str,
-    candidates: tuple[Candidate, ...],
+    scope: Scope,
     maximum_records: int = 20,
     *,
     mode: QueryMode = "literal",
@@ -197,41 +191,21 @@ def search(
 ) -> SearchReport:
     expression = unwrap(compile_query(query, mode))
     maximum = integer(maximum_records, 1, 1000, "Maximum records")
-    beginning = integer(offset, 0, 1_000_000, "Offset")
-    if not isinstance(candidates, tuple) or len(candidates) > MAX_CANDIDATES:
-        raise ToolsmithError("limit", "Supply at most 100000 authorized lexical candidates")
-    selected: dict[str, str] = {}
-    for candidate in candidates:
-        if not isinstance(candidate, Candidate):
-            raise ToolsmithError("invalid_input", "Supply typed authorized candidates")
-        reference = source_reference(candidate.reference)
-        if reference in selected:
-            raise ToolsmithError("invalid_input", "Candidate references must be unique")
-        selected[reference] = digest(candidate.digest)
-    missing, stale = 0, 0
+    beginning = integer(offset, 0, 2**63 - 1, "Offset")
     with transaction(connection, "toolsmith_lexical"):
-        states = {
-            record.reference: record
-            for record in unwrap(inspect_index(connection, tuple(selected)))
-        }
-        current: dict[str, str] = {}
-        for reference, checksum in selected.items():
-            actual = states[reference].digest
-            if actual is None:
-                missing += 1
-            elif actual != checksum:
-                stale += 1
-            else:
-                current[reference] = checksum
+        selected = scope_query(connection, scope)
+        candidates, indexed, missing, stale, _largest = coverage(
+            connection, selected, "lexical_document"
+        )
         rows = execute(
             connection,
-            "WITH candidate AS (SELECT key AS reference, value AS digest FROM json_each(?)) "
+            "WITH candidate AS (" + selected + ") "
             "SELECT c.reference, d.text_digest, c.start_offset, c.end_offset, c.text, bm25(lexical_search), c.text_digest, lexical_search.text, lexical_search.title, d.title "
             "FROM lexical_search JOIN lexical_chunk c ON c.id = lexical_search.rowid "
             "JOIN lexical_document d ON d.reference = c.reference "
-            "JOIN candidate a ON a.reference = d.reference AND a.digest = d.text_digest "
+            "JOIN candidate a ON a.reference = d.reference AND a.text_digest = d.text_digest "
             "WHERE lexical_search MATCH ? ORDER BY bm25(lexical_search), c.reference, c.ordinal LIMIT ? OFFSET ?",
-            (canonical_json(current).decode(), expression, maximum, beginning),
+            (expression, maximum, beginning),
         )
         hits: list[Hit] = []
         for row in rows:
@@ -248,7 +222,7 @@ def search(
             ):
                 raise ToolsmithError("integrity", "Lexical hit has invalid source spans or rank")
             hits.append(Hit(source_reference(row[0]), digest(row[1]), start, end, body, rank))
-    return SearchReport(tuple(hits), len(candidates), len(current), missing, stale)
+    return SearchReport(tuple(hits), candidates, indexed, missing, stale)
 
 
 @boundary

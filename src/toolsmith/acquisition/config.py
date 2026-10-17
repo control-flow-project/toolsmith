@@ -34,7 +34,7 @@ def read_http_policy(content: bytes) -> HttpPolicy:
             integer(
                 value.get("maximum_total_bytes", defaults.maximum_total_bytes),
                 1,
-                64 * 1024**3,
+                2**63 - 1,
                 "Total bytes",
             ),
             integer(
@@ -69,10 +69,10 @@ def read_budget_policy(content: bytes) -> BudgetPolicy:
         BudgetPolicy(
             identity(value["group"]),
             number(value["period_seconds"], 1, 31 * 86400, "Period"),
-            integer(value["group_requests"], 1, 10000, "Group requests"),
-            integer(value["group_bytes"], 1, 64 * 1024**3, "Group bytes"),
-            integer(value["task_requests"], 1, 10000, "Task requests"),
-            integer(value["task_bytes"], 1, 64 * 1024**3, "Task bytes"),
+            integer(value["group_requests"], 1, 2**63 - 1, "Group requests"),
+            integer(value["group_bytes"], 1, 2**63 - 1, "Group bytes"),
+            integer(value["task_requests"], 1, 2**63 - 1, "Task requests"),
+            integer(value["task_bytes"], 1, 2**63 - 1, "Task bytes"),
             number(value.get("minimum_interval_seconds", 0), 0, 31 * 86400, "Interval"),
             identity(value.get("definition", "explicit-budget-v1")),
         )

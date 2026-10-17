@@ -11,11 +11,13 @@ CREATE TABLE embedding_document (
     indexed_at TEXT NOT NULL
 );
 CREATE TABLE embedding_chunk (
+    id INTEGER PRIMARY KEY,
     reference TEXT NOT NULL REFERENCES embedding_document(reference) ON DELETE CASCADE ON UPDATE CASCADE,
     ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
     start_offset INTEGER NOT NULL CHECK (start_offset >= 0),
     end_offset INTEGER NOT NULL CHECK (end_offset > start_offset),
     text_digest TEXT NOT NULL,
-    vector BLOB NOT NULL CHECK (length(vector) = 1536),
-    PRIMARY KEY (reference, ordinal)
+    UNIQUE (reference, ordinal)
 );
+CREATE VIRTUAL TABLE embedding_vector USING vec1(vector, chunk_id);
+INSERT INTO embedding_vector(cmd,arg) VALUES ('rebuild','{"index":"flat","distance":"cos"}');

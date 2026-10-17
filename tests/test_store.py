@@ -11,6 +11,14 @@ from toolsmith.storage.operations import operation_status
 from toolsmith.storage.text import inspect_text, list_text, put_text
 
 
+def test_archive_paging_accepts_offsets_beyond_the_removed_million_record_ceiling(
+    store: Path,
+) -> None:
+    assert unwrap(list_text(store, "sample", offset=2**63 - 1)) == ()
+    assert unwrap(search_text(store, "sample", "selected", offset=2**63 - 1)) == ()
+    assert isinstance(list_text(store, "sample", offset=2**63), Failure)
+
+
 def test_initialization_is_repeatable_and_scope_bound(store: Path) -> None:
     assert unwrap(initialize_store(store, "sample")).items == 0
     wrong = initialize_store(store, "other")
@@ -28,7 +36,7 @@ def test_initialization_rejects_nonempty_and_can_finish_unpublished_state(tmp_pa
     (incomplete / "objects").mkdir(mode=0o700)
     (incomplete / "tmp").mkdir(mode=0o700)
     (incomplete / "tmp" / (".stage-" + "a" * 32 + ".tmp")).write_bytes(b"unpublished")
-    assert unwrap(initialize_store(incomplete, "sample")).schema_version == 2
+    assert unwrap(initialize_store(incomplete, "sample")).schema_version == 3
 
 
 def test_immutable_versions_idempotency_and_current_search(

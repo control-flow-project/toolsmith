@@ -4,7 +4,7 @@ from contextlib import closing
 from dataclasses import replace
 
 import pytest
-from semantic_support import FixtureEncoder, index_database, publish
+from semantic_support import FixtureEncoder, ScopeEntry, index_database, publish, selected_scope
 
 from toolsmith import lexical, semantic
 from toolsmith.result import Failure, ToolsmithError, unwrap
@@ -77,13 +77,21 @@ def test_case_pages_phrases_amendments_and_authorized_candidates() -> None:
         for source in sources:
             unwrap(lexical.index_source(connection, source, expected_digest=None))
         candidates = tuple(
-            lexical.Candidate(source.reference, checksum(source.text))
+            ScopeEntry(source.reference, checksum(source.text))
             for source in sources
             if source.reference.startswith("case-a:")
         )
-        phrase = unwrap(lexical.search(connection, '"Restricted Payments"', candidates, 1))
+        phrase = unwrap(
+            lexical.search(
+                connection, '"Restricted Payments"', selected_scope(connection, candidates), 1
+            )
+        )
         assert [hit.reference for hit in phrase.hits] == [sources[0].reference]
-        broad = unwrap(lexical.search(connection, "Restricted Payments", candidates))
+        broad = unwrap(
+            lexical.search(
+                connection, "Restricted Payments", selected_scope(connection, candidates)
+            )
+        )
         assert {hit.reference for hit in broad.hits} == {sources[0].reference, sources[1].reference}
         assert broad.indexed == 3 and broad.missing == broad.stale == 0
         assert (
@@ -99,7 +107,9 @@ def test_case_pages_phrases_amendments_and_authorized_candidates() -> None:
         unwrap(
             lexical.index_source(connection, replacement, expected_digest=checksum(sources[0].text))
         )
-        changed = unwrap(lexical.search(connection, "Restricted", candidates))
+        changed = unwrap(
+            lexical.search(connection, "Restricted", selected_scope(connection, candidates))
+        )
         assert changed.stale == 1 and all(
             hit.reference != sources[0].reference for hit in changed.hits
         )
@@ -174,11 +184,19 @@ def test_bulk_semantic_metadata_does_not_read_vectors_or_canonical_text() -> Non
     with index_database() as connection:
         original = semantic.Source("body", "Rain and wet weather")
         publish(connection, original)
-        connection.execute("UPDATE embedding_chunk SET vector = zeroblob(1536)")
+        connection.execute("UPDATE embedding_vector SET vector = zeroblob(1536)")
         connection.commit()
         traced: list[str] = []
         connection.set_trace_callback(traced.append)
         states = unwrap(semantic.inspect_index(connection, ("missing", "body")))
+        coverage = unwrap(
+            semantic.inspect_coverage(connection, semantic.Scope("embedding_document"))
+        )
+        assert coverage.entries == coverage.indexed == 1
+        assert (
+            unwrap(semantic.pending_references(connection, semantic.Scope("embedding_document")))
+            == ()
+        )
         connection.set_trace_callback(None)
         assert states[0].digest is None
         assert states[1].digest == semantic.fingerprint(original.text)
@@ -197,13 +215,16 @@ def test_semantic_filtered_representation_window_keeps_missing_and_stale_counts(
         for source in sources:
             publish(connection, source)
         candidates = (
-            semantic.Candidate(sources[0].reference, semantic.fingerprint(sources[0].text)),
-            semantic.Candidate(sources[1].reference, "a" * 64),
-            semantic.Candidate("article:3:summary", "b" * 64),
+            ScopeEntry(sources[0].reference, semantic.fingerprint(sources[0].text)),
+            ScopeEntry(sources[1].reference, "a" * 64),
+            ScopeEntry("article:3:summary", "b" * 64),
         )
         result = unwrap(
             semantic.search_embeddings(
-                connection, unwrap(semantic.encode_query("Rain", FixtureEncoder())), candidates, 1
+                connection,
+                unwrap(semantic.encode_query("Rain", FixtureEncoder())),
+                selected_scope(connection, candidates),
+                1,
             )
         )
         assert result.indexed == result.stale == result.missing == 1
@@ -237,7 +258,9 @@ def test_lexical_audit_detects_corrupt_derivatives(corruption: str) -> None:
                 lexical.search(
                     connection,
                     "Forged",
-                    (lexical.Candidate(source.reference, checksum(source.text)),),
+                    selected_scope(
+                        connection, (ScopeEntry(source.reference, checksum(source.text)),)
+                    ),
                 ),
                 Failure,
             )

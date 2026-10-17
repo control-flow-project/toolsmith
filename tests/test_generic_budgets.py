@@ -22,6 +22,51 @@ def policy(group: str = "source") -> BudgetPolicy:
     return BudgetPolicy(group, 60, 10, 1000, 3, 300)
 
 
+def test_group_and_task_counts_are_controlled_by_state_bytes_not_old_record_caps(
+    tmp_path: Path, clock: ControlledClock
+) -> None:
+    policies = tuple(
+        BudgetPolicy(f"group-{number}", 60, 2000, 2000, 2000, 2000) for number in range(300)
+    )
+    groups = (
+        GroupUsage(policies[0].group, 1200, 1200),
+        *(GroupUsage(selected.group, 0, 0) for selected in policies[1:]),
+    )
+    tasks = tuple(Usage(f"task-{number}", 1, 1) for number in range(1200))
+    snapshot = BudgetSnapshot(60, clock.wall(), clock.wall(), groups, tasks)
+    root = tmp_path / "large-state"
+    unwrap(import_budget(root, policies, snapshot, clock=clock, boot="boot-a"))
+    unwrap(reserve_budget(root, policies[0], "new-task", 1, clock=clock, boot="boot-a"))
+    observed = unwrap(inspect_budget(root, policies[0], "new-task", clock=clock, boot="boot-a"))
+    assert observed.group_requests == observed.group_bytes == 1201
+    assert observed.task_requests == observed.task_bytes == 1
+
+
+def test_usage_above_old_request_and_byte_ceilings_preserves_accounting(
+    tmp_path: Path, clock: ControlledClock
+) -> None:
+    bytes_used = 65 * 1024**3
+    selected = BudgetPolicy("source", 60, 1_000_000, 2**50, 1_000_000, 2**50)
+    snapshot = BudgetSnapshot(
+        60,
+        clock.wall() - 1,
+        clock.wall(),
+        (GroupUsage("source", 10001, bytes_used),),
+        (Usage("task", 10001, bytes_used),),
+    )
+    root = tmp_path / "large-counters"
+    unwrap(import_budget(root, (selected,), snapshot, clock=clock, boot="boot-a"))
+    reservation = unwrap(reserve_budget(root, selected, "task", 128, clock=clock, boot="boot-a"))
+    observed = unwrap(inspect_budget(root, selected, "task", clock=clock, boot="boot-a"))
+    assert observed.group_requests == observed.task_requests == 10002
+    assert observed.group_bytes == observed.task_bytes == bytes_used + 128
+    unwrap(settle_budget(root, selected, reservation, 64, clock=clock, boot="boot-a"))
+    assert (
+        unwrap(inspect_budget(root, selected, "task", clock=clock, boot="boot-a")).task_bytes
+        == bytes_used + 64
+    )
+
+
 def test_group_and_task_allowances_are_shared_across_transports(
     tmp_path: Path, clock: ControlledClock
 ) -> None:

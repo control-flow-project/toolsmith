@@ -1,15 +1,44 @@
+import hashlib
 import os
 from pathlib import Path
 from unittest.mock import patch
 
+from conftest import ControlledClock
 from semantic_support import index_database, publish
 
 from toolsmith.files import FileStamp, copy_file, file_stamp
 from toolsmith.filesystem import inventory, publish_directory, replace_bytes, sync_directory_tree
-from toolsmith.journal import append_record, read_journal
+from toolsmith.journal import MAX_JOURNAL_BYTES, append_record, read_journal, record_bytes
 from toolsmith.lexical import Region, find_text
 from toolsmith.result import Failure, unwrap
 from toolsmith.semantic import Source, clear_index, inspect_index, relocate_embedding
+from toolsmith.validation import JsonValue
+
+
+def test_journal_reads_and_appends_past_the_removed_100000_record_ceiling(
+    tmp_path: Path, clock: ControlledClock
+) -> None:
+    root = tmp_path / "large-journal"
+    root.mkdir(mode=0o700)
+    path = root / "journal.jsonl"
+    path.touch(mode=0o600)
+    previous = "0" * 64
+    with path.open("wb") as stream:
+        for sequence in range(1, 100_001):
+            value: dict[str, JsonValue] = {
+                "sequence": sequence,
+                "at": "2026-10-17T00:00:00+00:00",
+                "previous": previous,
+                "event": None,
+            }
+            previous = hashlib.sha256(record_bytes(value)).hexdigest()
+            value["sha256"] = previous
+            stream.write(record_bytes(value) + b"\n")
+    assert path.stat().st_size < MAX_JOURNAL_BYTES
+    appended = unwrap(append_record(root, {"next": True}, clock=clock))
+    assert appended.sequence == 100_001
+    records = unwrap(read_journal(root))
+    assert len(records) == 100_001 and records[-1] == appended
 
 
 def test_literal_search_preserves_punctuation_regions_counts_and_offsets() -> None:
@@ -23,6 +52,14 @@ def test_literal_search_preserves_punctuation_regions_counts_and_offsets() -> No
     assert result.matches[0].match_start == 8
     assert unwrap(find_text(body, "1x25%")).total == 0
     assert unwrap(find_text(body, "RATE", case_sensitive=True)).total == 1
+
+
+def test_literal_search_accepts_all_regions_in_a_byte_bounded_source() -> None:
+    body = "ordinary " * 10_001 + "target"
+    regions = tuple(Region(number * 9, (number + 1) * 9) for number in range(10_001))
+    selected = (*regions, Region(90_009, len(body)))
+    result = unwrap(find_text(body, "target", 1, regions=selected))
+    assert result.total == 1 and result.matches[0].region == 10_001
 
 
 def test_private_tree_and_atomic_publication_are_generic(tmp_path: Path) -> None:

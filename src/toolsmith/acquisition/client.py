@@ -59,7 +59,7 @@ def validate_http_policy(policy: HttpPolicy) -> HttpPolicy:
     if len(set(policy.hosts)) != len(policy.hosts):
         raise ToolsmithError("invalid_input", "Approved hosts must be unique")
     response_bytes = integer(policy.maximum_response_bytes, 1, 128 * 1024 * 1024, "Response bytes")
-    integer(policy.maximum_total_bytes, response_bytes, 64 * 1024 * 1024 * 1024, "Total wire bytes")
+    integer(policy.maximum_total_bytes, response_bytes, 2**63 - 1, "Total wire bytes")
     integer(policy.maximum_requests, 1, 100, "Maximum requests")
     integer(policy.maximum_redirects, 0, 10, "Maximum redirects")
     number(policy.deadline_seconds, 0.1, 60, "Deadline seconds")

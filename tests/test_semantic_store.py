@@ -140,7 +140,7 @@ def test_corrupt_vectors_block_integrity_and_backup_and_explicit_clear_allows_re
     add(store, "document", "original source", "original")
     unwrap(index_text(store, "sample", Path("/unused"), encoder=FixtureEncoder()))
     with open_store(store, "sample", write=True) as selected, selected.connection:
-        selected.connection.execute("UPDATE embedding_chunk SET vector = zeroblob(1536)")
+        selected.connection.execute("UPDATE embedding_vector SET vector = zeroblob(1536)")
     assert isinstance(check_integrity(store, "sample"), Failure)
     assert isinstance(backup_store(store, "sample", tmp_path / "bad-backup"), Failure)
     assert not (tmp_path / "bad-backup").exists()
