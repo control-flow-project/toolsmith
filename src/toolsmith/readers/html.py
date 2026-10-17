@@ -6,6 +6,7 @@ from toolsmith.readers.html_dom import (
     ACCESS_BODY,
     Node,
     check_access,
+    check_title_access,
     content_text,
     descendants,
     parse_html,
@@ -34,8 +35,8 @@ class HtmlInspection:
 @boundary
 def inspect_html(content: bytes) -> HtmlInspection:
     root = parse_html(content)
-    check_access(root)
     visible = descendants(root)
+    check_title_access(visible)
     pending = [root]
     resources = 0
     passwords = False

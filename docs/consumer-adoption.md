@@ -66,6 +66,11 @@ write coordination and compare-and-swap semantics.
 
 `inspect_html` returns visible text, title, content-root/password-control signals
 and resource-bearing element counts, not actual browser request counts.
+Inspection rejects document-title access screens before source scripts run, but
+does not decide whether body dialogs are CSS-visible. Static `read_html` rejects
+unresolved access dialogs. A browser-owning consumer supplies its computed-visible
+DOM to `read_html`; a hidden template is not an active login gate. Inspection's
+password-control signal describes raw markup, not a visibility assertion.
 `read_feed` preserves original/resolved links, raw/source-aware/UTC dates, feed kind
 and duplicate counts. Consumers own URL normalization and publisher acceptance.
 Neither reader certifies source completeness.

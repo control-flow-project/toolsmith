@@ -310,3 +310,15 @@ private storage protections and all library/runtime behavior stay unchanged.
   model weights. Registry publication and consumer deployment are not performed.
 - The earlier complete 178-test and real-model gates apply to the unchanged runtime
   implementation. They were not rerun for this licensing/documentation-only edit.
+
+## HTML inspection boundary — 0.4.1, 2026-10-17
+
+Inspection no longer treats an unresolved body dialog as proof of a visible
+access gate. Document-title access screens still fail before browser-owned code
+runs. Static text reading retains all dialog/password/challenge refusals.
+Browser-owning consumers pass computed-visible markup to that same reader.
+The regression covers hidden-template inspection and unchanged static denial.
+
+The complete bounded verification and installed wheel/sdist/base/HTTP/semantic
+acceptance pass. No publisher request or generative model call is required for
+this change. Actual browser acceptance remains consumer-owned.

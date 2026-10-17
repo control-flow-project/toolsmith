@@ -1,6 +1,6 @@
 # Consumer capability mapping
 
-Reviewed 2026-10-13/14. Toolsmith implementation target: **0.4.0**. Consumer
+Reviewed 2026-10-13/14. Toolsmith implementation target: **0.4.1**. Consumer
 snapshots: GAAP agents `52c2cc7`; Bad Bets agents `08e4461`. Neither consumer is
 modified, installed or deployed by this work. Inspection covers their local tool
 interfaces and owning modules, not a certification of every provider or analysis.
