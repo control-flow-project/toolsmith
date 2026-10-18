@@ -194,10 +194,14 @@ def titles(nodes: list[Node]) -> list[str]:
     return [value for value in values if value.strip()]
 
 
-def check_access(root: Node) -> None:
-    nodes = descendants(root, include_forms=True)
+def check_title_access(nodes: list[Node]) -> None:
     if any(ACCESS_HEADING.match(value.strip(" .!")) for value in titles(nodes)):
         raise ToolsmithError("denied", "HTML is an access/login/challenge screen; do not bypass it")
+
+
+def check_access(root: Node) -> None:
+    nodes = descendants(root, include_forms=True)
+    check_title_access(nodes)
     for node in nodes:
         if node.attributes.get("aria-modal", "").lower() == "true" or node.attributes.get(
             "role", ""

@@ -27,6 +27,11 @@ other fleets remain free not to install Toolsmith. Directory reorganization is
 proposed only after this coverage work; no import aliases are retained.
 
 - Bounded UTF-8 text, meaningful HTML and RSS/Atom reading.
+
+HTML inspection reports markup signals and rejects document-title access screens;
+it does not infer computed CSS visibility. Static text reading still rejects
+unresolved access dialogs. Browser-owning callers validate computed-visible DOM
+through that same text reader; Toolsmith neither runs a browser nor bypasses gates.
 - Explicit safe regular-file reads and private artifact storage/export.
 - Immutable local text/file versions and exact citations, with lexical FTS5 search.
 - Approved HTTPS acquisition, bounded DNS/TLS/body/redirect handling and persistent

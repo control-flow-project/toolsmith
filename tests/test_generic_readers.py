@@ -4,7 +4,7 @@ import zipfile
 
 import pytest
 
-from toolsmith.readers import read_feed, read_html
+from toolsmith.readers import inspect_html, read_feed, read_html
 from toolsmith.readers.content import validate_content
 from toolsmith.readers.json import read_json
 from toolsmith.readers.tables import decode_table, iter_table_rows, project_table
@@ -47,6 +47,21 @@ def test_article_title_selection_ambiguity_and_table_warning() -> None:
 def test_html_rejects_active_access_gates_without_bypass(blocked: str) -> None:
     result = read_html(blocked.encode())
     assert isinstance(result, Failure) and result.code == "denied"
+
+
+def test_inspection_does_not_claim_uncomputed_dialog_visibility() -> None:
+    content = (
+        "<title>Research note</title><style>.login {display:none}</style>"
+        "<article><h1>Research note</h1><p>"
+        + PROSE
+        + '</p></article><div class="login" role="dialog"><input type="password"></div>'
+    ).encode()
+    observed = unwrap(inspect_html(content))
+    assert observed.content_root and observed.password_controls
+    assert observed.title == "Research note"
+    denied = read_html(content, selection="article")
+    assert isinstance(denied, Failure) and denied.code == "denied"
+    assert isinstance(inspect_html(b"<title>Access denied</title><script>loop()</script>"), Failure)
 
 
 def test_html_noise_is_not_article_content_and_tables_are_not_financial_models() -> None:
