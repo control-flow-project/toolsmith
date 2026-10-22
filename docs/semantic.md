@@ -60,8 +60,9 @@ Consumers keep canonical text and authorization in their own SQLite database.
 Enable foreign keys and call `initialize_index` once. It creates only derivative
 relations and loads the packaged extension; it does not set application schema
 versions, change row factories or commit an existing transaction. Existing or
-partial index schemas fail. The previous raw-vector schema has an explicit
-`migrate_index` forward conversion; there is no alternate runtime reader.
+partial index schemas fail. There is one derivative schema and no vector-schema
+conversion API. Derivatives are rebuilt from caller-owned canonical text through
+the same public initialization and indexing functions.
 
 ```python
 import hashlib
@@ -191,10 +192,9 @@ toolsmith --root "$PWD/store" --collection sample semantic status
 toolsmith --root "$PWD/store" --collection sample semantic search "plain English question" --model-directory "$MODEL_DIRECTORY" --limit 20
 ```
 
-Archive schema v3 includes the native index and current-text counter. Explicit
-`maintenance migrate` verifies and copies reviewed v1/v2 stores into a new v3
-destination, preserving the source as rollback data. Raw vectors are converted
-without encoding again. Ordinary reads reject older or unknown schemas.
+The optional archive includes the same native index and current-text counter.
+Initialization creates its one current schema. Verified backup/restore preserves
+current retained text, citations and vectors; there is no conversion command.
 
 Databases have no Toolsmith byte ceiling. Backup/restore use an explicit aggregate
 20 GiB budget and stream database files; individual retained artifacts remain

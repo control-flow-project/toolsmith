@@ -21,8 +21,8 @@ organization. No consumer code, fleet core or production deployment is moved.
 - Public HTTPS routing/limits have one producer. Retention and request receipt
   composition remain archive-owned. Generic quotas span cooperating transports;
   adopting consumers do not gain a second canonical source archive.
-- Schema v2 has one explicit verified copy migration, not an older runtime reader,
-  reset or auto-migration. The original is preserved.
+- The optional archive has one current schema shared by initialization and verified
+  backup/restore. There is no historical-schema reader or conversion command.
 - No server, daemon, helper process, worker thread, automatic asset download,
   domain/consumer code, hosted CI or alternate Torch runtime is added.
 

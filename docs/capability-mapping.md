@@ -79,7 +79,7 @@ Tests without a live provider establish contracts, not publisher certification.
 | J01 | Generic bounded hash-linked JSON journal; caller owns event validation/retention | `journal.read_journal`, `append_record` | Domain-neutral Unicode event, tamper/tail and partial-write rollback tests |
 | T01 | Optional text/file archive, exact immutable versions, citations, permissions and operation IDs | `storage`, `retrieval`; higher-level composition | Existing store/CLI/maintenance/recovery tests; no duplicated lexical engine |
 | T02 | Verified backup/restore/integrity/rebuild/preview-bound staging cleanup | `operations` | Existing maintenance/corruption/restore/change/symlink tests |
-| T03 | Explicit archive-v1/v2 to v3 copy migration, original unchanged, exact versions preserved | `storage.migration.migrate_store` | `test_archive_migration.py`; bad schema/object/scope/collision tests |
+| T03 | One current archive structure; explicit initialization and verified same-schema restore | `storage.database`, `operations.backup` | `test_store.py`, `test_maintenance.py`; exact structure, identity, object, scope and collision tests |
 | C01 | Same library in installed CLI, with caller-owned `--database/--sources`, metadata-only `--references` and no archive | `cli.indexes`, `search lexical/semantic` | `test_standalone_cli.py` and installed wheel/sdist acceptance |
 | C02 | Standalone raw HTTPS receipt/file, readers and streaming filesystem commands | CLI composition only | Generic CLI tests and installed acceptance; source paths not echoed in receipts |
 | X01 | Optional zero-dependency base, selected extras, no services/threads/helper processes/domain code/CI | Package boundaries and metadata | Architecture tests, clean installs, native thread checks and artifact audit |
@@ -99,9 +99,9 @@ implementations to copy into Toolsmith.
 | Bad Bets `articles.py`, `feed_discovery.py`, `response_content.py`, `tables.py`, `documents.py` | Preserved-original checks, news insertion policy, derived source meaning, physical-page mapping | Generic DOM/feed/format/tabular/literal search APIs; remove their generic copies |
 | Bad Bets `data_acquire*`, `request_gate.py`, `browser*`, `data_browser*` | Reviewed sources/purpose/assignment/jobs, browser lifecycle, app receipts and selection | Generic approved public HTTP and one shared group/task quota engine |
 | Bad Bets `text_retrieval/*` | Nothing after semantic adoption | Replace completely with public semantic APIs and generic CLI; remove Torch/backend copies |
-| Bad Bets `data_news*`, `news_schema.py`, `news_migration.py` | One current article/URL, canonical headline/body/latest valid Luna summary, jobs/claims/tags/dates/entities, correction eligibility and query pagination | Public index state/publish/invalidate/query/audit ports; no private-table SQL |
+| Bad Bets `data_news*`, `news_schema.py` | One current article/URL, canonical headline/body/latest valid Luna summary, jobs/claims/tags/dates/entities, correction eligibility and query pagination | Public index state/publish/invalidate/query/audit ports; no private-table SQL |
 | Bad Bets `data_files.py`, basic portions of `inputs.py`, `store.py`, `journal.py` | Included backup areas, evidence/event schemas and source-approval semantics | Generic descriptors/validators/inventory/IO/publication/journal; domain composition only |
-| Bad Bets `data_backup.py`, `data_operations.py`, data schemas/migrations | Consistent multi-store backup manifest, research/news DB checks and restore activation | File/tree primitives and generic index audit; Toolsmith archive backup is not their backup |
+| Bad Bets `data_backup.py`, `data_operations.py`, current data schemas | Consistent multi-store backup manifest, research/news DB checks and restore activation | File/tree primitives and generic index audit; Toolsmith archive backup is not their backup |
 | Bad Bets `kite*`, broker credentials/login/transport/rate rules | Authenticated provider-specific requests and private credential custody | No replacement by credential-free public HTTPS; this capability is explicitly outside its contract |
 | Bad Bets market/reference/ownership/daily/option/portfolio/strategy/report modules | Provider parsing, financial definitions/calculations, evidence policy, charts/reports and publication | Generic tabular/JSON/file primitives only; financial logic is not copied |
 | Both browser/native-process supervisors and Crossfire runtime integration | Required subprocess ownership, fleet lifecycle, approvals, identity, delivery, telemetry and Matrix permissions | Nothing mandatory; never move core runtime into Toolsmith |
@@ -140,12 +140,13 @@ implementations to copy into Toolsmith.
   isolation from arbitrary processes under the same account. Caller authorization
   and publication decisions cannot be replaced by Toolsmith reference labels.
 
-## Migration actions
+## Consumer adoption
 
 GAAP: keep its current document CLI and application schema; replace generic file,
-ZIP and lexical implementations, update tests/skills/install documentation, forward
-migrate its case indexes with a verified backup, preserve full page/method/warning
-lookups, and remove old generic helpers. Do not require the Toolsmith text archive.
+ZIP and lexical implementations, update tests/skills/install documentation,
+preserve full page/method/warning lookups, and remove old generic helpers. Build
+derived case indexes from retained source bundles through the current index API.
+Do not require the Toolsmith text archive or add a schema converter.
 
 Bad Bets team: preserve canonical research/news/evidence stores, source approval,
 Luna-summary eligibility and filtered representation selection. Replace local

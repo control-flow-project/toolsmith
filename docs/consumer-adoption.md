@@ -50,10 +50,10 @@ returns `deferred`; it does not mutate or misclassify an atomically replaced fil
 
 Updates cannot erase usage, remove charged groups, shorten a charged period or
 change limits with outstanding reservations. Lost state is not silently recreated.
-`check_budget` validates without writing. Current quota format is 2; older formats
-require explicit reviewed `import_budget` counters, periods and cooldowns. Unknown
-interrupted usage stays charged. Consumers own old-format migration, never an
-ordinary old-schema reader. Preserve original stores and verified backups.
+`check_budget` validates without writing. `import_budget` accepts explicit reviewed
+current counters, periods and cooldowns into an empty selected root. It does not
+read consumer-specific state files or another schema. Unknown interrupted usage
+stays charged. Preserve original stores and verified backups.
 
 ## Files and readers
 

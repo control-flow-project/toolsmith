@@ -30,7 +30,6 @@ from toolsmith.semantic.store import (
 )
 from toolsmith.storage.artifacts import export_file, inspect_file, put_file, read_file
 from toolsmith.storage.database import initialize_store, inspect_store
-from toolsmith.storage.migration import migrate_store
 from toolsmith.storage.models import document_from_json
 from toolsmith.storage.operations import operation_status
 from toolsmith.storage.text import inspect_text, list_text, put_text
@@ -302,10 +301,4 @@ def execute(arguments: Arguments) -> Result[object]:
         return restore_store(
             root, collection, required_path(arguments.destination), arguments.maximum_bytes
         )
-    if action == "maintenance.migrate":
-        return migrate_store(
-            root, collection, required_path(arguments.destination), arguments.maximum_bytes
-        )
-    raise ToolsmithError(
-        "invalid_input", "Unknown command; no legacy command aliases are supported"
-    )
+    raise ToolsmithError("invalid_input", "Unknown command")

@@ -130,8 +130,8 @@ indexes, not a per-fleet plugin, alternate backend or mirrored application store
 - Originals/files: `file put`, `read` and `export` retain exact private bytes;
   exports never overwrite. Rights and permitted sharing remain consumer-owned.
 - Recovery: verified `maintenance backup/restore`, integrity and index operations
-  need no model service. Use production backups and forward owner migrations,
-  never reset a database or histories to make an optional toolkit work.
+  need no model service. Preserve originals and histories. The toolkit has one
+  current schema and does not convert consumer databases or reset running state.
 
 See the library/CLI guides for executable contracts. These examples use only
 portable public package exports; no repository-source reach-through, special

@@ -109,16 +109,14 @@ of filesystem deletion. Retained originals/objects are never cleanup targets.
 
 ## Schema
 
-Current archive schema v3 uses the generic lexical/native vector indexes and a
-current-text generation counter. Ordinary reads reject other schemas.
-`migrate_store` explicitly verifies reviewed v1/v2 schemas, canonical provenance
-and objects, forward-copies to a new destination, converts retained vectors
-without inference, adds the current view/counter and verifies the result
-before atomic publication. The source remains unchanged as the rollback copy.
-Unknown schema shapes, destination collisions or verification failures abort;
-there is no dual runtime reader, in-place reset or automatic migration.
+The archive has one current schema using the generic lexical/native vector
+indexes and a current-text generation counter. Store access and restore validate
+that exact structure. Initialization creates it directly. There is no schema
+converter or historical format. Verified restore copies the current store into
+a new destination and retains its originals and exact citations.
 
-Generic application index adoption has its own consumer-owned forward migration;
-this archive command cannot convert Bad Bets news or GAAP case schemas. Shared
-quota adoption uses reviewed quiesced counters with `import_budget`, preserving
-periods, charges and cooldowns rather than copying old-format runtime handlers.
+Caller-owned application indexes remain independent of the optional archive.
+Consumers may explicitly rebuild derivatives from their retained canonical text
+using the public indexing APIs. Shared quota import uses reviewed current counters
+with `import_budget`, preserving periods, charges and cooldowns. It does not read
+consumer state files or interpret a previous schema.

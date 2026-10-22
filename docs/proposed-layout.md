@@ -86,7 +86,6 @@ toolsmith/
 │       │       ├── chunks.py
 │       │       ├── index.py
 │       │       ├── status.py
-│       │       ├── migration.py
 │       │       ├── vector.py
 │       │       └── schema.sql
 │       ├── journal/
@@ -109,7 +108,6 @@ toolsmith/
 │       │   ├── backup.py
 │       │   ├── integrity.py
 │       │   ├── cleanup.py
-│       │   └── migration.py
 │       └── cli/
 │           ├── __init__.py
 │           ├── parser.py
@@ -147,7 +145,6 @@ toolsmith/
 │   ├── test_semantic_store.py
 │   ├── test_store.py
 │   ├── test_maintenance.py
-│   ├── test_archive_migration.py
 │   ├── test_cli.py
 │   └── test_standalone_cli.py
 ├── scripts/

@@ -94,7 +94,7 @@ and syscalls rather than treating fixture encoders as native certification.
 └── journal.jsonl            Bounded generic JSON events; application-owned retention
 
 <separately optional archive root>/
-├── toolsmith.sqlite3        Current archive schema v3, versions/files/operations
+├── toolsmith.sqlite3        Current archive schema, source versions/files/operations
 ├── objects/<sha256>         Immutable retained file bytes
 └── tmp/.stage-<uuid>.tmp    Invocation-owned staging
 ```
@@ -121,10 +121,9 @@ resume. It calls the same HTTPS producer. Network/native effects stay outside SQ
 transactions. Status starts nothing; retries uncertain GETs are explicitly requested
 and disclosed, within remaining admission limits.
 
-Archive schema v3 uses the generic native vector index, current-text view and
-change counter. Explicit migration preserves verified v1/v2 source stores and
-converts their derivatives into this schema. It uses the generic lexical
-engine. An explicit offline v1/v2-to-v3 migration verifies originals, copies into a new
-destination, rebuilds only derivatives and verifies before publication. The source
-remains unchanged as the rollback copy. Ordinary reads accept only the current
-schema: no dual runtime reader, automatic migration, reset or hidden fallback.
+The optional archive uses the generic native vector index, current-text view,
+change counter and lexical engine. It has one current schema. Initialization
+creates that schema; ordinary reads and backup/restore validate its exact current
+structure. No historical schema, schema-version dispatch, converter, reset or
+hidden fallback exists. Source versions remain citable domain records, not
+database schema versions.

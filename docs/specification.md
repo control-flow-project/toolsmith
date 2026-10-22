@@ -86,8 +86,8 @@ Read-only budget checking never saves or rolls over state on disk.
 It uses validated files and kernel locks, not another database or process. Boot,
 wall and monotonic observations preserve elapsed quota periods and reject clock
 rollback. Changing a policy cannot silently clear charges. Explicit quiesced
-forward quota import accepts reviewed generic counters, not consumer-specific
-legacy formats, and preserves their period and unknown charged usage.
+quota import accepts reviewed current generic counters, not consumer-specific
+state files, and preserves their period and unknown charged usage.
 There is no guarantee over callers selecting other state roots or bypassing tools.
 
 Linux, Python 3.13+ and SQLite FTS5 are required for secure local persistence.
@@ -165,15 +165,13 @@ credentials. Export destinations are explicit and cannot overwrite existing file
 
 Backup is consistent under the selected store lock. Restore verifies the complete
 backup before creating a new destination; it never overwrites production. Reject
-unsupported schemas. The current optional archive schema is version three: its lexical derivatives
-and native vector index use the same caller-owned implementations, not other
-archive engines. Explicit v1/v2 migration verifies the reviewed source schema,
-canonical provenance and objects, copies to a new destination, converts vector
-derivatives without inference, creates the current-text view/change counter and
-verifies the result.
-The original remains unchanged as the preserved rollback copy. There is no
-ordinary older-schema reader, automatic migration or reset. Neither adopting
-consumer is required to use this archive or its migration.
+invalid database identity, structure or content. The optional archive has one
+current schema. Its lexical derivatives and native vector index use the same
+caller-owned implementations, not other archive engines. There are no historical
+schema definitions, schema-version dispatch, conversion APIs or migration commands.
+Explicit initialization creates the current schema; restore verifies and copies
+that same schema. Consumers own retained originals and may explicitly rebuild
+derivatives from those originals. Neither adopting consumer must use this archive.
 
 Cleanup requires a preview describing exact eligible inactive staging files and
 their identities, then verifies the plan before deletion. Unknown files, symlinks,

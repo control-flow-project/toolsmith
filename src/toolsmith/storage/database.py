@@ -1,8 +1,9 @@
 import os
 import sqlite3
 from collections.abc import Iterator
-from contextlib import contextmanager, suppress
+from contextlib import closing, contextmanager, suppress
 from dataclasses import dataclass
+from functools import cache
 from importlib.resources import files
 from pathlib import Path
 from uuid import uuid4
@@ -21,7 +22,6 @@ from toolsmith.semantic.vector import load_vector_extension
 from toolsmith.validation import identity, integer, text
 
 APPLICATION_ID = 1414745393
-SCHEMA_VERSION = 3
 DATABASE_NAME = "toolsmith.sqlite3"
 
 
@@ -37,7 +37,6 @@ class Store:
 @dataclass(frozen=True)
 class StoreInfo:
     collection: str
-    schema_version: int
     items: int
     text_versions: int
     files: int
@@ -79,12 +78,43 @@ def configure(connection: sqlite3.Connection) -> None:
     connection.execute("PRAGMA synchronous = FULL")
 
 
+@cache
+def schema_sql() -> str:
+    return "\n".join(
+        files("toolsmith." + owner).joinpath("schema.sql").read_text(encoding="utf-8")
+        for owner in ("storage", "lexical", "semantic")
+    )
+
+
+def schema_records(connection: sqlite3.Connection) -> tuple[tuple[object, ...], ...]:
+    return tuple(
+        tuple(row)
+        for row in connection.execute(
+            "SELECT type, name, tbl_name, sql FROM sqlite_schema "
+            "WHERE name NOT GLOB 'sqlite_*' ORDER BY type, name"
+        )
+    )
+
+
+@cache
+def expected_schema() -> tuple[tuple[object, ...], ...]:
+    with closing(sqlite3.connect(":memory:")) as connection:
+        configure(connection)
+        connection.executescript(schema_sql())
+        return schema_records(connection)
+
+
+def validate_schema(connection: sqlite3.Connection) -> None:
+    if schema_records(connection) != expected_schema():
+        raise ToolsmithError("integrity", "Database structure does not match the Toolsmith schema")
+
+
 def info(store: Store) -> StoreInfo:
     counts = [
         store.connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
         for table in ("item", "text_version", "file_version")
     ]
-    return StoreInfo(store.collection, SCHEMA_VERSION, *counts)
+    return StoreInfo(store.collection, *counts)
 
 
 @contextmanager
@@ -98,14 +128,9 @@ def open_store(root: Path, collection: str, *, write: bool = False) -> Iterator[
             connection = sqlite3.connect(uri, uri=True, timeout=0)
             try:
                 configure(connection)
-                if (
-                    connection.execute("PRAGMA application_id").fetchone()[0] != APPLICATION_ID
-                    or connection.execute("PRAGMA user_version").fetchone()[0] != SCHEMA_VERSION
-                ):
-                    raise ToolsmithError(
-                        "integrity",
-                        "Not a current Toolsmith store; no fallback or automatic migration",
-                    )
+                if connection.execute("PRAGMA application_id").fetchone()[0] != APPLICATION_ID:
+                    raise ToolsmithError("integrity", "Database is not a Toolsmith store")
+                validate_schema(connection)
                 binding = connection.execute(
                     "SELECT identity FROM collection WHERE id = 1"
                 ).fetchone()
@@ -154,22 +179,8 @@ def initialize_store(root: Path, collection: str, *, clock: Clock | None = None)
                     )
                     try:
                         configure(connection)
-                        connection.executescript(
-                            "BEGIN IMMEDIATE;\n"
-                            + files("toolsmith.storage")
-                            .joinpath("schema.sql")
-                            .read_text(encoding="utf-8")
-                            + "\n"
-                            + files("toolsmith.lexical")
-                            .joinpath("schema.sql")
-                            .read_text(encoding="utf-8")
-                            + "\n"
-                            + files("toolsmith.semantic")
-                            .joinpath("schema.sql")
-                            .read_text(encoding="utf-8")
-                        )
+                        connection.executescript("BEGIN IMMEDIATE;\n" + schema_sql())
                         connection.execute(f"PRAGMA application_id = {APPLICATION_ID}")
-                        connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
                         connection.execute(
                             "INSERT INTO collection (id, identity, created_at) VALUES (1, ?, ?)",
                             (selected, utc_now(actual_clock)),

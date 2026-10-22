@@ -6,6 +6,8 @@ a fleet runtime, evidence application, skills distribution or hosted platform.
 
 WCBUBWHB: one current implementation, no compatibility aliases, hidden fallbacks,
 dual storage paths or legacy interfaces. The CLI calls the library. Do not add
+schema converters, historical schema fixtures or schema-version dispatch. Each
+store has one current schema; current backup/restore is not conversion. Do not add
 servers, listening sockets, daemons, unattended workers, helper processes,
 subprocess execution or automatic installation/activation. Ordinary short-lived
 CLI invocations are allowed. Browser automation and process-based PDF/OCR remain

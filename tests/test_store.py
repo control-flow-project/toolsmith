@@ -36,7 +36,7 @@ def test_initialization_rejects_nonempty_and_can_finish_unpublished_state(tmp_pa
     (incomplete / "objects").mkdir(mode=0o700)
     (incomplete / "tmp").mkdir(mode=0o700)
     (incomplete / "tmp" / (".stage-" + "a" * 32 + ".tmp")).write_bytes(b"unpublished")
-    assert unwrap(initialize_store(incomplete, "sample")).schema_version == 3
+    assert unwrap(initialize_store(incomplete, "sample")).collection == "sample"
 
 
 def test_immutable_versions_idempotency_and_current_search(
@@ -142,10 +142,17 @@ def test_failed_transaction_has_no_partial_version(
     assert isinstance(operation_status(store, "sample", "request"), Failure)
 
 
-def test_current_schema_only_and_cooperating_lock(store: Path) -> None:
+def test_store_identity_and_cooperating_lock(store: Path) -> None:
     with open_store(store, "sample", write=True) as selected:
         locked = inspect_store(store, "sample")
         assert isinstance(locked, Failure) and locked.code == "deferred"
-        selected.connection.execute("PRAGMA user_version = 9")
+        selected.connection.execute("PRAGMA application_id = 0")
+    result = inspect_store(store, "sample")
+    assert isinstance(result, Failure) and result.code == "integrity"
+
+
+def test_store_requires_its_exact_current_structure(store: Path) -> None:
+    with open_store(store, "sample", write=True) as selected:
+        selected.connection.execute("CREATE TABLE unrelated (value TEXT NOT NULL)")
     result = inspect_store(store, "sample")
     assert isinstance(result, Failure) and result.code == "integrity"
