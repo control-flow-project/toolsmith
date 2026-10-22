@@ -66,6 +66,7 @@ def test_database_over_128_mib_round_trips_without_whole_database_memory_copy(
     with open_store(store, "sample", write=True) as selected, selected.connection:
         selected.connection.execute("CREATE TABLE capacity_payload (content BLOB)")
         selected.connection.execute("INSERT INTO capacity_payload VALUES (zeroblob(134221824))")
+        selected.connection.execute("DROP TABLE capacity_payload")
     assert (store / "toolsmith.sqlite3").stat().st_size > 128 * 1024**2
     read = os.read
     largest = 0

@@ -3,6 +3,26 @@
 This file documents reproducible gates. Release evidence is recorded after the
 actual run; fixture results are not certification of every publisher/network.
 
+## Current-schema cleanup — 2026-10-22
+
+The 0.4.2 source removes archive/vector schema converters, their CLI/library
+exports and historical fixtures. The archive has one current structure, checked
+directly at store access and restore; it has no schema-version dispatch. Current
+source versions and citation histories remain domain data.
+
+The full local gate passes 354 tests in 30 isolated files, with no failures or
+skips. Formatting, Ruff, strict Mypy over 101 source files, wheel/sdist builds and
+installed CLI/library acceptance pass. Base, optional HTTP and optional semantic
+installations pass. The runner uses all 24 available cores inside an 8 GiB,
+no-swap, 256-task aggregate scope. No registry publication or consumer deployment
+is part of these checks.
+
+An initial run rejected the capacity fixture because it retained an unrelated
+table. The fixture now drops its temporary allocation table before exercising
+backup. It still verifies a database above 128 MiB and streaming reads no larger
+than 64 KiB. The current-schema validation and capacity assertions remain intact.
+Later dated sections describe their original revisions, not current APIs.
+
 ## Full gate
 
 ```sh

@@ -16,7 +16,6 @@ from toolsmith.semantic.index import (
     relocate_embedding,
     search_embeddings,
 )
-from toolsmith.semantic.migration import migrate_index
 from toolsmith.semantic.model import MiniLM, load_model
 from toolsmith.semantic.profile import PROFILE_ID, Prepared, Source, fingerprint
 from toolsmith.semantic.status import (
@@ -55,7 +54,6 @@ __all__ = [
     "invalidate_embedding",
     "prepare_connection",
     "load_model",
-    "migrate_index",
     "prepare_embedding",
     "publish_embedding",
     "pending_references",

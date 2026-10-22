@@ -38,7 +38,7 @@ HTTP client for a Toolsmith service, skill installation or fleet integration.
 | `toolsmith.readers` | `Document`, `TextPart`, `read_text`, `normalize_text`, `read_json`, `read_html`, `inspect_html`, `HtmlInspection`, `read_feed`, `Feed`, `FeedEntry`, `decode_table`, `iter_table_rows`, `project_table` |
 | `toolsmith.readers.content` | `validate_content`; PDF signature only, not extraction |
 | `toolsmith.lexical` | `Source`, `Scope`, `initialize_index`, `inspect_index`, `indexed_scope`, `matching_scope`, `index_source`, `invalidate_source`, `search`, `check_index`, `compile_query`, `Region`, `find_text` |
-| `toolsmith.semantic` | `load_model`, `inspect_model`, `Source`, `Scope`, `prepare_connection`, `prepare_embedding`, `encode_query`, `initialize_index`, `inspect_index`, `inspect_coverage`, `indexed_scope`, `pending_references`, `publish_embedding`, `invalidate_embedding`, `relocate_embedding`, `clear_index`, `search_embeddings`, `check_index`, `indexed_digest`, `migrate_index` |
+| `toolsmith.semantic` | `load_model`, `inspect_model`, `Source`, `Scope`, `prepare_connection`, `prepare_embedding`, `encode_query`, `initialize_index`, `inspect_index`, `inspect_coverage`, `indexed_scope`, `pending_references`, `publish_embedding`, `invalidate_embedding`, `relocate_embedding`, `clear_index`, `search_embeddings`, `check_index`, `indexed_digest` |
 | `toolsmith.acquisition.transport` | `NativeResolver`, `PinnedConnection`, `read_response`; bounded primitives for caller-owned native transports |
 | `toolsmith.acquisition.client` | `HttpPolicy`, `FetchResponse`, `fetch_http` without an archive |
 | `toolsmith.acquisition.config` | `read_http_policy`, `read_budget_policy` |
@@ -65,7 +65,6 @@ libraries listed above.
 | `toolsmith.operations.backup` | `backup_store`, `restore_store`, `BackupReport` |
 | `toolsmith.operations.integrity` | `check_integrity`, `rebuild_index`, `IntegrityReport` |
 | `toolsmith.operations.cleanup` | `preview_cleanup`, `apply_cleanup`, `CleanupPlan` |
-| `toolsmith.storage.migration` | `migrate_store`; verified forward copy, original unchanged |
 
 Operations validate boundaries and return typed `Result[T]`. `unwrap` and internal
 `ToolsmithError` are composition helpers used by the CLI/implementation, not an

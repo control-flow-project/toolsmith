@@ -58,7 +58,7 @@ def inspect_configuration(root: Path) -> Configuration | None:
                         or "configuration" not in state
                     ):
                         raise ToolsmithError(
-                            "integrity", "Budget configuration requires an explicit migration"
+                            "integrity", "Budget configuration does not match its contract"
                         )
                     return observed(state["configuration"])
             except FileNotFoundError as error:

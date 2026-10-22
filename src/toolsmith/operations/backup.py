@@ -25,13 +25,13 @@ from toolsmith.result import ToolsmithError, boundary
 from toolsmith.storage.database import (
     APPLICATION_ID,
     DATABASE_NAME,
-    SCHEMA_VERSION,
     Store,
     configure,
     database_failure,
     open_store,
     row_integer,
     row_text,
+    validate_schema,
 )
 from toolsmith.validation import (
     JsonValue,
@@ -50,7 +50,6 @@ MAX_MANIFEST_BYTES = 128 * 1024**2
 @dataclass(frozen=True)
 class BackupReport:
     collection: str
-    schema_version: int
     objects: int
     bytes: int
     verified: bool
@@ -157,7 +156,6 @@ def backup_store(
                 count += 1
             manifest: dict[str, JsonValue] = {
                 "format": 1,
-                "schema_version": SCHEMA_VERSION,
                 "collection": store.collection,
                 "created_at": utc_now(clock or SystemClock()),
                 "database_sha256": database.sha256,
@@ -171,7 +169,7 @@ def backup_store(
                     for row in store.connection.execute("SELECT id, size FROM blob ORDER BY id")
                 ),
             )
-            return BackupReport(store.collection, SCHEMA_VERSION, count, total, True)
+            return BackupReport(store.collection, count, total, True)
 
 
 @boundary
@@ -189,7 +187,6 @@ def restore_store(
             ),
             {
                 "format",
-                "schema_version",
                 "collection",
                 "created_at",
                 "database_sha256",
@@ -199,11 +196,9 @@ def restore_store(
         )
         if (
             integer(manifest["format"], 1, 1, "Backup format") != 1
-            or integer(manifest["schema_version"], SCHEMA_VERSION, SCHEMA_VERSION, "Backup schema")
-            != SCHEMA_VERSION
             or manifest["collection"] != selected
         ):
-            raise ToolsmithError("denied", "Backup format, schema or collection does not match")
+            raise ToolsmithError("denied", "Backup format or collection does not match")
         database = FileDigest(
             digest(manifest["database_sha256"], "Database identity"),
             integer(manifest["database_bytes"], 1, maximum, "Database bytes"),
@@ -235,13 +230,9 @@ def restore_store(
             )
             try:
                 configure(connection)
-                if (
-                    connection.execute("PRAGMA application_id").fetchone()[0] != APPLICATION_ID
-                    or connection.execute("PRAGMA user_version").fetchone()[0] != SCHEMA_VERSION
-                ):
-                    raise ToolsmithError(
-                        "integrity", "Backup database is not the current Toolsmith schema"
-                    )
+                if connection.execute("PRAGMA application_id").fetchone()[0] != APPLICATION_ID:
+                    raise ToolsmithError("integrity", "Backup database is not a Toolsmith store")
+                validate_schema(connection)
                 binding = connection.execute(
                     "SELECT identity FROM collection WHERE id = 1"
                 ).fetchone()
@@ -294,4 +285,4 @@ def restore_store(
                 for name in (staged, DATABASE_NAME):
                     with suppress(FileNotFoundError):
                         os.unlink(name, dir_fd=temporary.descriptor)
-        return BackupReport(selected, SCHEMA_VERSION, len(expected), total, True)
+        return BackupReport(selected, len(expected), total, True)

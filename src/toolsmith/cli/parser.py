@@ -63,7 +63,7 @@ def make_parser() -> Parser:
     parser.add_argument("--collection", help="Exact collection identity bound to the store")
     parser.add_argument("--json", action="store_true", help="Compact structured result")
     families = parser.add_subparsers(dest="family", required=True)
-    parser.add_argument("--version", action="version", version="toolsmith 0.4.1")
+    parser.add_argument("--version", action="version", version="toolsmith 0.4.2")
     capabilities = families.add_parser("capabilities")
     capabilities.set_defaults(action="capabilities")
     store = families.add_parser("store").add_subparsers(dest="command", required=True)
@@ -210,7 +210,6 @@ def make_parser() -> Parser:
         "cleanup-apply",
         "backup",
         "restore",
-        "migrate",
     ):
         command = maintenance.add_parser(name)
         command.set_defaults(action="maintenance." + name)
@@ -220,7 +219,7 @@ def make_parser() -> Parser:
             command.add_argument(
                 "file", type=Path, help="Exact cleanup plan JSON, not a command-result envelope"
             )
-        if name in {"backup", "restore", "migrate"}:
+        if name in {"backup", "restore"}:
             command.add_argument(
                 "destination", type=Path, help="New private destination; never overwritten"
             )

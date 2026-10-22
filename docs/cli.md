@@ -24,9 +24,8 @@ archive. The stable task shares group/task quotas; the caller owns job-level
 receipt storage/recovery. `http fetch/resume` is optional text-archive composition
 over the same HTTPS producer, not another implementation.
 
-`maintenance migrate DESTINATION` with explicit `--root/--collection` verifies
-and forward-copies a verified archive-v1/v2 store to v3; the original remains unchanged.
-Regular backup/restore commands are specific to the optional text archive.
+Backup/restore commands operate on the optional text archive's single current
+schema. There is no schema conversion command.
 
 `toolsmith --help` and each subcommand's `--help` define the current syntax.
 Global `--root`, `--collection` and `--json` precede the command family.
@@ -69,7 +68,6 @@ toolsmith http resume --policy FILE --network-state DIR --request-id ID
 toolsmith operation ID
 toolsmith maintenance integrity | rebuild-index
 toolsmith maintenance backup | restore DESTINATION [--maximum-bytes N]
-toolsmith maintenance migrate DESTINATION [--maximum-bytes N]
 toolsmith maintenance cleanup-preview [--minimum-age SECONDS]
 toolsmith maintenance cleanup-apply PLAN_JSON
 ```

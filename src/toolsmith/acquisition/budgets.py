@@ -137,9 +137,7 @@ def load(
         encoded = read_private(directory, "budget.json", MAX_STATE_BYTES)
     except FileNotFoundError:
         if any(name.endswith(".json") for name in os.listdir(directory.descriptor)):
-            raise ToolsmithError(
-                "conflict", "Existing quota state requires an explicit reviewed migration"
-            ) from None
+            raise ToolsmithError("conflict", "Quota directory contains unrelated state") from None
         return {
             "format": 2,
             "configuration": None,

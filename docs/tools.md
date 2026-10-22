@@ -41,7 +41,7 @@ consumer exclusions and exact capacities.
 | Current lexical search | Archive query/limit/offset → provenance-linked hits | Same generic lexical engine; at most 100 records |
 | Citation | Exact version/part/start/length → provenance and text | Unicode character offsets; at most 16,384 returned characters; never another version |
 | Retained HTTPS / resume | Approved retention policy + operation identity → retained result | Same raw HTTPS producer; archive admission/receipt owner; uncertain repeat GET disclosed |
-| Backup / restore / migration | Verified source, collection and new destination | Default/max 20 GiB aggregate; no object-count cutoff; verify before publication; original retained; forward-only schema migration |
+| Backup / restore | Verified current store, collection and new destination | Default/max 20 GiB aggregate; no object-count cutoff; verify before publication; original retained; no schema conversion |
 | Integrity / rebuild / cleanup | Explicit selected archive operation → report/preview-bound apply | Full audits are not normal reads; cleanup only inactive known staging, never originals/credentials |
 
 Databases/indexes have no Toolsmith byte ceiling. The 128 MiB bound applies to
