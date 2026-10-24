@@ -15,6 +15,7 @@ from toolsmith.validation import integer, text
 
 ATOM = "{http://www.w3.org/2005/Atom}"
 DC = "{http://purl.org/dc/elements/1.1/}"
+XML_BASE = "{http://www.w3.org/XML/1998/namespace}base"
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class Feed:
     duplicate_entries: int
     truncated: bool
     format: Literal["rss", "atom"]
+    next_url: str | None
 
 
 def selected(parent: ET.Element, name: str) -> ET.Element | None:
@@ -129,28 +131,48 @@ def bounded_xml(content: bytes) -> ET.Element:
     return root
 
 
+def base_url(element: ET.Element, source: str) -> str:
+    return canonical_url(urljoin(source, element.attrib.get(XML_BASE, "")))
+
+
+def next_page(container: ET.Element, source: str) -> str | None:
+    targets: set[str] = set()
+    for link in container.findall(ATOM + "link"):
+        if link.attrib.get("rel") != "next":
+            continue
+        target = text(link.attrib.get("href"), 8192, "Next feed page")
+        targets.add(canonical_url(urljoin(base_url(link, source), target)))
+    if len(targets) > 1:
+        raise ToolsmithError("conflict", "Feed declares conflicting next-page links")
+    return next(iter(targets)) if targets else None
+
+
 def feed_entry(element: ET.Element, source: str, atom: bool) -> FeedEntry:
+    source = base_url(element, source)
     prefix = ATOM if atom else ""
     title = field_text(selected(element, prefix + "title"), 1024)
     if not title:
         raise ToolsmithError("invalid_input", "Feed entry needs a meaningful title")
     if atom:
         links = {
-            child.attrib.get("href", "")
+            (child.attrib.get("href", ""), base_url(child, source))
             for child in element.findall(ATOM + "link")
             if child.attrib.get("rel", "alternate") == "alternate"
             and child.attrib.get("type", "text/html") in {"text/html", "application/xhtml+xml"}
         }
         if len(links) != 1:
             raise ToolsmithError("conflict", "Atom needs one unambiguous alternate article link")
-        original_link = next(iter(links))
-        url = canonical_url(urljoin(source, original_link))
+        original_link, link_base = next(iter(links))
+        url = canonical_url(urljoin(link_base, original_link))
     else:
-        link = field_text(selected(element, "link"), 8192)
+        linked = selected(element, "link")
+        link = field_text(linked, 8192)
         if not link:
             raise ToolsmithError("invalid_input", "Feed entry lacks an explicit article link")
         original_link = link
-        url = canonical_url(urljoin(source, original_link))
+        url = canonical_url(
+            urljoin(base_url(linked, source) if linked is not None else source, original_link)
+        )
     publication = selected(element, prefix + ("published" if atom else "pubDate"))
     if publication is None and not atom:
         publication = selected(element, DC + "date")
@@ -180,12 +202,14 @@ def read_feed(content: bytes, source_url: str, maximum_entries: int = 100) -> Fe
     source = canonical_url(source_url)
     maximum = integer(maximum_entries, 1, 1000, "Maximum entries")
     root = bounded_xml(content)
+    source = base_url(root, source)
     if root.tag == "rss":
         channel = selected(root, "channel")
         if channel is None:
             raise ToolsmithError("invalid_input", "RSS requires exactly one channel")
         entries = channel.findall("item")
         container, atom = channel, False
+        source = base_url(channel, source)
     elif root.tag == ATOM + "feed":
         entries = root.findall(ATOM + "entry")
         container, atom = root, True
@@ -213,4 +237,5 @@ def read_feed(content: bytes, source_url: str, maximum_entries: int = 100) -> Fe
         len(entries) - len(distinct),
         truncated,
         "atom" if atom else "rss",
+        next_page(container, source),
     )

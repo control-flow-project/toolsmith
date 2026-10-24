@@ -3,18 +3,22 @@
 This file documents reproducible gates. Release evidence is recorded after the
 actual run; fixture results are not certification of every publisher/network.
 
-## Linked HTML inspection — 2026-10-24
+## Linked HTML and feed pagination — 2026-10-24
 
 Version 0.4.3 exposes typed anchor/feed links through the existing HTML inspector.
 Literal targets remain untrusted; no link is requested automatically. Navigation
 links are distinct from cleaned prose. Long labels expose a truncation flag.
 Unused data attributes no longer fail the reader solely because of value length;
 relevant attributes, input bytes, nodes, nesting, duplicate-attribute and access
-checks remain enforced.
+checks remain enforced. Feed results also expose the declared Atom next-page
+link in RSS/Atom. Inherited XML bases apply to next and article links;
+conflicting or unsafe next targets fail, and no page is requested automatically.
+Protocol ownership follows RFC 5005 feed pagination, not publisher selectors.
 
-The complete gate passes 366 tests in 31 isolated files, Ruff lint/format and
-strict Mypy. Wheel and sdist build and install into independent clean environments;
-installed CLI/library, linked HTML, license/archive contents, optional HTTP and
+The complete gate passes 381 tests in 32 isolated files, Ruff lint/format and
+strict Mypy over 103 source/test/script files. Wheel and sdist build and install
+into independent clean environments; installed CLI/library, linked HTML,
+feed pagination, license/archive contents, optional HTTP and
 optional semantic installation checks pass. No skipped case or failed test is
 reported in this run. Verification uses an aggregate 8-GiB, zero-swap, 256-task
 scope. The dependency lock changes only the first-party version record.

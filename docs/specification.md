@@ -38,6 +38,9 @@ authorize them before any request. Labels are bounded to 1,000 characters with
 an explicit truncation flag. The parser retains only attributes used by reading,
 visibility, resource and link inspection. Unused attributes do not acquire an
 independent value-size limit; the complete input/node/depth budgets still apply.
+RSS/Atom results expose a resolved feed-level next-page link, if declared,
+including inherited XML base resolution. Conflicting or unsafe next links fail.
+Pagination is metadata only; callers own authorization, requests and completeness.
 - Explicit safe regular-file reads and private artifact storage/export.
 - Immutable local text/file versions and exact citations, with lexical FTS5 search.
 - Approved HTTPS acquisition, bounded DNS/TLS/body/redirect handling and persistent

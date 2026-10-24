@@ -55,6 +55,7 @@ assert not any(value.startswith('Private ::') for value in metadata.get_all('Cla
 assert set(parent.iterdir()) == before
 assert unwrap(read_html(b'<main>Meaningful text</main>')).parts[0].text == 'Meaningful text'
 assert len(unwrap(read_feed(b'<rss><channel><item><title>A</title><link>https://example.com/a</link></item></channel></rss>', 'https://example.com/feed')).entries) == 1
+assert unwrap(read_feed(b'<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="?page=2"/></feed>', 'https://example.com/feed')).next_url == 'https://example.com/feed?page=2'
 root = parent / 'store'
 unwrap(initialize_store(root, 'sample'))
 document = unwrap(read_text(b'Installed package lexical words', 'Installed'))

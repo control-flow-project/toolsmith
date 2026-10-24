@@ -72,7 +72,9 @@ unresolved access dialogs. A browser-owning consumer supplies its computed-visib
 DOM to `read_html`; a hidden template is not an active login gate. Inspection's
 password-control signal describes raw markup, not a visibility assertion.
 `read_feed` preserves original/resolved links, raw/source-aware/UTC dates, feed kind
-and duplicate counts. Consumers own URL normalization and publisher acceptance.
+and duplicate counts. Its `next_url` describes an explicit feed-level Atom next
+link in RSS/Atom; inherited XML bases apply to page and article links. Consumers
+own request authorization, finite pagination and publisher acceptance.
 Neither reader certifies source completeness.
 
 ## Application input limits

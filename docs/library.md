@@ -68,6 +68,13 @@ link = inspection.links[0]
 assert link.target == "/article" and link.label == "Report"
 ```
 
+`read_feed` returns an explicit `next_url` for feed-level Atom `rel="next"`
+links, including Atom links embedded in RSS channels. Relative links honor
+inherited `xml:base`; article links use the same resolution. Conflicting next
+pages fail instead of selecting one. The reader does not request another page.
+Callers must authorize and account for each page and detect repeated URLs.
+No next link does not prove the publisher exposes every article in that feed.
+
 | Module | Archive operations |
 | --- | --- |
 | `toolsmith.storage.models` | `TextReference`, `FileReference`; archive document validation |
