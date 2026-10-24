@@ -112,5 +112,5 @@ is introduced. Existing per-query output/model limits remain explicit.
 The CLI query file is an array of `{"id":"candidate-1","text":"Supplied headline"}`.
 Use `search lexical batch` or `search semantic batch` with `--database`, `--scope`
 and `--queries`; semantic queries also require `--model-directory`. The table or
-view named by the scope must contain authorized `reference` and `digest` columns.
+view named by the scope must contain authorized `reference` and `text_digest` columns.
 Applications own authorization, candidate dates and interpretation of matches.

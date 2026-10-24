@@ -197,6 +197,8 @@ def main() -> int:
     interpreter = os.environ.get("TOOLSMITH_PYTHON", sys.executable)
     with tempfile.TemporaryDirectory(prefix="toolsmith-installed-") as directory:
         parent = Path(directory)
+        constraints = parent / "security-constraints.txt"
+        constraints.write_text("certifi==2026.10.19\nfilelock==4.2.1\n")
         for label, artifact in (("wheel", wheel), ("sdist", source)):
             environment = parent / (label + "-venv")
             run([uv, "venv", "--python", interpreter, str(environment)], parent)
@@ -210,6 +212,12 @@ def main() -> int:
                     str(python),
                     "--exclude-newer",
                     "2026-10-17T00:00:00Z",
+                    "--exclude-newer-package",
+                    "certifi=2026-10-25T00:00:00Z",
+                    "--exclude-newer-package",
+                    "filelock=2026-10-25T00:00:00Z",
+                    "--constraint",
+                    str(constraints),
                     "--no-deps",
                     str(artifact),
                 ],
@@ -249,6 +257,12 @@ def main() -> int:
                     str(python),
                     "--exclude-newer",
                     "2026-10-17T00:00:00Z",
+                    "--exclude-newer-package",
+                    "certifi=2026-10-25T00:00:00Z",
+                    "--exclude-newer-package",
+                    "filelock=2026-10-25T00:00:00Z",
+                    "--constraint",
+                    str(constraints),
                     str(artifact) + "[http,pdf]",
                 ],
                 parent,
@@ -266,6 +280,12 @@ def main() -> int:
                         str(python),
                         "--exclude-newer",
                         "2026-10-17T00:00:00Z",
+                        "--exclude-newer-package",
+                        "certifi=2026-10-25T00:00:00Z",
+                        "--exclude-newer-package",
+                        "filelock=2026-10-25T00:00:00Z",
+                        "--constraint",
+                        str(constraints),
                         str(artifact) + "[semantic]",
                     ],
                     parent,
@@ -335,6 +355,12 @@ def main() -> int:
                 str(parent / "wheel-venv/bin/python"),
                 "--exclude-newer",
                 "2026-10-17T00:00:00Z",
+                "--exclude-newer-package",
+                "certifi=2026-10-25T00:00:00Z",
+                "--exclude-newer-package",
+                "filelock=2026-10-25T00:00:00Z",
+                "--constraint",
+                str(constraints),
                 str(wheel) + "[http]",
             ],
             parent,
@@ -359,6 +385,12 @@ def main() -> int:
                 str(parent / "wheel-venv/bin/python"),
                 "--exclude-newer",
                 "2026-10-17T00:00:00Z",
+                "--exclude-newer-package",
+                "certifi=2026-10-25T00:00:00Z",
+                "--exclude-newer-package",
+                "filelock=2026-10-25T00:00:00Z",
+                "--constraint",
+                str(constraints),
                 str(wheel) + "[semantic]",
             ],
             parent,

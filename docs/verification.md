@@ -2,7 +2,7 @@
 
 ## Generic primitives — 2026-10-24, 0.5.0
 
-The integrated local gate passes 449 tests in 39 isolated files, Ruff formatting
+The integrated local gate passes 458 tests in 40 isolated files, Ruff formatting
 and lint, strict Mypy and wheel/sdist builds. It runs with an aggregate 8-GiB
 memory limit, zero swap and at most 256 tasks. Tests cover complete 2,500-entry
 feeds, 250 selected downloads, cross-group concurrency, same-group serialization,
@@ -16,11 +16,11 @@ smoke requests fetch the ET OPML directory (30,863 bytes), Mint markets feed
 (40,972 bytes) and Business Standard markets feed (55,650 bytes). Those requests
 verify the transport only, not complete news coverage or Luna decisions.
 
-The runtime dependency audit is not yet clean: the existing semantic dependency
-chain retains certifi/filelock advisories whose published fixes fall inside the
-seven-day age cutoff. A named security exception is awaiting the maintainer's
-decision. Pillow uses the eligible fixed 13.0.0 release; no audit failure is
-waived or described as passing.
+The locked runtime dependency audit reports no known vulnerabilities. On
+2026-10-24 the maintainer approved certifi 2026.10.19 and filelock 4.2.1 as exact
+security-fix exceptions to the seven-day release-age cutoff. Lock resolution and
+installed-package verification retain that cutoff for every other dependency.
+Pillow uses the eligible fixed 13.0.0 release. No audit failure is waived.
 
 This file documents reproducible gates. Release evidence is recorded after the
 actual run; fixture results are not certification of every publisher/network.

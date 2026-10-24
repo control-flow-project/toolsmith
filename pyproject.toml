@@ -45,6 +45,11 @@ path = "hatch_build.py"
 
 [tool.uv]
 exclude-newer = "2026-10-17T00:00:00Z"
+constraint-dependencies = ["certifi==2026.10.19", "filelock==4.2.1"]
+
+[tool.uv.exclude-newer-package]
+certifi = "2026-10-25T00:00:00Z"
+filelock = "2026-10-25T00:00:00Z"
 
 [tool.mypy]
 python_version = "3.13"

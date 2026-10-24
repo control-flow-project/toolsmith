@@ -233,7 +233,11 @@ async def request_pinned_async(
         ) from error
     except TimeoutError as error:
         raise ToolsmithError("limit", "The explicit network deadline was exhausted") from error
-    except (OSError, aiohttp.ClientError, UnicodeError) as error:
+    except (OSError, aiohttp.ClientConnectionError) as error:
+        raise ToolsmithError(
+            "unavailable", "Approved source connection failed within its deadline"
+        ) from error
+    except (aiohttp.ClientError, UnicodeError) as error:
         raise ToolsmithError(
             "http", "Approved source request failed within its bounded transport"
         ) from error

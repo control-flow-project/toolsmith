@@ -1,4 +1,5 @@
 import asyncio
+import ssl
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -103,6 +104,32 @@ def native_request(monkeypatch: pytest.MonkeyPatch, clock: ControlledClock) -> N
 def test_native_transport_bounded_success_and_no_credentials(native_request: NativeRequest) -> None:
     assert native_request((("Content-Length", "5"),), b"plain", 10) == b"plain"
     assert native_request((("Content-Length", "0" * 5000 + "5"),), b"plain", 10) == b"plain"
+
+
+@pytest.mark.parametrize(
+    "error,code",
+    [
+        (ConnectionResetError("Controlled connection reset"), "unavailable"),
+        (aiohttp.ServerDisconnectedError("Controlled server disconnect"), "unavailable"),
+        (aiohttp.ClientPayloadError("Controlled malformed response"), "http"),
+        (ssl.SSLError("Controlled TLS rejection"), "tls"),
+        (TimeoutError("Controlled deadline"), "limit"),
+    ],
+)
+def test_native_transport_distinguishes_connection_failures_from_invalid_responses(
+    monkeypatch: pytest.MonkeyPatch, clock: ControlledClock, error: Exception, code: str
+) -> None:
+    async def fail_request(
+        self: aiohttp.ClientSession, method: str, url: object, **options: object
+    ) -> aiohttp.ClientResponse:
+        raise error
+
+    monkeypatch.setattr(aiohttp.ClientSession, "_request", fail_request)
+    with pytest.raises(ToolsmithError) as failure:
+        NativeTransport().get(
+            "https://example.com/path", ("8.8.8.8",), 1024, clock.monotonic() + 10, clock
+        )
+    assert failure.value.failure.code == code
 
 
 @pytest.mark.parametrize(
