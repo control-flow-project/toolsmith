@@ -56,7 +56,11 @@ structure. They are not ceilings on the application database's total entries.
 | ZIP | 128 MiB/member, 1 GiB aggregate, 10,000 members, 4 MiB central directory, depth 64; bounded untrusted archive expansion/metadata |
 | Plain text / JSON | Configurable to 128 MiB; JSON rejects duplicate keys and nonfinite numbers |
 | HTML | 4 MiB, 50,000 nodes, depth 128; reading attributes at most 8,192 characters; unused attributes discarded. Inspection preserves typed links, labels at most 1,000 characters with explicit truncation. No deterministic table interpretation. |
-| Feed | 2 MiB, 12,000 nodes, depth 32, at most 1,000 returned entries; omitted entries are still validated |
+| Feed | 2 MiB, two million nodes, depth 32; all distinct entries are returned, without an item-count ceiling |
+| XML / JSONL | Default 32 MiB input; XML has explicit node/depth/field bounds and rejects DTD/entities; invalid JSONL never drops a line silently |
+| PDF | 32 MiB input; paged text defaults to twenty pages with an explicit continuation; rendering checks DPI/pixels/output bytes before publication |
+| Download batch | 32 MiB manifest, 1..16 concurrent network operations, explicit total deadline; no item-count cap, and unfinished inputs are reported |
+| Batch search | 32 MiB query input; existing per-query expression/model/output limits apply, never a corpus-count or query-count sample |
 | CSV | 32 MiB compressed / 64 MiB expanded, 256 columns; row budget is explicit and configurable |
 | Tree inventory | Default 10,000 / maximum 100,000 returned entries, explicit byte budget, depth 64; a bounded materialized tree report |
 | Journal | 64 KiB event / 32 MiB journal; caller owns retention, no automatic deletion or replacement |

@@ -7,6 +7,11 @@ paths, not a global store. Applications own rights, permissions and source meani
 
 ## Generic capabilities: no text archive required
 
+See [primitive recipes](primitives.md) for bulk file outputs, XML/JSONL,
+HTML links/metadata, optional PDF pages, safe URL/ZIP/gzip operations, concurrent
+downloads and batch indexed search. These operations never select or summarize
+application content.
+
 | Capability | Inputs and results | Limits and cautions |
 | --- | --- | --- |
 | Regular-file IO | Explicit path/byte bound → bytes, digest or private streamed copy | Buffered maximum 128 MiB, streaming requires an explicit byte budget (native signed-64-bit range); no-follow regular files; stable metadata; copy never overwrites |

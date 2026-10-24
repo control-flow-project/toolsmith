@@ -47,7 +47,14 @@ assert importlib.util.find_spec('onnxruntime') is None
 assert importlib.util.find_spec('tokenizers') is None
 from toolsmith.semantic import Scope, Source, encode_query, initialize_index, inspect_model
 assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
-assert importlib.metadata.version('ctlflow-toolsmith') == '0.4.3'
+assert importlib.metadata.version('ctlflow-toolsmith') == '0.5.0'
+assert importlib.util.find_spec('aiohttp') is None
+assert importlib.util.find_spec('pypdfium2') is None
+from toolsmith.readers import read_xml, read_json_lines, read_pdf
+assert unwrap(read_xml(b'<root><value>one</value></root>')).root.name == 'root'
+assert len(unwrap(read_json_lines(b'{"id":1}\\n{"id":2}\\n'))) == 2
+assert isinstance(read_pdf(b'%PDF-1.7\\n'), Failure)
+assert 'pypdfium2' not in sys.modules
 metadata = importlib.metadata.metadata('ctlflow-toolsmith')
 assert metadata['License-Expression'] == 'MIT'
 assert metadata.get_all('License-File') == ['LICENSE']
@@ -139,7 +146,7 @@ def check_archives(wheel: Path, source: Path) -> None:
         metadata = archive.read(next(name for name in names if name.endswith("/METADATA"))).decode()
         check_license(metadata, archive.read(license_path).decode())
         assert all(
-            "extra == 'http'" in line or "extra == 'semantic'" in line
+            any("extra == '" + name + "'" in line for name in ("http", "pdf", "semantic"))
             for line in metadata.splitlines()
             if line.startswith("Requires-Dist:")
         )
@@ -178,11 +185,11 @@ def check_archives(wheel: Path, source: Path) -> None:
 
 def main() -> int:
     require_limits()
-    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.4.3-py3-none-*.whl"))
+    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.5.0-py3-none-*.whl"))
     if len(wheels) != 1 or wheels[0].name.endswith("-any.whl"):
         raise RuntimeError("Expected one platform-tagged native wheel")
     wheel = wheels[0]
-    source = ROOT / "dist/ctlflow_toolsmith-0.4.3.tar.gz"
+    source = ROOT / "dist/ctlflow_toolsmith-0.5.0.tar.gz"
     check_archives(wheel, source)
     uv = os.environ.get("TOOLSMITH_UV") or shutil.which("uv")
     if uv is None:
@@ -202,7 +209,7 @@ def main() -> int:
                     "--python",
                     str(python),
                     "--exclude-newer",
-                    "2026-10-04T00:00:00Z",
+                    "2026-10-17T00:00:00Z",
                     "--no-deps",
                     str(artifact),
                 ],
@@ -233,6 +240,20 @@ def main() -> int:
             )
             assert command["ok"] is True and command["result"]
             print(label + " installed CLI/library acceptance passed", flush=True)
+            run(
+                [
+                    uv,
+                    "pip",
+                    "install",
+                    "--python",
+                    str(python),
+                    "--exclude-newer",
+                    "2026-10-17T00:00:00Z",
+                    str(artifact) + "[http,pdf]",
+                ],
+                parent,
+            )
+            print(run([str(python), str(ROOT / "scripts/accept_primitives.py")], workspace), end="")
             model_directory = os.environ.get("TOOLSMITH_MODEL_DIRECTORY")
             api_header = os.environ.get("TOOLSMITH_API_HEADER")
             if model_directory is not None and api_header is not None:
@@ -244,7 +265,7 @@ def main() -> int:
                         "--python",
                         str(python),
                         "--exclude-newer",
-                        "2026-10-04T00:00:00Z",
+                        "2026-10-17T00:00:00Z",
                         str(artifact) + "[semantic]",
                     ],
                     parent,
@@ -313,7 +334,7 @@ def main() -> int:
                 "--python",
                 str(parent / "wheel-venv/bin/python"),
                 "--exclude-newer",
-                "2026-10-04T00:00:00Z",
+                "2026-10-17T00:00:00Z",
                 str(wheel) + "[http]",
             ],
             parent,
@@ -337,7 +358,7 @@ def main() -> int:
                 "--python",
                 str(parent / "wheel-venv/bin/python"),
                 "--exclude-newer",
-                "2026-10-04T00:00:00Z",
+                "2026-10-17T00:00:00Z",
                 str(wheel) + "[semantic]",
             ],
             parent,

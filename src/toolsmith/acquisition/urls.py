@@ -1,13 +1,45 @@
 import ipaddress
 import re
-from urllib.parse import parse_qsl, urlsplit, urlunsplit
+from dataclasses import dataclass
+from urllib.parse import parse_qsl, urljoin, urlsplit, urlunsplit
 
-from toolsmith.result import ToolsmithError
+from toolsmith.result import Result, ToolsmithError, boundary
 from toolsmith.validation import text
 
 HOST = re.compile(
     r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?\Z"
 )
+
+
+@dataclass(frozen=True)
+class ResolvedUrl:
+    index: int
+    result: Result[str]
+
+
+@boundary
+def resolve_url(base: str, target: str) -> str:
+    approved_base = canonical_url(base)
+    selected = text(target, 8192, "Link target")
+    return canonical_url(urljoin(approved_base, selected))
+
+
+@boundary
+def resolve_urls(base: str, targets: tuple[str, ...]) -> tuple[ResolvedUrl, ...]:
+    approved_base = canonical_url(base)
+    if not isinstance(targets, tuple):
+        raise ToolsmithError("invalid_input", "Supply a tuple of link targets")
+    if (
+        sum(len(text(target, 8192, "Link target").encode()) for target in targets)
+        > 32 * 1024 * 1024
+    ):
+        raise ToolsmithError("limit", "Link batch exceeds its 32 MiB input budget")
+    return tuple(
+        ResolvedUrl(index, resolve_url(approved_base, target))
+        for index, target in enumerate(targets)
+    )
+
+
 SECRET = re.compile(
     r"(?:^|[_-])(?:token|secret|password|passwd|authorization|credential|api[_-]?key|access[_-]?key)(?:$|[_-])",
     re.I,

@@ -14,6 +14,7 @@ from toolsmith.semantic.index import (
     prepare_connection,
     publish_embedding,
     relocate_embedding,
+    search_batch,
     search_embeddings,
 )
 from toolsmith.semantic.model import MiniLM, load_model
@@ -59,4 +60,5 @@ __all__ = [
     "pending_references",
     "relocate_embedding",
     "search_embeddings",
+    "search_batch",
 ]

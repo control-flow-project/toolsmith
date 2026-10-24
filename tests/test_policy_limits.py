@@ -157,6 +157,7 @@ def test_unknown_cooldown_survives_other_responses_and_window_rollover(
     root = tmp_path / "network"
     policy = SourcePolicy("source", ("example.com",), "text_only")
     first = reserve(root, policy, clock)
+    clock.advance(60)
     second = reserve(root, policy, clock)
     settle(root, policy, clock, first, 20, None)
     settle(root, policy, clock, second, 20, 30)

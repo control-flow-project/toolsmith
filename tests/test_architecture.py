@@ -11,7 +11,6 @@ def test_product_has_no_process_server_thread_or_domain_owner() -> None:
         "multiprocessing",
         "threading",
         "concurrent",
-        "asyncio",
         "selenium",
         "playwright",
         "flask",
@@ -34,6 +33,11 @@ def test_product_has_no_process_server_thread_or_domain_owner() -> None:
         "execlp",
         "execvp",
         "spawn",
+        "create_subprocess_exec",
+        "create_subprocess_shell",
+        "to_thread",
+        "run_in_executor",
+        "set_default_executor",
     }
     violations = []
     for path in sorted((ROOT / "src").rglob("*.py")):
@@ -68,7 +72,7 @@ def test_product_has_no_process_server_thread_or_domain_owner() -> None:
 def test_dependencies_are_optional_and_distribution_is_mit_licensed() -> None:
     config = tomllib.loads((ROOT / "pyproject.toml").read_text())
     assert config["project"]["dependencies"] == []
-    assert set(config["project"]["optional-dependencies"]) == {"http", "semantic"}
+    assert set(config["project"]["optional-dependencies"]) == {"http", "pdf", "semantic"}
     assert not any(value.startswith("Private ::") for value in config["project"]["classifiers"])
     assert config["project"]["scripts"] == {"toolsmith": "toolsmith.cli:main"}
     assert config["project"]["license"] == "MIT"
@@ -118,6 +122,7 @@ def test_generic_capabilities_do_not_import_archive_or_consumers() -> None:
         ROOT / "src/toolsmith/acquisition" / name
         for name in (
             "client.py",
+            "batch.py",
             "budgets.py",
             "budget_import.py",
             "config.py",

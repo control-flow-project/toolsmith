@@ -1,5 +1,11 @@
 # CLI
 
+The global `--output /absolute/new-file.json` stores a complete successful result
+and prints only a compact path/byte-count receipt. See [primitive recipes](primitives.md)
+for HTML links/metadata, XML/JSONL, PDF pages, URL/archive/gzip, concurrent download
+manifests and batch indexed-query commands. Feed reading returns all entries
+within its byte/structure bounds and no longer accepts an entry-count limit.
+
 ## Archive-independent commands
 
 `search lexical/semantic` uses an explicit caller-owned `--database`. `init` adds

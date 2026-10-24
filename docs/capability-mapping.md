@@ -42,7 +42,7 @@ Tests without a live provider establish contracts, not publisher certification.
 | P04 | Do not parse login, challenge, subscription/password dialogs as article data | Shared `readers.html_dom` access checks | `test_html_rejects_active_access_gates_without_bypass` |
 | P05 | RSS/Atom unambiguous fields/links, bounded XML, no DTD/entities or excessive escapes | `readers.read_feed` | Feed negative/ambiguous/conflict/structure/escape tests |
 | P06 | Preserve original publication/update values, source offsets and UTC separately | `FeedEntry` | `test_feed_retains_publication_and_update_offsets_and_unknown_dates` |
-| P07 | Discovery counts, identical lead deduplication and explicit truncation | `Feed` | `test_feed_duplicate_counts_truncation_and_omitted_entry_validation`; no article fetching or inferred dates |
+| P07 | Complete byte-bounded feed discovery and identical lead deduplication, without an entry-count cap | `Feed` | `test_feed_duplicate_counts_and_complete_entry_validation`, `test_large_feed_returns_every_entry_without_an_item_ceiling`; no article fetching or inferred dates |
 | P08 | CSV, single-member ZIP-CSV and single-member GZIP-CSV; Bad Bets reports | `readers.decode_table` | Archive path/encryption/format/extra-member/expansion tests |
 | P09 | Bounded row iterator, headers, widths, exact filters/projection and complete scan counts | `iter_table_rows`, `project_table` | Bad rows/headers/row limits and `scanned/matched/truncated` assertions |
 | P10 | HTML/PDF/image table interpretation stays with the consumer LLM | No deterministic HTML table extraction API or CLI remains | Ordinary source text and original artifacts remain available; removed table form is rejected |

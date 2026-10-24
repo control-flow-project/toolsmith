@@ -5,7 +5,8 @@ from collections.abc import Sequence
 
 from toolsmith.cli.commands import execute
 from toolsmith.cli.parser import Arguments, make_parser
-from toolsmith.result import Failure, Success, ToolsmithError
+from toolsmith.files import absolute_path, write_new_bytes
+from toolsmith.result import Failure, Success, ToolsmithError, unwrap
 from toolsmith.validation import JsonValue, json_value
 
 EXIT_CODES = {
@@ -28,6 +29,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = Arguments()
     try:
         make_parser().parse_args(supplied, namespace=arguments)
+        if arguments.output is not None:
+            absolute_path(arguments.output)
+            if arguments.output.exists() or arguments.output.is_symlink():
+                raise ToolsmithError(
+                    "conflict", "Output file already exists; it was not overwritten"
+                )
         result = execute(arguments)
     except ToolsmithError as error:
         result = error.failure
@@ -44,6 +51,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         failure: Failure = result
         payload = {"ok": False, "error": json_value(failure)}
         code = EXIT_CODES[failure.code]
+    if arguments.output is not None and code == 0:
+        try:
+            content = json.dumps(
+                payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")
+            ).encode("utf-8")
+            unwrap(write_new_bytes(arguments.output, content))
+            payload = {
+                "ok": True,
+                "result": {"output": str(arguments.output), "bytes": len(content)},
+            }
+        except ToolsmithError as error:
+            payload = {"ok": False, "error": json_value(error.failure)}
+            code = EXIT_CODES[error.failure.code]
     print(
         json.dumps(
             payload,

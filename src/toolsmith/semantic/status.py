@@ -47,10 +47,15 @@ def inspect_coverage(connection: sqlite3.Connection, scope: Scope) -> IndexCover
     with transaction(connection, "toolsmith_scope_metadata"):
         validate_profile(connection)
         selected = scope_query(connection, scope)
-        entries, indexed, missing, stale, _largest, chunks = coverage(
-            connection, selected, "embedding_document"
+        observed = coverage(connection, selected, "embedding_document")
+        return IndexCoverage(
+            observed.entries,
+            observed.indexed,
+            observed.missing,
+            observed.stale,
+            observed.chunks,
+            observed.chunks * DIMENSIONS * 4,
         )
-        return IndexCoverage(entries, indexed, missing, stale, chunks, chunks * DIMENSIONS * 4)
 
 
 @boundary

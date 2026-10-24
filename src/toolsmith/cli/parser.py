@@ -27,6 +27,7 @@ class Arguments(argparse.Namespace):
     offset: int = 0
     maximum_bytes: int = 16 * 1024 * 1024
     destination: Path | None = None
+    output: Path | None = None
     minimum_age: float = 86_400
     policy: Path | None = None
     network_state: Path | None = None
@@ -36,6 +37,7 @@ class Arguments(argparse.Namespace):
     model_directory: Path | None = None
     database: Path | None = None
     sources: Path | None = None
+    queries: Path | None = None
     reference: str | None = None
     scope: str | None = None
     mode: QueryMode = "literal"
@@ -44,6 +46,13 @@ class Arguments(argparse.Namespace):
     columns: list[str] | None = None
     filters: list[str] | None = None
     header_row: int = 1
+    page: int = 0
+    dpi: int = 144
+    profiles: Path | None = None
+    requests: Path | None = None
+    concurrency: int = 8
+    deadline_seconds: float = 300
+    member: str | None = None
 
 
 class Parser(argparse.ArgumentParser):
@@ -62,6 +71,7 @@ def make_parser() -> Parser:
     parser.add_argument("--root", type=Path, help="Explicit absolute private store directory")
     parser.add_argument("--collection", help="Exact collection identity bound to the store")
     parser.add_argument("--json", action="store_true", help="Compact structured result")
+    parser.add_argument("--output", type=Path, help="Write the result to a new explicit file")
     families = parser.add_subparsers(dest="family", required=True)
     parser.add_argument("--version", action="version", version="toolsmith 0.4.3")
     capabilities = families.add_parser("capabilities")
@@ -70,7 +80,7 @@ def make_parser() -> Parser:
     for name in ("init", "inspect"):
         store.add_parser(name).set_defaults(action="store." + name)
     readers = families.add_parser("read").add_subparsers(dest="command", required=True)
-    for name in ("text", "html", "feed", "json", "table"):
+    for name in ("text", "html", "html-links", "feed", "json", "jsonl", "xml", "pdf", "table"):
         command = readers.add_parser(name)
         command.set_defaults(action="read." + name)
         command.add_argument("file", type=Path)
@@ -81,13 +91,42 @@ def make_parser() -> Parser:
             command.add_argument("--selection", choices=("text", "article"), default="text")
         elif name == "feed":
             command.add_argument("--source-url", required=True)
-            command.add_argument("--limit", type=int, default=100)
+        elif name == "pdf":
+            command.add_argument("--start", type=int, default=0)
+            command.add_argument("--limit", type=int, default=20)
         elif name == "table":
             command.add_argument("--format", choices=("csv", "zip-csv", "gzip-csv"), default="csv")
             command.add_argument("--column", dest="columns", action="append", required=True)
             command.add_argument("--filter", dest="filters", action="append", default=[])
             command.add_argument("--header-row", type=int, default=1)
             command.add_argument("--limit", type=int, default=20)
+    urls = families.add_parser("url").add_subparsers(dest="command", required=True)
+    resolving = urls.add_parser("resolve")
+    resolving.set_defaults(action="url.resolve")
+    resolving.add_argument("url")
+    resolving.add_argument("--file", type=Path, required=True)
+    archives = families.add_parser("archive").add_subparsers(dest="command", required=True)
+    for name in ("list", "read"):
+        command = archives.add_parser(name)
+        command.set_defaults(action="archive." + name)
+        command.add_argument("file", type=Path)
+        if name == "read":
+            command.add_argument("member")
+            command.add_argument("--destination", type=Path, required=True)
+            command.add_argument("--maximum-bytes", type=int, default=32 * 1024 * 1024)
+    decompressors = families.add_parser("decompress").add_subparsers(dest="command", required=True)
+    gzip_reader = decompressors.add_parser("gzip")
+    gzip_reader.set_defaults(action="decompress.gzip")
+    gzip_reader.add_argument("file", type=Path)
+    gzip_reader.add_argument("--destination", type=Path, required=True)
+    gzip_reader.add_argument("--maximum-bytes", type=int, default=32 * 1024 * 1024)
+    rendering = families.add_parser("render").add_subparsers(dest="command", required=True)
+    pdf_render = rendering.add_parser("pdf")
+    pdf_render.set_defaults(action="render.pdf")
+    pdf_render.add_argument("file", type=Path)
+    pdf_render.add_argument("--page", type=int, required=True)
+    pdf_render.add_argument("--dpi", type=int, default=144)
+    pdf_render.add_argument("--destination", type=Path, required=True)
     streaming = families.add_parser("filesystem").add_subparsers(dest="command", required=True)
     for name in ("hash", "copy"):
         command = streaming.add_parser(name)
@@ -99,28 +138,30 @@ def make_parser() -> Parser:
     indexes = families.add_parser("search").add_subparsers(dest="kind", required=True)
     for kind in ("lexical", "semantic"):
         commands = indexes.add_parser(kind).add_subparsers(dest="command", required=True)
-        for name in ("init", "index", "query", "status", "check", "delete"):
+        for name in ("init", "index", "query", "batch", "status", "check", "delete"):
             command = commands.add_parser(name)
             command.set_defaults(action="search." + kind + "." + name)
             command.add_argument("--database", type=Path, required=True)
             if name == "index":
                 command.add_argument("--sources", type=Path, required=True)
-            if name in {"status", "query", "check"}:
+            if name in {"status", "query", "batch", "check"}:
                 command.add_argument(
                     "--scope",
                     required=True,
                     help="Application-owned table/view exposing reference and text_digest",
                 )
-            if name in {"index", "query"}:
+            if name in {"index", "query", "batch"}:
                 command.add_argument("--limit", type=int, default=20)
                 if kind == "semantic":
                     command.add_argument("--model-directory", type=Path, required=True)
             if name == "query":
                 command.add_argument("query")
-                if kind == "lexical":
-                    command.add_argument(
-                        "--mode", choices=("literal", "phrase", "fts5"), default="literal"
-                    )
+            if name == "batch":
+                command.add_argument("--queries", type=Path, required=True)
+            if name in {"query", "batch"} and kind == "lexical":
+                command.add_argument(
+                    "--mode", choices=("literal", "phrase", "fts5"), default="literal"
+                )
             if name == "delete":
                 command.add_argument("reference")
     texts = families.add_parser("text").add_subparsers(dest="command", required=True)
@@ -179,6 +220,14 @@ def make_parser() -> Parser:
         if name == "export":
             command.add_argument("destination", type=Path)
     http = families.add_parser("http").add_subparsers(dest="command", required=True)
+    batch = http.add_parser("batch")
+    batch.set_defaults(action="http.batch")
+    batch.add_argument("--profiles", type=Path, required=True)
+    batch.add_argument("--requests", type=Path, required=True)
+    batch.add_argument("--network-state", type=Path, required=True)
+    batch.add_argument("--task", required=True)
+    batch.add_argument("--concurrency", type=int, default=8)
+    batch.add_argument("--deadline-seconds", type=float, default=300)
     request = http.add_parser("request")
     request.set_defaults(action="http.request")
     request.add_argument("url")

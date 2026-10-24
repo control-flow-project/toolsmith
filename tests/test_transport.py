@@ -1,81 +1,106 @@
-from collections.abc import Callable
+import asyncio
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 
+import aiohttp
 import pytest
+from aiohttp.base_protocol import BaseProtocol
+from aiohttp.http_exceptions import HttpProcessingError
+from aiohttp.http_parser import HttpResponseParser
 from conftest import ControlledClock
 
 from toolsmith.acquisition.transport import NativeTransport
 from toolsmith.result import ToolsmithError
 
+type NativeRequest = Callable[[tuple[tuple[str, str], ...], bytes, int], bytes]
 
+
+@dataclass
 class SourceResponse:
-    def __init__(self, headers: tuple[tuple[str, str], ...], body: bytes) -> None:
-        self.headers = headers
-        self.body = body
-        self.status = 200
-        self.closed = False
-
-    def getheaders(self) -> tuple[tuple[str, str], ...]:
-        return self.headers
-
-    def isclosed(self) -> bool:
-        return self.closed
-
-    def read1(self, maximum: int) -> bytes:
-        content = self.body[:maximum]
-        self.body = self.body[maximum:]
-        if not self.body:
-            self.closed = True
-        return content
-
-    def close(self) -> None:
-        self.closed = True
+    status: int
+    raw_headers: tuple[tuple[bytes, bytes], ...]
+    content: aiohttp.StreamReader
 
 
 @pytest.fixture
-def native_request(
-    monkeypatch: pytest.MonkeyPatch, clock: ControlledClock
-) -> Callable[[tuple[tuple[str, str], ...], bytes, int], bytes]:
-    import toolsmith.acquisition.transport as implementation
-
+def native_request(monkeypatch: pytest.MonkeyPatch, clock: ControlledClock) -> NativeRequest:
     def request(headers: tuple[tuple[str, str], ...], body: bytes, maximum: int) -> bytes:
-        response = SourceResponse(headers, body)
-        captured: dict[str, str] = {}
-        closed: list[bool] = []
+        wire = (
+            b"HTTP/1.1 200 OK\r\n"
+            + b"".join(name.encode() + b": " + value.encode() + b"\r\n" for name, value in headers)
+            + b"\r\n"
+            + body
+        )
 
-        class Connection:
-            active_socket: None = None
+        class Session:
+            def __init__(
+                self,
+                *,
+                connector: aiohttp.BaseConnector,
+                cookie_jar: aiohttp.abc.AbstractCookieJar,
+                trust_env: bool,
+                auto_decompress: bool,
+                max_headers: int,
+                max_line_size: int,
+                max_field_size: int,
+                read_bufsize: int,
+            ) -> None:
+                self.connector = connector
+                assert isinstance(cookie_jar, aiohttp.DummyCookieJar)
+                assert not trust_env and not auto_decompress
+                assert max_headers == 100
+                assert max_line_size == max_field_size == read_bufsize == 65_536
 
-            def __init__(self, *_arguments: object) -> None:
-                pass
+            async def __aenter__(self) -> "Session":
+                return self
 
-            def request(self, method: str, path: str, *, headers: dict[str, str]) -> None:
-                assert method == "GET" and path == "/source"
-                captured.update(headers)
+            async def __aexit__(self, *_arguments: object) -> None:
+                await self.connector.close()
 
-            def getresponse(self) -> SourceResponse:
-                return response
+            @asynccontextmanager
+            async def get(
+                self,
+                url: str,
+                *,
+                headers: tuple[tuple[str, str], ...],
+                allow_redirects: bool,
+                server_hostname: str,
+            ) -> AsyncIterator[SourceResponse]:
+                assert url == "https://example.com/path"
+                assert server_hostname == "example.com" and not allow_redirects
+                assert dict(headers)["User-Agent"].startswith("Mozilla/5.0")
+                assert not {name.lower() for name, _value in headers} & {"cookie", "authorization"}
+                loop = asyncio.get_running_loop()
+                parser = HttpResponseParser(
+                    BaseProtocol(loop),
+                    loop,
+                    65_536,
+                    max_headers=100,
+                    max_line_size=65_536,
+                    max_field_size=65_536,
+                    read_until_eof=True,
+                )
+                try:
+                    messages, _upgraded, _tail = parser.feed_data(wire)
+                    parser.feed_eof()
+                except (HttpProcessingError, ValueError, OverflowError) as error:
+                    raise aiohttp.ClientPayloadError("Invalid fixture response framing") from error
+                assert len(messages) == 1
+                message, payload = messages[0]
+                yield SourceResponse(message.code, message.raw_headers, payload)
 
-            def close(self) -> None:
-                closed.append(True)
-
-        monkeypatch.setattr(implementation, "PinnedConnection", Connection)
-        try:
-            result = NativeTransport().get(
-                "https://example.com/source", ("8.8.8.8",), maximum, clock.monotonic() + 10, clock
-            )
-            assert captured["User-Agent"].startswith("Mozilla/5.0")
-            assert "Authorization" not in captured and "Cookie" not in captured
-            return result.content
-        finally:
-            assert closed == [True]
-            assert response.closed
+        monkeypatch.setattr(aiohttp, "ClientSession", Session)
+        return (
+            NativeTransport()
+            .get("https://example.com/path", ("8.8.8.8",), maximum, clock.monotonic() + 10, clock)
+            .content
+        )
 
     return request
 
 
-def test_native_transport_bounded_success_and_no_credentials(
-    native_request: Callable[[tuple[tuple[str, str], ...], bytes, int], bytes],
-) -> None:
+def test_native_transport_bounded_success_and_no_credentials(native_request: NativeRequest) -> None:
     assert native_request((("Content-Length", "5"),), b"plain", 10) == b"plain"
     assert native_request((("Content-Length", "0" * 5000 + "5"),), b"plain", 10) == b"plain"
 
@@ -95,10 +120,21 @@ def test_native_transport_bounded_success_and_no_credentials(
     ],
 )
 def test_native_response_framing_and_body_limits(
-    native_request: Callable[[tuple[tuple[str, str], ...], bytes, int], bytes],
-    headers: tuple[tuple[str, str], ...],
-    body: bytes,
-    maximum: int,
+    native_request: NativeRequest, headers: tuple[tuple[str, str], ...], body: bytes, maximum: int
 ) -> None:
     with pytest.raises(ToolsmithError):
         native_request(headers, body, maximum)
+
+
+def test_native_chunked_body_is_decoded_by_the_http_parser(native_request: NativeRequest) -> None:
+    assert (
+        native_request((("Transfer-Encoding", "chunked"),), b"5\r\nplain\r\n0\r\n\r\n", 10)
+        == b"plain"
+    )
+
+
+def test_native_response_headers_have_an_aggregate_bound(native_request: NativeRequest) -> None:
+    headers = tuple((f"X-Field-{number}", "a" * 1000) for number in range(70))
+    with pytest.raises(ToolsmithError) as exceeded:
+        native_request(headers, b"plain", 10)
+    assert exceeded.value.failure.code == "limit"

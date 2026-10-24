@@ -1,3 +1,4 @@
+import asyncio
 import time
 from datetime import UTC, datetime
 from typing import Protocol
@@ -6,6 +7,7 @@ from typing import Protocol
 class Clock(Protocol):
     def wall(self) -> float: ...
     def monotonic(self) -> float: ...
+    async def wait(self, seconds: float) -> None: ...
 
 
 class SystemClock:
@@ -14,6 +16,9 @@ class SystemClock:
 
     def monotonic(self) -> float:
         return time.monotonic()
+
+    async def wait(self, seconds: float) -> None:
+        await asyncio.sleep(seconds)
 
 
 def utc_now(clock: Clock) -> str:

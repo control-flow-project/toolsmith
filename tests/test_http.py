@@ -1,21 +1,19 @@
 import gzip
-import io
-import socket
 import ssl
+from collections.abc import AsyncIterator
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 from conftest import ControlledClock
+from test_transport import NativeRequest
+from test_transport import native_request as native_request
 
 from toolsmith.acquisition.client import retry_after
 from toolsmith.acquisition.http import acquire_http, resume_http
 from toolsmith.acquisition.limits import inspect_limits
 from toolsmith.acquisition.policy import SourcePolicy
 from toolsmith.acquisition.transport import (
-    DeadlineReader,
-    PinnedConnection,
     Response,
     expanded_body,
 )
@@ -26,16 +24,13 @@ from toolsmith.storage.database import inspect_store, open_store
 from toolsmith.storage.operations import operation_status
 from toolsmith.validation import canonical_json, json_value
 
-if TYPE_CHECKING:
-    from _typeshed import WriteableBuffer
-
 
 class FixedResolver:
     def __init__(self, addresses: tuple[str, ...] = ("8.8.8.8",)) -> None:
         self.addresses = addresses
         self.hosts: list[str] = []
 
-    def resolve(self, host: str, deadline: float, clock: Clock) -> tuple[str, ...]:
+    async def resolve_async(self, host: str, deadline: float, clock: Clock) -> tuple[str, ...]:
         self.hosts.append(host)
         return self.addresses
 
@@ -45,7 +40,7 @@ class RecordedTransport:
         self.responses = responses
         self.urls: list[str] = []
 
-    def get(
+    async def get_async(
         self,
         url: str,
         addresses: tuple[str, ...],
@@ -329,6 +324,19 @@ def test_interrupted_get_requires_explicit_bounded_resume(
         Failure,
     )
     assert len(transport.urls) == 1
+    deferred = resume_http(
+        store,
+        "sample",
+        tmp_path / "network",
+        policy,
+        "request",
+        clock=clock,
+        resolver=resolver,
+        transport=transport,
+    )
+    assert isinstance(deferred, Failure) and deferred.code == "deferred"
+    assert len(transport.urls) == 1
+    clock.advance(policy.deadline_seconds + 1)
     result = unwrap(
         resume_http(
             store,
@@ -425,6 +433,7 @@ def test_running_operation_after_process_loss_resumes_saved_request(
         selected.connection.execute(
             "UPDATE operation SET status = 'running', failure_json = NULL WHERE id = 'request'"
         )
+    clock.advance(policy.deadline_seconds + 1)
     resumed = unwrap(
         resume_http(
             store,
@@ -504,26 +513,43 @@ def test_gzip_wire_and_expansion_controls() -> None:
             expanded_body(content, encoding, maximum)
 
 
-def test_tls_requires_certificate_and_hostname_verification(clock: ControlledClock) -> None:
-    connection = PinnedConnection("example.com", "8.8.8.8", clock.monotonic() + 10, clock)
-    assert connection.tls_context.check_hostname
-    assert connection.tls_context.verify_mode == ssl.CERT_REQUIRED
+def test_tls_requires_certificate_and_hostname_verification(
+    native_request: NativeRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = ssl.create_default_context
+    contexts: list[ssl.SSLContext] = []
+
+    def create() -> ssl.SSLContext:
+        context = original()
+        contexts.append(context)
+        return context
+
+    monkeypatch.setattr(ssl, "create_default_context", create)
+    assert native_request((("Content-Length", "5"),), b"plain", 10) == b"plain"
+    assert len(contexts) == 1
+    assert contexts[0].check_hostname
+    assert contexts[0].verify_mode == ssl.CERT_REQUIRED
 
 
-def test_slow_reads_enforce_an_absolute_deadline_without_threads(clock: ControlledClock) -> None:
-    class SlowRaw(io.RawIOBase):
-        def readinto(self, buffer: "WriteableBuffer") -> int | None:
-            clock.advance(2)
-            return 0
+def test_slow_reads_enforce_an_absolute_deadline_without_threads(
+    clock: ControlledClock, native_request: NativeRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aiohttp
 
-    with socket.socket() as sock:
-        reader = DeadlineReader(SlowRaw(), sock, clock.monotonic() + 1, clock)
-        try:
-            with pytest.raises(ToolsmithError) as expired:
-                reader.readinto(bytearray(1))
-            assert expired.value.failure.code == "limit"
-        finally:
-            reader.close()
+    original = aiohttp.StreamReader.iter_chunked
+
+    def delayed(reader: aiohttp.StreamReader, amount: int) -> AsyncIterator[bytes]:
+        async def iterate() -> AsyncIterator[bytes]:
+            async for chunk in original(reader, amount):
+                clock.advance(11)
+                yield chunk
+
+        return iterate()
+
+    monkeypatch.setattr(aiohttp.StreamReader, "iter_chunked", delayed)
+    with pytest.raises(ToolsmithError) as expired:
+        native_request((("Content-Length", "5"),), b"plain", 10)
+    assert expired.value.failure.code == "limit"
 
 
 def test_policy_json_results_contain_no_machine_paths() -> None:

@@ -1,5 +1,27 @@
 # Verification
 
+## Generic primitives — 2026-10-24, 0.5.0
+
+The integrated local gate passes 449 tests in 39 isolated files, Ruff formatting
+and lint, strict Mypy and wheel/sdist builds. It runs with an aggregate 8-GiB
+memory limit, zero swap and at most 256 tasks. Tests cover complete 2,500-entry
+feeds, 250 selected downloads, cross-group concurrency, same-group serialization,
+crash/deadline accounting, strict HTTP framing, typed XML/JSONL/HTML metadata,
+native PDF text/rendering, output-file safety and one coverage read per batch
+of 250 indexed queries. These are not live discovery or summary-quality claims.
+
+The optional primitives and actual MiniLM installation checks pass in independent
+wheel and sdist environments, with no added native worker threads. Direct HTTPS
+smoke requests fetch the ET OPML directory (30,863 bytes), Mint markets feed
+(40,972 bytes) and Business Standard markets feed (55,650 bytes). Those requests
+verify the transport only, not complete news coverage or Luna decisions.
+
+The runtime dependency audit is not yet clean: the existing semantic dependency
+chain retains certifi/filelock advisories whose published fixes fall inside the
+seven-day age cutoff. A named security exception is awaiting the maintainer's
+decision. Pillow uses the eligible fixed 13.0.0 release; no audit failure is
+waived or described as passing.
+
 This file documents reproducible gates. Release evidence is recorded after the
 actual run; fixture results are not certification of every publisher/network.
 

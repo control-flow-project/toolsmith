@@ -31,6 +31,55 @@ MAX_MEMBER_BYTES = 128 * 1024 * 1024
 
 
 @dataclass(frozen=True)
+class ArchiveEntry:
+    name: str
+    content_bytes: int
+    compressed_bytes: int
+    is_directory: bool
+
+
+def archive_entry(member: zipfile.ZipInfo) -> ArchiveEntry:
+    directory = member.is_dir()
+    name = member_name(member.filename[:-1] if directory else member.filename)
+    expected_mode = stat.S_IFDIR if directory else stat.S_IFREG
+    if (
+        member.flag_bits & 1
+        or stat.S_IFMT(member.external_attr >> 16) not in {0, expected_mode}
+        or member.compress_type not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}
+        or member.file_size > MAX_MEMBER_BYTES
+        or (directory and member.file_size != 0)
+    ):
+        raise ToolsmithError("denied", "Archive contains unsafe or oversized members")
+    return ArchiveEntry(name, member.file_size, member.compress_size, directory)
+
+
+@boundary
+def list_archive(source: Path) -> tuple[ArchiveEntry, ...]:
+    with regular_descriptor(source) as incoming:
+        if os.fstat(incoming).st_size > MAX_ARCHIVE_BYTES:
+            raise ToolsmithError("limit", "Archive exceeds its byte budget")
+        with os.fdopen(os.dup(incoming), "rb") as stream:
+            central_directory(stream)
+            try:
+                incoming_archive = zipfile.ZipFile(stream)
+            except zipfile.BadZipFile as error:
+                raise ToolsmithError("invalid_input", "Archive is not a valid ZIP file") from error
+            with incoming_archive as archive:
+                members = archive.infolist()
+                if len(members) > MAX_MEMBERS:
+                    raise ToolsmithError("limit", "Archive exceeds its structural member budget")
+                output: list[ArchiveEntry] = []
+                names: set[str] = set()
+                for member in members:
+                    entry = archive_entry(member)
+                    if entry.name in names:
+                        raise ToolsmithError("conflict", "Archive contains duplicate member names")
+                    names.add(entry.name)
+                    output.append(entry)
+                return tuple(output)
+
+
+@dataclass(frozen=True)
 class MemberSource:
     name: str
     path: Path
@@ -206,21 +255,14 @@ def read_archive_member(source: Path, name: str, maximum_bytes: int = 4 * 1024 *
                     names: set[str] = set()
                     requested = None
                     for record in records:
-                        current = member_name(record.filename)
-                        if (
-                            current in names
-                            or record.is_dir()
-                            or record.flag_bits & 1
-                            or stat.S_IFMT(record.external_attr >> 16) not in {0, stat.S_IFREG}
-                            or record.compress_type
-                            not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}
-                            or record.file_size > MAX_MEMBER_BYTES
-                        ):
+                        entry = archive_entry(record)
+                        current = entry.name
+                        if current in names:
                             raise ToolsmithError(
                                 "denied", "Archive contains unsafe, duplicate or oversized members"
                             )
                         names.add(current)
-                        if current == selected:
+                        if current == selected and not entry.is_directory:
                             requested = record
                     if requested is None:
                         raise ToolsmithError("not_found", "Exact archive member was not found")

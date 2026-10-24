@@ -7,8 +7,9 @@ from importlib.resources import files
 
 from toolsmith.lexical.chunks import text_chunks
 from toolsmith.lexical.query import QueryMode, compile_query
-from toolsmith.result import ToolsmithError, boundary, unwrap
-from toolsmith.scopes import Scope, coverage, scope_query, temporary_relation
+from toolsmith.result import Failure, ToolsmithError, boundary, unwrap
+from toolsmith.scopes import Coverage, Scope, coverage, scope_query, temporary_relation
+from toolsmith.search_batch import QueryResult, SearchBatch, SearchQuery, validate_queries
 from toolsmith.sqlite import execute, transaction
 from toolsmith.validation import canonical_json, digest, integer, source_reference, text
 
@@ -211,6 +212,45 @@ def invalidate_source(connection: sqlite3.Connection, reference: str) -> bool:
 
 
 @boundary
+def _search_in_scope(
+    connection: sqlite3.Connection,
+    expression: str,
+    selected: str,
+    observed: Coverage,
+    maximum: int,
+    beginning: int,
+) -> SearchReport:
+    rows = execute(
+        connection,
+        "WITH candidate AS (" + selected + ") "
+        "SELECT c.reference, d.text_digest, c.start_offset, c.end_offset, c.text, bm25(lexical_search), c.text_digest, lexical_search.text, lexical_search.title, d.title "
+        "FROM lexical_search JOIN lexical_chunk c ON c.id = lexical_search.rowid "
+        "JOIN lexical_document d ON d.reference = c.reference "
+        "JOIN candidate a ON a.reference = d.reference AND a.text_digest = d.text_digest "
+        "WHERE lexical_search MATCH ? ORDER BY bm25(lexical_search), c.reference, c.ordinal LIMIT ? OFFSET ?",
+        (expression, maximum, beginning),
+    )
+    hits: list[Hit] = []
+    for row in rows:
+        body = text(row[4], 8192, "Indexed chunk", allow_empty=True)
+        start = integer(row[2], 0, MAX_SOURCE_BYTES, "Start")
+        end = integer(row[3], start + 1, MAX_SOURCE_BYTES, "End")
+        rank = float(row[5])
+        if (
+            len(body) != end - start
+            or not math.isfinite(rank)
+            or hashlib.sha256(body.encode()).hexdigest() != digest(row[6])
+            or row[7] != body
+            or row[8] != row[9]
+        ):
+            raise ToolsmithError("integrity", "Lexical hit has invalid source spans or rank")
+        hits.append(Hit(source_reference(row[0]), digest(row[1]), start, end, body, rank))
+    return SearchReport(
+        tuple(hits), observed.entries, observed.indexed, observed.missing, observed.stale
+    )
+
+
+@boundary
 def search(
     connection: sqlite3.Connection,
     query: str,
@@ -225,35 +265,42 @@ def search(
     beginning = integer(offset, 0, 2**63 - 1, "Offset")
     with transaction(connection, "toolsmith_lexical"):
         selected = scope_query(connection, scope)
-        candidates, indexed, missing, stale, _largest, _chunks = coverage(
-            connection, selected, "lexical_document"
+        observed = coverage(connection, selected, "lexical_document")
+        return unwrap(
+            _search_in_scope(connection, expression, selected, observed, maximum, beginning)
         )
-        rows = execute(
-            connection,
-            "WITH candidate AS (" + selected + ") "
-            "SELECT c.reference, d.text_digest, c.start_offset, c.end_offset, c.text, bm25(lexical_search), c.text_digest, lexical_search.text, lexical_search.title, d.title "
-            "FROM lexical_search JOIN lexical_chunk c ON c.id = lexical_search.rowid "
-            "JOIN lexical_document d ON d.reference = c.reference "
-            "JOIN candidate a ON a.reference = d.reference AND a.text_digest = d.text_digest "
-            "WHERE lexical_search MATCH ? ORDER BY bm25(lexical_search), c.reference, c.ordinal LIMIT ? OFFSET ?",
-            (expression, maximum, beginning),
+
+
+@boundary
+def search_batch(
+    connection: sqlite3.Connection,
+    queries: tuple[SearchQuery, ...],
+    scope: Scope,
+    maximum_records: int = 20,
+    *,
+    mode: QueryMode = "literal",
+) -> SearchBatch[SearchReport]:
+    checked = validate_queries(queries)
+    maximum = integer(maximum_records, 1, 1000, "Maximum records")
+    if not checked:
+        return SearchBatch(())
+    expressions = tuple((query.id, compile_query(query.text, mode)) for query in checked)
+    with transaction(connection, "toolsmith_lexical_batch"):
+        selected = scope_query(connection, scope)
+        observed = coverage(connection, selected, "lexical_document")
+        return SearchBatch(
+            tuple(
+                QueryResult(
+                    identity,
+                    expression
+                    if isinstance(expression, Failure)
+                    else _search_in_scope(
+                        connection, expression.value, selected, observed, maximum, 0
+                    ),
+                )
+                for identity, expression in expressions
+            )
         )
-        hits: list[Hit] = []
-        for row in rows:
-            body = text(row[4], 8192, "Indexed chunk", allow_empty=True)
-            start = integer(row[2], 0, MAX_SOURCE_BYTES, "Start")
-            end = integer(row[3], start + 1, MAX_SOURCE_BYTES, "End")
-            rank = float(row[5])
-            if (
-                len(body) != end - start
-                or not math.isfinite(rank)
-                or hashlib.sha256(body.encode()).hexdigest() != digest(row[6])
-                or row[7] != body
-                or row[8] != row[9]
-            ):
-                raise ToolsmithError("integrity", "Lexical hit has invalid source spans or rank")
-            hits.append(Hit(source_reference(row[0]), digest(row[1]), start, end, body, rank))
-    return SearchReport(tuple(hits), candidates, indexed, missing, stale)
 
 
 @boundary

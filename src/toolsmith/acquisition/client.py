@@ -1,3 +1,4 @@
+import asyncio
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ from toolsmith.acquisition.transport import (
 from toolsmith.acquisition.urls import canonical_url, hostname, public_address
 from toolsmith.clock import Clock, SystemClock, utc_now
 from toolsmith.files import absolute_path
-from toolsmith.result import ToolsmithError, boundary, unwrap
+from toolsmith.result import Failure, ToolsmithError, async_boundary, boundary, unwrap
 from toolsmith.validation import integer, number
 
 
@@ -90,8 +91,8 @@ def retry_after(response: Response, clock: Clock) -> float | None:
     return delay if math.isfinite(delay) and delay <= 2**53 - clock.wall() else None
 
 
-@boundary
-def fetch_http(
+@async_boundary
+async def fetch_http_async(
     url: str,
     policy: HttpPolicy,
     network_state: Path,
@@ -103,6 +104,7 @@ def fetch_http(
     transport: Transport | None = None,
     remaining_requests: int | None = None,
     before_request: Callable[[], None] | None = None,
+    network_limit: asyncio.Semaphore | None = None,
 ) -> FetchResponse:
     current = canonical_url(url)
     checked, quota = validate_http_policy(policy), validate_policy(budget)
@@ -122,6 +124,7 @@ def fetch_http(
         resolver or NativeResolver(),
         transport or NativeTransport(),
     )
+    limiter = network_limit if network_limit is not None else asyncio.Semaphore(1)
     deadline = actual_clock.monotonic() + checked.deadline_seconds
     requests, redirects, used_total = 0, 0, 0
     while True:
@@ -132,21 +135,49 @@ def fetch_http(
             raise ToolsmithError(
                 "limit", "The supplied operation request or byte allowance is exhausted"
             )
-        addresses = selected_resolver.resolve(
-            urlsplit(current).hostname or "", deadline, actual_clock
-        )
+        try:
+            async with asyncio.timeout(remaining(deadline, actual_clock)), limiter:
+                addresses = await selected_resolver.resolve_async(
+                    urlsplit(current).hostname or "", deadline, actual_clock
+                )
+        except TimeoutError as error:
+            raise ToolsmithError("limit", "The explicit network deadline was exhausted") from error
         if not 1 <= len(addresses) <= 64:
             raise ToolsmithError("denied", "DNS must return a bounded nonempty public address set")
         pinned = tuple(public_address(address) for address in addresses)
         remaining(deadline, actual_clock)
         maximum = min(checked.maximum_response_bytes, checked.maximum_total_bytes - used_total)
-        reservation = unwrap(
-            reserve_budget(network_state, quota, task, maximum, clock=actual_clock)
-        )
-        if before_request is not None:
-            before_request()
-        requests += 1
-        response = selected_transport.get(current, pinned, maximum, deadline, actual_clock)
+        while True:
+            reserved = reserve_budget(
+                network_state,
+                quota,
+                task,
+                maximum,
+                clock=actual_clock,
+                deadline_seconds=min(60, remaining(deadline, actual_clock)),
+            )
+            if not isinstance(reserved, Failure):
+                reservation = reserved.value
+                break
+            delay = reserved.retry_after_seconds
+            if (
+                reserved.code != "deferred"
+                or delay is None
+                or delay <= 0
+                or delay >= remaining(deadline, actual_clock)
+            ):
+                raise ToolsmithError(reserved.code, reserved.message, delay)
+            await actual_clock.wait(delay)
+        try:
+            async with asyncio.timeout(remaining(deadline, actual_clock)), limiter:
+                if before_request is not None:
+                    before_request()
+                requests += 1
+                response = await selected_transport.get_async(
+                    current, pinned, maximum, deadline, actual_clock
+                )
+        except TimeoutError as error:
+            raise ToolsmithError("limit", "The explicit network deadline was exhausted") from error
         remaining(deadline, actual_clock)
         if (
             not isinstance(response, Response)
@@ -181,3 +212,35 @@ def fetch_http(
         return FetchResponse(
             current, media_type, response.content, requests, used_total, utc_now(actual_clock)
         )
+
+
+@boundary
+def fetch_http(
+    url: str,
+    policy: HttpPolicy,
+    network_state: Path,
+    budget: BudgetPolicy,
+    task: str,
+    *,
+    clock: Clock | None = None,
+    resolver: Resolver | None = None,
+    transport: Transport | None = None,
+    remaining_requests: int | None = None,
+    before_request: Callable[[], None] | None = None,
+) -> FetchResponse:
+    return unwrap(
+        asyncio.run(
+            fetch_http_async(
+                url,
+                policy,
+                network_state,
+                budget,
+                task,
+                clock=clock,
+                resolver=resolver,
+                transport=transport,
+                remaining_requests=remaining_requests,
+                before_request=before_request,
+            )
+        )
+    )

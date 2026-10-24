@@ -16,6 +16,12 @@ authorized. Keep one CPU-only, single-calling-thread implementation: no encoder
 service, helper process, worker pool, automatic download or GPU/model fallback.
 Do not add placeholder implementations.
 
+The 2026-10-24 primitives task authorizes optional in-process PDFium text/page
+reading and cooperative asynchronous HTTPS batches. Neither permits product
+threads, helper processes, browser automation, OCR or generative model calls.
+Its necessity and verification record is .analysis/20261024-luna-primitives/plan.md.
+Batch input/output bounds never become corpus or discovery item-count cutoffs.
+
 Everything is optional to consumers. Core fleet setup, delivery, history and
 lifecycle must never depend on Toolsmith. No skills, domain connectors, financial
 calculations, taxonomies, prompts or agent definitions belong here. Do not modify

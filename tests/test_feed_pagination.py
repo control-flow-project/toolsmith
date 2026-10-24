@@ -22,7 +22,7 @@ def test_next_page_is_resolved_for_atom_and_rss_without_following_it(atom: bool)
     content = feed(f'<{prefix}link rel="next" href="?page=2"/>', atom=atom)
     selected = unwrap(read_feed(content, "https://example.com/current/feed"))
     assert selected.next_url == "https://example.com/current/feed?page=2"
-    assert selected.entries == () and not selected.truncated
+    assert selected.entries == ()
 
 
 @pytest.mark.parametrize("atom", [True, False])
@@ -42,10 +42,20 @@ def test_entry_pagination_does_not_impersonate_feed_pagination() -> None:
     assert selected.next_url is None and selected.entries[0].url == "https://example.com/report"
 
 
-def test_conflicting_next_pages_are_rejected_even_when_article_output_is_limited() -> None:
+def test_conflicting_next_pages_are_rejected() -> None:
     content = feed('<link rel="next" href="?page=2"/><link rel="next" href="?page=3"/>', atom=True)
-    result = read_feed(content, "https://example.com/feed", 1)
+    result = read_feed(content, "https://example.com/feed")
     assert isinstance(result, Failure) and result.code == "conflict"
+
+
+def test_large_feed_returns_every_entry_without_an_item_ceiling() -> None:
+    entries = "".join(
+        f'<entry><title>Report {index}</title><link href="/report/{index}"/></entry>'
+        for index in range(2500)
+    )
+    selected = unwrap(read_feed(feed(entries, atom=True), "https://example.com/feed"))
+    assert len(selected.entries) == selected.total_entries == 2500
+    assert selected.entries[-1].url == "https://example.com/report/2499"
 
 
 def test_identical_next_targets_have_one_resolved_value() -> None:

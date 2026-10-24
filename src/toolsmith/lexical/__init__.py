@@ -12,6 +12,7 @@ from toolsmith.lexical.index import (
     invalidate_source,
     matching_scope,
     search,
+    search_batch,
 )
 from toolsmith.lexical.passages import FindReport, Match, Region, find_text
 from toolsmith.lexical.query import compile_query
@@ -37,4 +38,5 @@ __all__ = [
     "invalidate_source",
     "matching_scope",
     "search",
+    "search_batch",
 ]

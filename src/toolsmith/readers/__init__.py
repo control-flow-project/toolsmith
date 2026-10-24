@@ -1,7 +1,15 @@
 from toolsmith.readers.feeds import Feed, FeedEntry, read_feed
-from toolsmith.readers.html import HtmlInspection, HtmlLink, inspect_html, read_html
-from toolsmith.readers.json import read_json
+from toolsmith.readers.html import (
+    HtmlInspection,
+    HtmlLink,
+    HtmlMetadata,
+    HtmlStructuredData,
+    inspect_html,
+    read_html,
+)
+from toolsmith.readers.json import read_json, read_json_lines
 from toolsmith.readers.models import Document, TextPart
+from toolsmith.readers.pdf import PdfImage, PdfPageText, PdfText, read_pdf, render_pdf_page
 from toolsmith.readers.tables import (
     Projection,
     decode_table,
@@ -9,10 +17,13 @@ from toolsmith.readers.tables import (
     project_table,
 )
 from toolsmith.readers.text import normalize_text, read_text
+from toolsmith.readers.xml import XmlDocument, XmlElement, XmlLimits, read_xml
 
 __all__ = [
     "HtmlInspection",
     "HtmlLink",
+    "HtmlMetadata",
+    "HtmlStructuredData",
     "inspect_html",
     "Document",
     "TextPart",
@@ -25,6 +36,16 @@ __all__ = [
     "read_feed",
     "read_html",
     "read_json",
+    "read_json_lines",
+    "XmlDocument",
+    "XmlElement",
+    "XmlLimits",
+    "read_xml",
+    "PdfImage",
+    "PdfPageText",
+    "PdfText",
+    "read_pdf",
+    "render_pdf_page",
     "read_text",
     "normalize_text",
 ]

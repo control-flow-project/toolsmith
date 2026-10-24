@@ -33,6 +33,18 @@ class HtmlLink:
 
 
 @dataclass(frozen=True)
+class HtmlMetadata:
+    name: str
+    content: str
+
+
+@dataclass(frozen=True)
+class HtmlStructuredData:
+    media_type: str
+    text: str
+
+
+@dataclass(frozen=True)
 class HtmlInspection:
     title: str
     text: str
@@ -40,6 +52,10 @@ class HtmlInspection:
     external_resources: int
     password_controls: bool
     links: tuple[HtmlLink, ...]
+    metadata: tuple[HtmlMetadata, ...]
+    structured_data: tuple[HtmlStructuredData, ...]
+    time_values: tuple[str, ...]
+    base_href: str | None
 
 
 def links(root: Node) -> tuple[HtmlLink, ...]:
@@ -69,12 +85,33 @@ def inspect_html(content: bytes) -> HtmlInspection:
     pending = [root]
     resources = 0
     passwords = False
+    metadata: list[HtmlMetadata] = []
+    structured: list[HtmlStructuredData] = []
+    time_values: list[str] = []
+    base_href: str | None = None
     while pending:
         current = pending.pop()
         passwords = passwords or (
             current.tag == "input" and current.attributes.get("type", "").lower() == "password"
         )
-        pending.extend(child for child in current.children if isinstance(child, Node))
+        pending.extend(reversed([child for child in current.children if isinstance(child, Node)]))
+        if current.tag == "meta":
+            name = current.attributes.get("name") or current.attributes.get("property")
+            if name is not None and "content" in current.attributes:
+                metadata.append(HtmlMetadata(name, current.attributes["content"]))
+        if current.tag == "script":
+            media_type = current.attributes.get("type", "").split(";", 1)[0].strip().lower()
+            if media_type in {"application/json", "application/ld+json"}:
+                structured.append(
+                    HtmlStructuredData(
+                        media_type,
+                        "".join(child for child in current.children if isinstance(child, str)),
+                    )
+                )
+        if current.tag == "time" and "datetime" in current.attributes:
+            time_values.append(current.attributes["datetime"])
+        if current.tag == "base" and base_href is None:
+            base_href = current.attributes.get("href")
         attributes = {"src", "srcset", "poster"} | ({"href"} if current.tag == "link" else set())
         if any(
             current.attributes.get(attribute, "").strip()
@@ -89,6 +126,10 @@ def inspect_html(content: bytes) -> HtmlInspection:
         resources,
         passwords,
         links(root),
+        tuple(metadata),
+        tuple(structured),
+        tuple(time_values),
+        base_href,
     )
 
 

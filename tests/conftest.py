@@ -22,6 +22,9 @@ class ControlledClock:
         self.current_wall += seconds
         self.current_monotonic += seconds
 
+    async def wait(self, seconds: float) -> None:
+        self.advance(seconds)
+
 
 @pytest.fixture
 def clock() -> ControlledClock:
