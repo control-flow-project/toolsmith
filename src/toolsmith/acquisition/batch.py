@@ -11,7 +11,7 @@ from toolsmith.acquisition.urls import canonical_url
 from toolsmith.clock import Clock, SystemClock
 from toolsmith.files import absolute_path, write_new_bytes
 from toolsmith.result import Failure, Result, ToolsmithError, async_boundary, boundary, unwrap
-from toolsmith.validation import identity, integer, number, text
+from toolsmith.validation import digest, identity, integer, number, text
 
 
 @dataclass(frozen=True)
@@ -21,6 +21,7 @@ class DownloadRequest:
     destination: Path
     policy: HttpPolicy
     budget: BudgetPolicy
+    configuration_digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,8 @@ def validate_requests(requests: tuple[DownloadRequest, ...]) -> None:
         destination = absolute_path(request.destination)
         policy = validate_http_policy(request.policy)
         budget = validate_policy(request.budget)
+        if request.configuration_digest is not None:
+            digest(request.configuration_digest)
         definition = common_definition(budget)
         if common is not None and common != definition:
             raise ToolsmithError("invalid_input", "Batch budgets require shared period/task limits")
@@ -121,6 +124,7 @@ async def download_one(
                 transport=transport,
                 before_request=before_request,
                 network_limit=semaphore,
+                expected_configuration_digest=request.configuration_digest,
             )
         )
         unwrap(write_new_bytes(request.destination, response.content))

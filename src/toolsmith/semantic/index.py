@@ -4,9 +4,15 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from importlib.resources import files
 
-from toolsmith.result import Failure, ToolsmithError, boundary, unwrap
+from toolsmith.result import Failure, Success, ToolsmithError, boundary, unwrap
 from toolsmith.scopes import Coverage, Scope, coverage, scope_query
-from toolsmith.search_batch import QueryResult, SearchBatch, SearchQuery, validate_queries
+from toolsmith.search_batch import (
+    EmbeddingQuery,
+    QueryResult,
+    SearchBatch,
+    SearchQuery,
+    validate_queries,
+)
 from toolsmith.semantic.chunks import Encoder, encode_query
 from toolsmith.semantic.profile import (
     MAX_CHUNKS,
@@ -22,7 +28,7 @@ from toolsmith.semantic.profile import (
 )
 from toolsmith.semantic.vector import load_vector_extension
 from toolsmith.sqlite import execute, transaction
-from toolsmith.validation import digest, integer, source_reference, timestamp
+from toolsmith.validation import digest, integer, source_reference, text, timestamp
 
 SCHEMA_SQL = files("toolsmith.semantic").joinpath("schema.sql").read_text(encoding="utf-8")
 
@@ -351,7 +357,49 @@ def search_batch(
     maximum = integer(maximum_records, 1, 100, "Maximum records")
     if not checked:
         return SearchBatch(())
-    encoded = tuple((query.id, encode_query(query.text, encoder)) for query in checked)
+    encoded = tuple(QueryResult(query.id, encode_query(query.text, encoder)) for query in checked)
+    return _search_encoded_batch(connection, encoded, scope, maximum)
+
+
+@boundary
+def search_embeddings_batch(
+    connection: sqlite3.Connection,
+    queries: tuple[EmbeddingQuery, ...],
+    scope: Scope,
+    maximum_records: int = 20,
+) -> SearchBatch[SearchReport]:
+    maximum = integer(maximum_records, 1, 100, "Maximum records")
+    if not isinstance(queries, tuple) or any(
+        not isinstance(query, EmbeddingQuery) for query in queries
+    ):
+        raise ToolsmithError("invalid_input", "Supply typed embedding queries")
+    identities = [text(query.id, 300, "Query id") for query in queries]
+    if len(set(identities)) != len(identities) or any(
+        not isinstance(query.vector, bytes) for query in queries
+    ):
+        raise ToolsmithError(
+            "invalid_input", "Embedding query ids must be unique and vectors must be bytes"
+        )
+    if sum(len(query.vector) + len(query.id.encode()) for query in queries) > 32 * 1024 * 1024:
+        raise ToolsmithError(
+            "limit", "Embedding query input exceeds 32 MiB; process remaining inputs explicitly"
+        )
+    return _search_encoded_batch(
+        connection,
+        tuple(QueryResult(query.id, Success(query.vector)) for query in queries),
+        scope,
+        maximum,
+    )
+
+
+def _search_encoded_batch(
+    connection: sqlite3.Connection,
+    queries: tuple[QueryResult[bytes], ...],
+    scope: Scope,
+    maximum: int,
+) -> SearchBatch[SearchReport]:
+    if not queries:
+        return SearchBatch(())
     load_vector_extension(connection)
     with transaction(connection, "toolsmith_embedding_batch"):
         validate_profile(connection)
@@ -360,12 +408,14 @@ def search_batch(
         return SearchBatch(
             tuple(
                 QueryResult(
-                    identity,
-                    vector
-                    if isinstance(vector, Failure)
-                    else _search_in_scope(connection, vector.value, selected, observed, maximum),
+                    query.id,
+                    query.result
+                    if isinstance(query.result, Failure)
+                    else _search_in_scope(
+                        connection, query.result.value, selected, observed, maximum
+                    ),
                 )
-                for identity, vector in encoded
+                for query in queries
             )
         )
 

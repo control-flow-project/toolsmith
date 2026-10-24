@@ -4,6 +4,11 @@ The [primitive recipes](primitives.md) cover `readers.read_xml`, `read_json_line
 `inspect_html`, `read_pdf`, `render_pdf_page`, `acquisition.batch.download_batch`,
 `download_batch_async`, URL resolution, ZIP/gzip and batch indexed lookup.
 All are optional; none owns source selection or application orchestration.
+`acquisition.streams.DeadlineReader` is a raw socket I/O adapter for callers
+that own their own authenticated protocol. It applies one absolute deadline to
+buffered reads and owns no DNS, HTTP policy, credentials or connection setup.
+Public acquisition continues to use the single aiohttp transport; the stream
+adapter is not an alternate public downloader or response parser.
 
 See [caller-owned application integration](consumer-adoption.md) for SQLite
 scopes, atomic approval/quota configuration and filesystem ownership.

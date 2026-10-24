@@ -11,6 +11,12 @@ class SearchQuery:
 
 
 @dataclass(frozen=True)
+class EmbeddingQuery:
+    id: str
+    vector: bytes
+
+
+@dataclass(frozen=True)
 class QueryResult[Report]:
     id: str
     result: Result[Report]

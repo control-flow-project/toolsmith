@@ -15,6 +15,7 @@ from toolsmith.acquisition.budgets import (
     settle_budget,
 )
 from toolsmith.acquisition.client import HttpPolicy
+from toolsmith.acquisition.configuration import configure_budget
 from toolsmith.acquisition.transport import Response
 from toolsmith.clock import Clock
 from toolsmith.result import Failure, Success, unwrap
@@ -69,6 +70,40 @@ def test_batch_downloads_more_than_two_hundred_selected_items(
     assert len(transport.urls) == 250
     assert all(isinstance(item.result, Success) for item in batch.items)
     assert requests[-1].destination.read_bytes() == b"useful words"
+
+
+def test_batch_requires_current_explicit_approval_for_configured_state(
+    tmp_path: Path, clock: ControlledClock
+) -> None:
+    selected = request(tmp_path, "approved", "one")
+    network = tmp_path / "network"
+    configured = unwrap(
+        configure_budget(network, (selected.budget,), {"approval": "reviewed"}, clock=clock)
+    )
+    transport = RecordedTransport([plain()])
+    rejected = unwrap(
+        download_batch(
+            (selected,),
+            network,
+            "assignment",
+            clock=clock,
+            resolver=FixedResolver(),
+            transport=transport,
+        )
+    )
+    assert isinstance(rejected.items[0].result, Failure) and transport.urls == []
+    approved = replace(selected, configuration_digest=configured.digest)
+    completed = unwrap(
+        download_batch(
+            (approved,),
+            network,
+            "assignment",
+            clock=clock,
+            resolver=FixedResolver(),
+            transport=transport,
+        )
+    )
+    assert completed.complete and len(transport.urls) == 1
 
 
 def test_distinct_groups_overlap_but_each_group_is_serial_and_spaced(

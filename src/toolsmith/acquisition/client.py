@@ -105,6 +105,7 @@ async def fetch_http_async(
     remaining_requests: int | None = None,
     before_request: Callable[[], None] | None = None,
     network_limit: asyncio.Semaphore | None = None,
+    expected_configuration_digest: str | None = None,
 ) -> FetchResponse:
     current = canonical_url(url)
     checked, quota = validate_http_policy(policy), validate_policy(budget)
@@ -155,6 +156,7 @@ async def fetch_http_async(
                 maximum,
                 clock=actual_clock,
                 deadline_seconds=min(60, remaining(deadline, actual_clock)),
+                expected_configuration_digest=expected_configuration_digest,
             )
             if not isinstance(reserved, Failure):
                 reservation = reserved.value
@@ -227,6 +229,7 @@ def fetch_http(
     transport: Transport | None = None,
     remaining_requests: int | None = None,
     before_request: Callable[[], None] | None = None,
+    expected_configuration_digest: str | None = None,
 ) -> FetchResponse:
     return unwrap(
         asyncio.run(
@@ -241,6 +244,7 @@ def fetch_http(
                 transport=transport,
                 remaining_requests=remaining_requests,
                 before_request=before_request,
+                expected_configuration_digest=expected_configuration_digest,
             )
         )
     )

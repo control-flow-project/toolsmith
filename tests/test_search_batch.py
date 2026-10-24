@@ -9,9 +9,35 @@ from toolsmith import lexical, semantic
 from toolsmith.result import Failure, unwrap
 from toolsmith.scopes import Coverage
 from toolsmith.search_batch import (
+    EmbeddingQuery,
     SearchQuery,
     read_queries,
 )
+
+
+def test_batch_vectors_reuse_embedding_and_keep_individual_failure() -> None:
+    with index_database() as connection:
+        source = semantic.Source("weather", "Rain weather")
+        publish(connection, source)
+        scope = selected_scope(
+            connection, (ScopeEntry(source.reference, semantic.fingerprint(source.text)),)
+        )
+        vector = unwrap(semantic.encode_query("Rain weather", FixtureEncoder()))
+        batch = unwrap(
+            semantic.search_embeddings_batch(
+                connection,
+                (
+                    EmbeddingQuery("one", vector),
+                    EmbeddingQuery("bad", b"not-a-vector"),
+                    EmbeddingQuery("two", vector),
+                ),
+                scope,
+            )
+        )
+        assert tuple(item.id for item in batch.items) == ("one", "bad", "two")
+        assert unwrap(batch.items[0].result).hits[0].reference == "weather"
+        assert isinstance(batch.items[1].result, Failure)
+        assert unwrap(batch.items[2].result).hits[0].reference == "weather"
 
 
 def test_lexical_batch_queries_one_authorized_index_without_crossing_scope() -> None:

@@ -8,13 +8,14 @@ from toolsmith.acquisition.config import read_budget_policy, read_http_policy
 from toolsmith.cli.parser import Arguments
 from toolsmith.files import read_bytes
 from toolsmith.result import ToolsmithError, boundary, unwrap
-from toolsmith.validation import canonical_json, fields, parse_json, text
+from toolsmith.validation import canonical_json, digest, fields, parse_json, text
 
 
 @dataclass(frozen=True)
 class DownloadProfile:
     http: HttpPolicy
     budget: BudgetPolicy
+    configuration_digest: str | None
 
 
 def read_profiles(path: Path) -> dict[str, DownloadProfile]:
@@ -24,10 +25,11 @@ def read_profiles(path: Path) -> dict[str, DownloadProfile]:
     profiles: dict[str, DownloadProfile] = {}
     for name, value in supplied.items():
         identity = text(name, 300, "Profile name")
-        item = fields(value, {"http", "budget"})
+        item = fields(value, {"http", "budget"}, {"configuration_digest"})
         profiles[identity] = DownloadProfile(
             unwrap(read_http_policy(canonical_json(item["http"]))),
             unwrap(read_budget_policy(canonical_json(item["budget"]))),
+            digest(item["configuration_digest"]) if "configuration_digest" in item else None,
         )
     return profiles
 
@@ -50,6 +52,7 @@ def read_requests(path: Path, profiles: dict[str, DownloadProfile]) -> tuple[Dow
                 Path(text(item["destination"], 8192, "Destination")),
                 profile.http,
                 profile.budget,
+                profile.configuration_digest,
             )
         )
     return tuple(requests)

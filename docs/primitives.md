@@ -69,6 +69,9 @@ The request file is an array of objects such as
 `{"id":"document-1","url":"https://example.com/report","profile":"publisher","destination":"/private/work/document-1.html"}`.
 Group/task limits are operator approvals, not suggested collection quotas.
 All profiles in a batch share period/task limits; each group has one policy.
+If network state has reviewed configuration, each profile must also supply its
+current `configuration_digest`. A missing/stale approval fails before HTTP; the
+downloader never assumes that a recently changed approval still permits work.
 
 ```sh
 toolsmith --output /private/work/downloads.json http batch --profiles /private/work/profiles.json --requests /private/work/requests.json --network-state /private/network --task assignment --concurrency 8 --deadline-seconds 300
