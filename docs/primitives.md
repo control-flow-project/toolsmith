@@ -25,6 +25,10 @@ Executable scripts, styles and non-content markup are excluded from prose;
 literal JSON/JSON-LD blocks are separate untrusted fields. Link labels can be
 explicitly marked shortened. No site selector or deterministic table meaning is
 inferred. Callers inspect ordinary text and metadata, then choose what to read.
+Ordinary content inside form wrappers remains readable; interactive controls
+and values do not become prose. Long reading attributes use the complete 4 MiB
+HTML input bound rather than a separate small field cutoff. Access/password
+signals, hidden-content exclusions and node/depth limits still apply.
 The XML representation preserves expanded namespace names, attributes, text and
 child order. RSS/Atom returns every distinct entry within its input bounds and
 an explicit publisher-declared next link when present; it fetches nothing.

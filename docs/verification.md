@@ -2,13 +2,17 @@
 
 ## Generic primitives — 2026-10-24, 0.5.0
 
-The integrated local gate passes 458 tests in 40 isolated files, Ruff formatting
+The integrated local gate passes 461 tests in 40 isolated files, Ruff formatting
 and lint, strict Mypy and wheel/sdist builds. It runs with an aggregate 8-GiB
 memory limit, zero swap and at most 256 tasks. Tests cover complete 2,500-entry
 feeds, 250 selected downloads, cross-group concurrency, same-group serialization,
 crash/deadline accounting, strict HTTP framing, typed XML/JSONL/HTML metadata,
 native PDF text/rendering, output-file safety and one coverage read per batch
 of 250 indexed queries. These are not live discovery or summary-quality claims.
+Form-wrapped public pages retain their text and links without leaking control
+values. Password/access checks remain covered. Long reading attributes use the
+whole 4 MiB HTML bound; oversized complete input still fails. Fresh independent
+wheel/sdist acceptance includes the form case, actual MiniLM and native PDF checks.
 
 The optional primitives and actual MiniLM installation checks pass in independent
 wheel and sdist environments, with no added native worker threads. Direct HTTPS

@@ -46,6 +46,15 @@ def main() -> int:
     )
     assert inspected.links[0].target == "/report"
     assert inspected.metadata[0].content == "Publisher"
+    wrapped = unwrap(
+        inspect_html(
+            b'<form><input type="hidden" value="opaque"><p>Public reporting.</p>'
+            b'<a href="/release">Release</a></form>'
+        )
+    )
+    assert wrapped.text == "Public reporting.\nRelease"
+    assert wrapped.links[0].target == "/release"
+    assert "opaque" not in wrapped.text
     assert unwrap(read_xml(b'<root><entry href="/one">One</entry></root>')).nodes == 2
     assert unwrap(read_json_lines(b'{"id":1}\n{"id":2}\n')) == ({"id": 1}, {"id": 2})
     assert len(unwrap(resolve_urls("https://example.com/index", ("/one", "/two")))) == 2

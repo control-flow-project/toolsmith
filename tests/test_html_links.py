@@ -94,11 +94,57 @@ def test_ignored_large_data_attributes_do_not_block_readable_content() -> None:
     assert ignored not in inspected.text
 
 
-@pytest.mark.parametrize("attribute", ["href", "style", "class", "role", "src", "content"])
-def test_large_reading_attributes_remain_bounded(attribute: str) -> None:
-    content = f'<main {attribute}="{"x" * 8193}"><p>Reporting.</p></main>'.encode()
+def test_form_wrapped_public_reporting_keeps_text_and_links_not_control_values() -> None:
+    content = b"""<html><title>Publisher releases</title><body>
+    <form id="aspnetForm" method="post">
+      <input type="hidden" name="__VIEWSTATE" value="opaque-control-state">
+      <h1>Industrial production release</h1><p>Production rose 4.2 percent.</p>
+      <a href="/releases/current.pdf">Read the complete release</a>
+      <button>Submit a change</button><select><option>Private control</option></select>
+    </form></body></html>"""
+    inspected = unwrap(inspect_html(content))
+    assert "Production rose 4.2 percent." in inspected.text
+    assert "Industrial production release" in inspected.text
+    assert inspected.links == (
+        HtmlLink("/releases/current.pdf", "Read the complete release", (), None, False),
+    )
+    assert "opaque-control-state" not in inspected.text
+    assert "Private control" not in inspected.text
+    assert "Submit a change" not in inspected.text
+    assert not inspected.password_controls
+    assert "Production rose 4.2 percent." in unwrap(read_html(content)).parts[0].text
+
+
+def test_form_content_does_not_disable_password_or_access_screen_checks() -> None:
+    content = b'<title>Sign in to continue</title><form><h1>Sign in to continue</h1><input type="password"></form>'
     assert isinstance(inspect_html(content), Failure)
     assert isinstance(read_html(content), Failure)
+    public_title = b'<html><title>Account</title><form><input type="password"></form></html>'
+    assert unwrap(inspect_html(public_title)).password_controls
+    assert isinstance(read_html(public_title), Failure)
+
+
+def test_long_reading_attributes_use_the_whole_input_bound_without_losing_prose() -> None:
+    target = "https://example.org/release?reference=" + "x" * 20000
+    style = "--publisher-state:" + "x" * 20000 + ";display:block"
+    content = f'<main style="{style}"><p>Material public reporting.</p><a href="{target}">Release</a></main>'.encode()
+    inspected = unwrap(inspect_html(content))
+    assert inspected.text == "Material public reporting.\nRelease"
+    assert len(inspected.links) == 1
+    assert inspected.links[0].target == target
+    assert style not in inspected.text
+    oversized = b'<main title="' + b"x" * (4 * 1024 * 1024) + b'">Report</main>'
+    assert isinstance(inspect_html(oversized), Failure)
+
+
+@pytest.mark.parametrize("attribute", ["href", "style", "class", "role", "src", "content"])
+def test_reading_attributes_are_bounded_by_the_complete_html_input(attribute: str) -> None:
+    content = f'<main {attribute}="{"x" * 8193}"><p>Reporting.</p></main>'.encode()
+    assert unwrap(inspect_html(content)).text == "Reporting."
+    assert unwrap(read_html(content)).parts[0].text == "Reporting."
+    oversized = f'<main {attribute}="{"x" * (4 * 1024 * 1024)}"><p>Reporting.</p></main>'.encode()
+    assert isinstance(inspect_html(oversized), Failure)
+    assert isinstance(read_html(oversized), Failure)
 
 
 def test_duplicate_ignored_attributes_do_not_weaken_access_checks() -> None:

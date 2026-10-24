@@ -5,6 +5,8 @@ from html.parser import HTMLParser
 from toolsmith.readers.text import decode_text, normalize_text
 from toolsmith.result import ToolsmithError
 
+MAX_HTML_BYTES = 4 * 1024 * 1024
+
 OMIT = {
     "script",
     "style",
@@ -13,7 +15,6 @@ OMIT = {
     "svg",
     "nav",
     "footer",
-    "form",
     "iframe",
     "button",
     "select",
@@ -150,8 +151,6 @@ class MeaningfulParser(HTMLParser):
         for name, value in attrs:
             if name in READ_ATTRIBUTES:
                 selected.setdefault(name, value or "")
-        if any(len(value) > 8192 for value in selected.values()):
-            raise ToolsmithError("limit", "HTML reading attribute exceeds its field budget")
         if tag in {"p", "li"} and self.stack[-1].tag == tag:
             self.stack.pop()
         node = Node(tag, selected)
@@ -177,7 +176,7 @@ class MeaningfulParser(HTMLParser):
 def parse_html(content: bytes) -> Node:
     parser = MeaningfulParser()
     try:
-        parser.feed(decode_text(content, 4 * 1024 * 1024))
+        parser.feed(decode_text(content, MAX_HTML_BYTES))
         parser.close()
     except (AssertionError, ValueError, RecursionError) as error:
         raise ToolsmithError(

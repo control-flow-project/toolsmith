@@ -38,7 +38,12 @@ links separately from cleaned prose. Targets remain literal: callers resolve and
 authorize them before any request. Labels are bounded to 1,000 characters with
 an explicit truncation flag. The parser retains only attributes used by reading,
 visibility, resource and link inspection. Unused attributes do not acquire an
-independent value-size limit; the complete input/node/depth budgets still apply.
+independent value-size limit. Reading attributes also use the complete 4 MiB
+HTML input bound, not an 8,192-character per-value cutoff; a long decorative
+attribute must not erase the rest of a readable page. Node/depth/name budgets
+still apply. Form containers preserve ordinary text and links, including pages
+wrapped by ASP.NET forms; controls and their values remain excluded. Password
+signals and access-screen rejection remain unchanged.
 Duplicate HTML attributes retain their first value; later duplicates never
 replace link targets or visibility attributes. This tolerance does not relax
 XML/feed validation or the untrusted-link authorization boundary.
