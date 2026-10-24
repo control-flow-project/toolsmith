@@ -35,7 +35,7 @@ HTTP client for a Toolsmith service, skill installation or fleet integration.
 | `toolsmith.paths` | `relative_components`, `relative_parent`, `relative_file` for canonical private descendants |
 | `toolsmith.filesystem` | `inventory`, `sync_directory_tree`, `publish_directory`, `FileEntry` |
 | `toolsmith.archives` | `pack_files`, `unpack_files`, `read_archive_member`, `MemberSource`, `MemberDigest`, `ArchiveReport` |
-| `toolsmith.readers` | `Document`, `TextPart`, `read_text`, `normalize_text`, `read_json`, `read_html`, `inspect_html`, `HtmlInspection`, `read_feed`, `Feed`, `FeedEntry`, `decode_table`, `iter_table_rows`, `project_table` |
+| `toolsmith.readers` | `Document`, `TextPart`, `read_text`, `normalize_text`, `read_json`, `read_html`, `inspect_html`, `HtmlInspection`, `HtmlLink`, `read_feed`, `Feed`, `FeedEntry`, `decode_table`, `iter_table_rows`, `project_table` |
 | `toolsmith.readers.content` | `validate_content`; PDF signature only, not extraction |
 | `toolsmith.lexical` | `Source`, `Scope`, `initialize_index`, `inspect_index`, `indexed_scope`, `matching_scope`, `index_source`, `invalidate_source`, `search`, `check_index`, `compile_query`, `Region`, `find_text` |
 | `toolsmith.semantic` | `load_model`, `inspect_model`, `Source`, `Scope`, `prepare_connection`, `prepare_embedding`, `encode_query`, `initialize_index`, `inspect_index`, `inspect_coverage`, `indexed_scope`, `pending_references`, `publish_embedding`, `invalidate_embedding`, `relocate_embedding`, `clear_index`, `search_embeddings`, `check_index`, `indexed_digest` |
@@ -50,6 +50,23 @@ HTTP client for a Toolsmith service, skill installation or fleet integration.
 The following modules compose the **optional text archive**, not a generic storage
 backend for consumer applications. Its parsing and indexing still use the same
 libraries listed above.
+
+`inspect_html` returns `links` as a tuple of `HtmlLink` values: literal `target`,
+readable `label`, `relations`, optional `media_type` and `label_truncated`.
+Relative targets, fragments and non-HTTP schemes remain untrusted metadata;
+the caller must resolve and validate them against its source policy before
+requesting anything. Navigation links are preserved even though navigation prose
+is omitted from `text`. Hidden, advertising and template regions stay excluded.
+No browser, network access or automatic following occurs. For example:
+
+```python
+from toolsmith.readers import inspect_html
+from toolsmith.result import unwrap
+
+inspection = unwrap(inspect_html(b'<main><a href="/article">Report</a></main>'))
+link = inspection.links[0]
+assert link.target == "/article" and link.label == "Report"
+```
 
 | Module | Archive operations |
 | --- | --- |

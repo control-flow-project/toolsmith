@@ -237,7 +237,7 @@ class NativeTransport:
                 "GET",
                 parts.path + ("?" + parts.query if parts.query else ""),
                 headers={
-                    "User-Agent": "Mozilla/5.0 (Toolsmith/0.4.2; approved bounded acquisition)",
+                    "User-Agent": "Mozilla/5.0 (Toolsmith/0.4.3; approved bounded acquisition)",
                     "Accept": "*/*",
                     "Accept-Encoding": "gzip",
                     "Connection": "close",

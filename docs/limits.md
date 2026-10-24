@@ -55,7 +55,7 @@ structure. They are not ceilings on the application database's total entries.
 | Backup manifest | 128 MiB bounded metadata input; writer streams records and enforces the same bound as restore |
 | ZIP | 128 MiB/member, 1 GiB aggregate, 10,000 members, 4 MiB central directory, depth 64; bounded untrusted archive expansion/metadata |
 | Plain text / JSON | Configurable to 128 MiB; JSON rejects duplicate keys and nonfinite numbers |
-| HTML | 4 MiB, 50,000 nodes, depth 128; meaningful text only, with table/dynamic-content warnings |
+| HTML | 4 MiB, 50,000 nodes, depth 128; reading attributes at most 8,192 characters; unused attributes discarded. Inspection preserves typed links, labels at most 1,000 characters with explicit truncation. No deterministic table interpretation. |
 | Feed | 2 MiB, 12,000 nodes, depth 32, at most 1,000 returned entries; omitted entries are still validated |
 | CSV | 32 MiB compressed / 64 MiB expanded, 256 columns; row budget is explicit and configurable |
 | Tree inventory | Default 10,000 / maximum 100,000 returned entries, explicit byte budget, depth 64; a bounded materialized tree report |

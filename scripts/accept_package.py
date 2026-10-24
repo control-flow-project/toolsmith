@@ -47,7 +47,7 @@ assert importlib.util.find_spec('onnxruntime') is None
 assert importlib.util.find_spec('tokenizers') is None
 from toolsmith.semantic import Scope, Source, encode_query, initialize_index, inspect_model
 assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
-assert importlib.metadata.version('ctlflow-toolsmith') == '0.4.2'
+assert importlib.metadata.version('ctlflow-toolsmith') == '0.4.3'
 metadata = importlib.metadata.metadata('ctlflow-toolsmith')
 assert metadata['License-Expression'] == 'MIT'
 assert metadata.get_all('License-File') == ['LICENSE']
@@ -91,6 +91,9 @@ before_audit = (settings / 'budget.json').read_bytes()
 assert unwrap(check_budget(settings, (selected,))) == 0
 assert (settings / 'budget.json').read_bytes() == before_audit
 assert unwrap(inspect_html(b'<main>Public text</main><input type="password">')).password_controls
+linked = unwrap(inspect_html(b'<nav><a href="/section">Section</a></nav><main data-unused="' + b'x' * 20000 + b'"><a href="/article">Article</a></main>'))
+assert tuple(link.target for link in linked.links) == ('/section', '/article')
+assert linked.links[1].label == 'Article' and not linked.links[1].label_truncated
 assert unwrap(replace_bytes(parent / 'explicit-output.txt', b'private output')) == 14
 assert not (parent / '.lock').exists()
 assert unwrap(project_table(unwrap(decode_table(b'Name,Value\\nA,10\\n')), ('Value',), {'Name':'A'})).matched == 1
@@ -174,11 +177,11 @@ def check_archives(wheel: Path, source: Path) -> None:
 
 def main() -> int:
     require_limits()
-    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.4.2-py3-none-*.whl"))
+    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.4.3-py3-none-*.whl"))
     if len(wheels) != 1 or wheels[0].name.endswith("-any.whl"):
         raise RuntimeError("Expected one platform-tagged native wheel")
     wheel = wheels[0]
-    source = ROOT / "dist/ctlflow_toolsmith-0.4.2.tar.gz"
+    source = ROOT / "dist/ctlflow_toolsmith-0.4.3.tar.gz"
     check_archives(wheel, source)
     uv = os.environ.get("TOOLSMITH_UV") or shutil.which("uv")
     if uv is None:

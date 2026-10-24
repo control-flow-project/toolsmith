@@ -3,6 +3,24 @@
 This file documents reproducible gates. Release evidence is recorded after the
 actual run; fixture results are not certification of every publisher/network.
 
+## Linked HTML inspection — 2026-10-24
+
+Version 0.4.3 exposes typed anchor/feed links through the existing HTML inspector.
+Literal targets remain untrusted; no link is requested automatically. Navigation
+links are distinct from cleaned prose. Long labels expose a truncation flag.
+Unused data attributes no longer fail the reader solely because of value length;
+relevant attributes, input bytes, nodes, nesting, duplicate-attribute and access
+checks remain enforced.
+
+The complete gate passes 366 tests in 31 isolated files, Ruff lint/format and
+strict Mypy. Wheel and sdist build and install into independent clean environments;
+installed CLI/library, linked HTML, license/archive contents, optional HTTP and
+optional semantic installation checks pass. No skipped case or failed test is
+reported in this run. Verification uses an aggregate 8-GiB, zero-swap, 256-task
+scope. The dependency lock changes only the first-party version record.
+These are offline/package checks, not live publisher or model-quality evidence.
+No registry publication, service or fleet activation occurs.
+
 ## Current-schema cleanup — 2026-10-22
 
 The 0.4.2 source removes archive/vector schema converters, their CLI/library

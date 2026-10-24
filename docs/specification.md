@@ -32,6 +32,12 @@ HTML inspection reports markup signals and rejects document-title access screens
 it does not infer computed CSS visibility. Static text reading still rejects
 unresolved access dialogs. Browser-owning callers validate computed-visible DOM
 through that same text reader; Toolsmith neither runs a browser nor bypasses gates.
+Inspection also returns typed untrusted anchor/feed links, including navigation
+links separately from cleaned prose. Targets remain literal: callers resolve and
+authorize them before any request. Labels are bounded to 1,000 characters with
+an explicit truncation flag. The parser retains only attributes used by reading,
+visibility, resource and link inspection. Unused attributes do not acquire an
+independent value-size limit; the complete input/node/depth budgets still apply.
 - Explicit safe regular-file reads and private artifact storage/export.
 - Immutable local text/file versions and exact citations, with lexical FTS5 search.
 - Approved HTTPS acquisition, bounded DNS/TLS/body/redirect handling and persistent

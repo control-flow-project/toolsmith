@@ -1,5 +1,5 @@
 from toolsmith.readers.feeds import Feed, FeedEntry, read_feed
-from toolsmith.readers.html import HtmlInspection, inspect_html, read_html
+from toolsmith.readers.html import HtmlInspection, HtmlLink, inspect_html, read_html
 from toolsmith.readers.json import read_json
 from toolsmith.readers.models import Document, TextPart
 from toolsmith.readers.tables import (
@@ -12,6 +12,7 @@ from toolsmith.readers.text import normalize_text, read_text
 
 __all__ = [
     "HtmlInspection",
+    "HtmlLink",
     "inspect_html",
     "Document",
     "TextPart",

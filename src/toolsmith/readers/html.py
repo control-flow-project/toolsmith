@@ -24,12 +24,41 @@ WARNING = (
 
 
 @dataclass(frozen=True)
+class HtmlLink:
+    target: str
+    label: str
+    relations: tuple[str, ...]
+    media_type: str | None
+    label_truncated: bool
+
+
+@dataclass(frozen=True)
 class HtmlInspection:
     title: str
     text: str
     content_root: bool
     external_resources: int
     password_controls: bool
+    links: tuple[HtmlLink, ...]
+
+
+def links(root: Node) -> tuple[HtmlLink, ...]:
+    output: list[HtmlLink] = []
+    for node in descendants(root, include_navigation=True):
+        target = node.attributes.get("href", "").strip()
+        if node.tag not in {"a", "link"} or not target:
+            continue
+        label = normalize_text(content_text(node) or node.attributes.get("title", ""))
+        output.append(
+            HtmlLink(
+                target,
+                label[:1000],
+                tuple(node.attributes.get("rel", "").casefold().split()),
+                node.attributes.get("type") or None,
+                len(label) > 1000,
+            )
+        )
+    return tuple(output)
 
 
 @boundary
@@ -59,6 +88,7 @@ def inspect_html(content: bytes) -> HtmlInspection:
         any(node.tag in {"main", "article"} for node in visible),
         resources,
         passwords,
+        links(root),
     )
 
 
