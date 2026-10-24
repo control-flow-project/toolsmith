@@ -38,6 +38,9 @@ authorize them before any request. Labels are bounded to 1,000 characters with
 an explicit truncation flag. The parser retains only attributes used by reading,
 visibility, resource and link inspection. Unused attributes do not acquire an
 independent value-size limit; the complete input/node/depth budgets still apply.
+Duplicate HTML attributes retain their first value; later duplicates never
+replace link targets or visibility attributes. This tolerance does not relax
+XML/feed validation or the untrusted-link authorization boundary.
 RSS/Atom results expose a resolved feed-level next-page link, if declared,
 including inherited XML base resolution. Conflicting or unsafe next links fail.
 Pagination is metadata only; callers own authorization, requests and completeness.

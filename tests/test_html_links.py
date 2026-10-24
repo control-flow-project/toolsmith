@@ -4,6 +4,32 @@ from toolsmith.readers import HtmlLink, inspect_html, read_html
 from toolsmith.result import Failure, unwrap
 
 
+def test_duplicate_html_attributes_preserve_the_first_link_target_and_metadata() -> None:
+    inspected = unwrap(
+        inspect_html(
+            b'<main><a href="/first" HREF="/second" rel="author" rel="external">Article</a></main>'
+        )
+    )
+    assert inspected.links == (HtmlLink("/first", "Article", ("author",), None, False),)
+    assert inspected.text == "Article"
+
+
+def test_duplicate_visibility_attributes_do_not_reveal_hidden_content() -> None:
+    inspected = unwrap(
+        inspect_html(
+            b'<main><p>Visible</p><div style="display:none" style="">'
+            b'<a href="/hidden">Hidden</a></div></main>'
+        )
+    )
+    assert inspected.links == ()
+    assert inspected.text == "Visible"
+
+
+def test_duplicate_unused_attributes_do_not_block_readable_html() -> None:
+    content = b'<main data-layout="wide" data-layout="narrow"><p>Reporting</p></main>'
+    assert unwrap(read_html(content)).parts[0].text == "Reporting"
+
+
 def test_linked_inspection_keeps_navigation_and_feed_metadata_outside_cleaned_text() -> None:
     content = b"""<html><head><title>Publisher</title>
     <link rel="alternate" type="application/rss+xml" href="/feed.xml" title="News feed">
@@ -75,8 +101,8 @@ def test_large_reading_attributes_remain_bounded(attribute: str) -> None:
     assert isinstance(read_html(content), Failure)
 
 
-def test_ignored_attributes_do_not_weaken_duplicate_or_access_checks() -> None:
-    assert isinstance(inspect_html(b'<main data-key="one" data-key="two">Text</main>'), Failure)
+def test_duplicate_ignored_attributes_do_not_weaken_access_checks() -> None:
+    assert unwrap(inspect_html(b'<main data-key="one" data-key="two">Text</main>')).text == "Text"
     assert isinstance(inspect_html(b"<title>Access denied</title><a href='/one'>One</a>"), Failure)
     gated = b"""<main>Reporting</main><div role="dialog" aria-modal="true">
     <p>Subscribe to read</p><input type="password"></div>"""

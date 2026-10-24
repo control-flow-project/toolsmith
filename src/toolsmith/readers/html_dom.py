@@ -142,11 +142,12 @@ class MeaningfulParser(HTMLParser):
         self.nodes += 1
         if self.nodes > 50_000 or len(self.stack) >= 128 or len(attrs) > 100:
             raise ToolsmithError("limit", "HTML exceeds its node, attribute or nesting budget")
-        if len({name for name, _ in attrs}) != len(attrs):
-            raise ToolsmithError("invalid_input", "HTML contains ambiguous duplicate attributes")
         if any(len(name) > 500 for name, _ in attrs):
             raise ToolsmithError("limit", "HTML attribute exceeds its field budget")
-        selected = {name: value or "" for name, value in attrs if name in READ_ATTRIBUTES}
+        selected: dict[str, str] = {}
+        for name, value in attrs:
+            if name in READ_ATTRIBUTES:
+                selected.setdefault(name, value or "")
         if any(len(value) > 8192 for value in selected.values()):
             raise ToolsmithError("limit", "HTML reading attribute exceeds its field budget")
         if tag in {"p", "li"} and self.stack[-1].tag == tag:
