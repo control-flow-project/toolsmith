@@ -1,8 +1,38 @@
 # Verification
 
+## PR review corrections — 25 October 2026
+
+Controlled regressions reproduced two automatic-wait defects: a new download
+waited out an existing publisher cooldown or exhausted quota instead of returning
+a deferral. Budget admission now waits only for local spacing/slot contention;
+separate batches retain permitted spacing. Typed query batches enforce the same
+32-MiB aggregate bound as file input before index/model work.
+
+Live consumer qualification exposed database corruption. The file preflight
+opened and closed an ordinary descriptor while another connection held SQLite
+locks. That close releases all POSIX record locks for that file in the process,
+allowing a competing writer. Metadata inspection now uses Linux O_PATH at the
+shared connection owner. External-process tests verify that secondary generic,
+index and archive connections retain the original writer lock; symlink, hardlink,
+permission and nonregular-file rejection remain covered. The consumer adds the
+same regression for companion-database validation. This follows SQLite's
+[documented close/locking hazard](https://www.sqlite.org/howtocorrupt.html).
+
+The corrected source passes 481 tests across 42 isolated files, with zero failed
+tests or warnings, Ruff formatting/lint, strict Mypy over 122 files, and wheel/sdist
+builds. Fresh independent wheel and sdist installations pass CLI/library,
+XML/JSONL/HTML/URL/ZIP/PDF primitives, archive contents, optional HTTP and optional
+semantic installation checks. These runs use the verified 8-GiB, zero-swap,
+256-task scope. Actual MiniLM assets were not supplied to this package rerun;
+the earlier dated real-model evidence remains separate. Consumer recovery and
+full live collection are not certified by these library checks. The installed
+third-party dependency audit reports no known vulnerabilities; it skips the
+editable first-party distribution. Dependency records did not change in these
+review corrections.
+
 ## Selected acquisition buckets — 25 October 2026
 
-The current source gate passes 469 tests in 41 isolated files, strict typing,
+The pre-review source gate passed 469 tests in 41 isolated files, strict typing,
 lint/format and wheel/sdist builds. The bucket scheduler is shared by approved
 HTTP downloads and caller-owned asynchronous acquisition operations. Its default
 is one concurrent coroutine per publisher bucket, not an eight-request ceiling.

@@ -141,6 +141,10 @@ private files, not permission changes to an existing parent. Replacement owns
 atomic publication only; callers own coordination and compare-and-swap semantics.
 No implicit lock file is added to an artifact directory. No-replace publication
 uses one pinned-descriptor rename, never a transient hard-link alias.
+Database metadata validation uses Linux O_PATH descriptors. Opening another
+connection must never open/close an ordinary database descriptor outside SQLite:
+that close would release the process's existing POSIX database locks. The shared
+SQLite connection owner retains private-file checks and pinned-parent URI opening.
 
 Network access is HTTPS port 443 only, with exact reviewed DNS hosts. Reject URL
 credentials, secret-like query keys, fragments and control characters. Resolve with

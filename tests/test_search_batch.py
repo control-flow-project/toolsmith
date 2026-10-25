@@ -6,12 +6,13 @@ import pytest
 from semantic_support import FixtureEncoder, ScopeEntry, index_database, publish, selected_scope
 
 from toolsmith import lexical, semantic
-from toolsmith.result import Failure, unwrap
+from toolsmith.result import Failure, ToolsmithError, unwrap
 from toolsmith.scopes import Coverage
 from toolsmith.search_batch import (
     EmbeddingQuery,
     SearchQuery,
     read_queries,
+    validate_queries,
 )
 
 
@@ -99,6 +100,13 @@ def test_query_reader_preserves_a_large_batch_without_a_two_hundred_item_cap() -
     queries = unwrap(read_queries(json.dumps(items).encode()))
     assert len(queries) == 2500
     assert queries[-1].id == "2499"
+
+
+def test_typed_batch_enforces_aggregate_query_bytes_before_index_or_model_work() -> None:
+    queries = tuple(SearchQuery(str(index), "x" * 16_384) for index in range(2048))
+    with pytest.raises(ToolsmithError) as rejected:
+        validate_queries(queries)
+    assert rejected.value.failure.code == "limit"
 
 
 @pytest.mark.parametrize(

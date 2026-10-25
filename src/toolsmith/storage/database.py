@@ -19,6 +19,7 @@ from toolsmith.files import (
 )
 from toolsmith.result import ToolsmithError, boundary
 from toolsmith.semantic.vector import load_vector_extension
+from toolsmith.sqlite import connect_database
 from toolsmith.validation import identity, integer, text
 
 APPLICATION_ID = 1414745393
@@ -121,11 +122,8 @@ def info(store: Store) -> StoreInfo:
 def open_store(root: Path, collection: str, *, write: bool = False) -> Iterator[Store]:
     selected = identity(collection, "Collection")
     with private_directory(root) as directory, directory_lock(directory, shared=not write):
-        with private_file(directory, DATABASE_NAME):
-            pass
-        uri = f"file:/proc/self/fd/{directory.descriptor}/{DATABASE_NAME}?mode={'rw' if write else 'ro'}"
         try:
-            connection = sqlite3.connect(uri, uri=True, timeout=0)
+            connection = connect_database(root / DATABASE_NAME, write=write)
             try:
                 configure(connection)
                 if connection.execute("PRAGMA application_id").fetchone()[0] != APPLICATION_ID:
@@ -156,7 +154,7 @@ def initialize_store(root: Path, collection: str, *, clock: Clock | None = None)
     with private_directory(root, create=True) as directory, directory_lock(directory):
         names = set(os.listdir(directory.descriptor))
         if DATABASE_NAME in names:
-            with private_file(directory, DATABASE_NAME):
+            with closing(connect_database(root / DATABASE_NAME)):
                 pass
         else:
             if names - {".lock", "objects", "tmp"}:

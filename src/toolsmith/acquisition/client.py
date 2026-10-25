@@ -8,7 +8,7 @@ from urllib.parse import urljoin, urlsplit
 
 from toolsmith.acquisition.budgets import (
     BudgetPolicy,
-    reserve_budget,
+    reserve_budget_async,
     settle_budget,
     validate_policy,
 )
@@ -24,7 +24,7 @@ from toolsmith.acquisition.transport import (
 from toolsmith.acquisition.urls import canonical_url, hostname, public_address
 from toolsmith.clock import Clock, SystemClock, utc_now
 from toolsmith.files import absolute_path
-from toolsmith.result import Failure, ToolsmithError, async_boundary, boundary, unwrap
+from toolsmith.result import ToolsmithError, async_boundary, boundary, unwrap
 from toolsmith.validation import integer, number
 
 
@@ -148,8 +148,8 @@ async def fetch_http_async(
         pinned = tuple(public_address(address) for address in addresses)
         remaining(deadline, actual_clock)
         maximum = min(checked.maximum_response_bytes, checked.maximum_total_bytes - used_total)
-        while True:
-            reserved = reserve_budget(
+        reservation = unwrap(
+            await reserve_budget_async(
                 network_state,
                 quota,
                 task,
@@ -158,18 +158,7 @@ async def fetch_http_async(
                 deadline_seconds=min(60, remaining(deadline, actual_clock)),
                 expected_configuration_digest=expected_configuration_digest,
             )
-            if not isinstance(reserved, Failure):
-                reservation = reserved.value
-                break
-            delay = reserved.retry_after_seconds
-            if (
-                reserved.code != "deferred"
-                or delay is None
-                or delay <= 0
-                or delay >= remaining(deadline, actual_clock)
-            ):
-                raise ToolsmithError(reserved.code, reserved.message, delay)
-            await actual_clock.wait(delay)
+        )
         try:
             async with asyncio.timeout(remaining(deadline, actual_clock)), limiter:
                 if before_request is not None:

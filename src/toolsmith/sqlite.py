@@ -1,11 +1,54 @@
+import os
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from urllib.parse import quote
 
-from toolsmith.files import private_directory, private_file
+from toolsmith.files import check_private, component, new_private, private_directory
 from toolsmith.result import ToolsmithError
-from toolsmith.validation import text
+from toolsmith.validation import number, text
+
+
+def connect_database(
+    path: Path, *, create: bool = False, write: bool = False, timeout_seconds: float = 0
+) -> sqlite3.Connection:
+    """Validate metadata without closing an ordinary descriptor on an open database."""
+    if type(create) is not bool or type(write) is not bool:
+        raise ToolsmithError("invalid_input", "Database creation/write intent must be Boolean")
+    timeout = number(timeout_seconds, 0, 60, "Database lock timeout")
+    if not hasattr(os, "O_PATH"):
+        raise ToolsmithError(
+            "unavailable", "Safe database metadata inspection requires Linux O_PATH"
+        )
+    name = component(path.name)
+    with private_directory(path.parent) as directory:
+        flags = os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC
+        try:
+            descriptor = os.open(name, flags, dir_fd=directory.descriptor)
+        except FileNotFoundError:
+            if not create:
+                raise
+            new_private(directory, name, b"")
+            descriptor = os.open(name, flags, dir_fd=directory.descriptor)
+        try:
+            expected = check_private(descriptor)
+            uri = f"file:/proc/self/fd/{directory.descriptor}/{quote(name, safe='')}" + (
+                "?mode=rw" if write or create else "?mode=ro"
+            )
+            connection = sqlite3.connect(uri, uri=True, timeout=timeout)
+            try:
+                observed = os.stat(name, dir_fd=directory.descriptor, follow_symlinks=False)
+                if (expected.st_dev, expected.st_ino) != (observed.st_dev, observed.st_ino):
+                    raise ToolsmithError("denied", "Database identity changed during opening")
+            except BaseException:
+                connection.close()
+                raise
+            return connection
+        finally:
+            # O_PATH does not remove this process's POSIX record locks. Ordinary
+            # open/close here would silently unlock existing SQLite connections.
+            os.close(descriptor)
 
 
 def execute(
@@ -49,12 +92,9 @@ def transaction(
 def open_database(
     path: Path, *, create: bool = False, write: bool = False
 ) -> Iterator[sqlite3.Connection]:
-    with private_directory(path.parent) as directory:
-        with private_file(directory, path.name, create=create):
-            pass
-        uri = f"file:/proc/self/fd/{directory.descriptor}/{path.name}?mode={'rw' if write or create else 'ro'}"
+    with private_directory(path.parent):
         try:
-            connection = sqlite3.connect(uri, uri=True, timeout=0)
+            connection = connect_database(path, create=create, write=write)
             try:
                 connection.execute("PRAGMA foreign_keys = ON")
                 connection.execute("PRAGMA busy_timeout = 0")

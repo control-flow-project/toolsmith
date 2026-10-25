@@ -9,6 +9,13 @@ that own their own authenticated protocol. It applies one absolute deadline to
 buffered reads and owns no DNS, HTTP policy, credentials or connection setup.
 Public acquisition continues to use the single aiohttp transport; the stream
 adapter is not an alternate public downloader or response parser.
+`sqlite.connect_database(path, create=False, write=False, timeout_seconds=0)`
+opens a caller-owned connection using the canonical private-file validator.
+Linux O_PATH metadata inspection preserves existing SQLite process locks;
+ordinary filesystem reads/hashes of an active database must use SQLite's backup
+API or wait until all connections are closed. The caller closes the connection
+and owns schema, transaction and connection settings. `sqlite.open_database`
+composes it with the standard index-connection settings.
 
 See [caller-owned application integration](consumer-adoption.md) for SQLite
 scopes, atomic approval/quota configuration and filesystem ownership.
@@ -54,10 +61,10 @@ HTTP client for a Toolsmith service, skill installation or fleet integration.
 | `toolsmith.acquisition.urls` | `resolve_url`, `resolve_urls`, `ResolvedUrl`; resolution does not authorize requests |
 | `toolsmith.acquisition.batch` | `DownloadRequest`, `DownloadedFile`, `DownloadOutcome`, `DownloadBatch`, `download_batch`, `download_batch_async` |
 | `toolsmith.acquisition.buckets` | `Bucket`, `BucketResult`, `run_buckets_async`; finite caller-selected acquisition with per-bucket spacing |
-| `toolsmith.acquisition.transport` | `NativeResolver`, `PinnedConnection`, `read_response`; bounded primitives for caller-owned native transports |
-| `toolsmith.acquisition.client` | `HttpPolicy`, `FetchResponse`, `fetch_http` without an archive |
+| `toolsmith.acquisition.transport` | `NativeResolver`, `NativeTransport`, `request_pinned`, `request_pinned_async`; bounded DNS and pinned HTTPS transport |
+| `toolsmith.acquisition.client` | `HttpPolicy`, `FetchResponse`, `fetch_http`, `fetch_http_async` without an archive |
 | `toolsmith.acquisition.config` | `read_http_policy`, `read_budget_policy` |
-| `toolsmith.acquisition.budgets` | `BudgetPolicy`, `Reservation`, `BudgetStatus`, `inspect_budget`, `reserve_budget`, `settle_budget` |
+| `toolsmith.acquisition.budgets` | `BudgetPolicy`, `Reservation`, `BudgetStatus`, `inspect_budget`, `reserve_budget`, `reserve_budget_async`, `settle_budget`; asynchronous admission waits only for local spacing/slots within its deadline, never upstream cooldowns or exhausted quota |
 | `toolsmith.acquisition.budget_import` | `BudgetSnapshot`, `GroupUsage`, `Usage`, `import_budget` for reviewed quiesced counters |
 | `toolsmith.acquisition.configuration` | `Configuration`, `configure_budget`, `inspect_configuration`, `check_budget` for atomic caller configuration and charged limits |
 | `toolsmith.journal` | `Record`, `read_journal`, `append_record` |

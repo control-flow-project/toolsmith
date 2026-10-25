@@ -12,7 +12,7 @@ from toolsmith.files import (
     read_private,
     replace_private,
 )
-from toolsmith.result import ToolsmithError, boundary
+from toolsmith.result import ToolsmithError, async_boundary, boundary
 from toolsmith.validation import (
     JsonValue,
     canonical_json,
@@ -386,8 +386,11 @@ def inspect_budget(
         return result
 
 
-@boundary
-def reserve_budget(
+class _SpacingDelay(ToolsmithError):
+    """Only local spacing/slot contention can be waited out automatically."""
+
+
+def _reserve_budget(
     root: Path,
     policy: BudgetPolicy,
     task: str,
@@ -410,11 +413,15 @@ def reserve_budget(
             raise ToolsmithError("conflict", "Configuration changed before request reservation")
         observed = status(state, checked, selected)
         now = actual_clock.wall()
-        if observed.next_request_at is None or observed.next_request_at > now:
+        group, task_usage = scope(state, checked, selected)
+        cooldown = (
+            None if group["cooldown"] is None else number(group["cooldown"], 0, 2**53, "Cooldown")
+        )
+        if cooldown is None or cooldown > now:
             raise ToolsmithError(
                 "deferred",
-                "Source spacing/cooldown prevents a request",
-                None if observed.next_request_at is None else observed.next_request_at - now,
+                "Upstream cooldown prevents a request",
+                None if cooldown is None else cooldown - now,
             )
         if (
             observed.group_requests >= checked.group_requests
@@ -427,11 +434,16 @@ def reserve_budget(
                 "Group or task allowance is exhausted",
                 max(0.1, observed.period_started + checked.period_seconds - now),
             )
+        if observed.next_request_at is not None and observed.next_request_at > now:
+            raise _SpacingDelay(
+                "deferred",
+                "Source spacing or active slot prevents a request",
+                observed.next_request_at - now,
+            )
         pending = records(state["reservations"])
         reservation = Reservation(
             uuid4().hex, identity(state["period"]), checked.group, selected, charged
         )
-        group, task_usage = scope(state, checked, selected)
         usage = counters(group["usage"])
         for counter in (usage, task_usage):
             counter["requests"] = integer(counter["requests"], 0, MAX_BYTES - 1, "Requests") + 1
@@ -449,6 +461,68 @@ def reserve_budget(
         records(state["tasks"])[selected] = task_usage
         save(directory, state)
         return reservation
+
+
+@boundary
+def reserve_budget(
+    root: Path,
+    policy: BudgetPolicy,
+    task: str,
+    maximum_bytes: int,
+    *,
+    clock: Clock | None = None,
+    boot: str | None = None,
+    expected_configuration_digest: str | None = None,
+    deadline_seconds: float = 60,
+) -> Reservation:
+    return _reserve_budget(
+        root,
+        policy,
+        task,
+        maximum_bytes,
+        clock=clock,
+        boot=boot,
+        expected_configuration_digest=expected_configuration_digest,
+        deadline_seconds=deadline_seconds,
+    )
+
+
+@async_boundary
+async def reserve_budget_async(
+    root: Path,
+    policy: BudgetPolicy,
+    task: str,
+    maximum_bytes: int,
+    *,
+    clock: Clock | None = None,
+    boot: str | None = None,
+    expected_configuration_digest: str | None = None,
+    deadline_seconds: float = 60,
+) -> Reservation:
+    selected_clock = clock or SystemClock()
+    deadline = selected_clock.monotonic() + number(
+        deadline_seconds, 0.001, 60, "Request deadline seconds"
+    )
+    while True:
+        remaining = deadline - selected_clock.monotonic()
+        if remaining <= 0:
+            raise ToolsmithError("deferred", "Local pacing exhausted the request deadline")
+        try:
+            return _reserve_budget(
+                root,
+                policy,
+                task,
+                maximum_bytes,
+                clock=selected_clock,
+                boot=boot,
+                expected_configuration_digest=expected_configuration_digest,
+                deadline_seconds=remaining,
+            )
+        except _SpacingDelay as error:
+            delay = error.failure.retry_after_seconds
+            if delay is None or delay <= 0 or delay >= remaining:
+                raise
+            await selected_clock.wait(delay)
 
 
 @boundary

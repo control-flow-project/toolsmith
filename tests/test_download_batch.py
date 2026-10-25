@@ -194,6 +194,70 @@ def test_upstream_cooldown_is_local_to_its_group(tmp_path: Path, clock: Controll
     assert isinstance(batch.items[2].result, Success)
 
 
+@pytest.mark.parametrize("restriction", ["cooldown", "quota"])
+def test_existing_upstream_or_quota_deferral_does_not_wait_and_request(
+    tmp_path: Path, clock: ControlledClock, restriction: str
+) -> None:
+    selected = request(tmp_path, "later", "one")
+    if restriction == "quota":
+        selected = replace(
+            selected, budget=replace(selected.budget, period_seconds=5, group_requests=1)
+        )
+    network = tmp_path / "network"
+    held = unwrap(reserve_budget(network, selected.budget, "earlier", 100, clock=clock))
+    unwrap(
+        settle_budget(
+            network,
+            selected.budget,
+            held,
+            0,
+            3 if restriction == "cooldown" else 0,
+            clock=clock,
+        )
+    )
+    started = clock.monotonic()
+    transport = RecordedTransport([plain()])
+    batch = unwrap(
+        download_batch(
+            (selected,),
+            network,
+            "assignment",
+            clock=clock,
+            resolver=FixedResolver(),
+            transport=transport,
+        )
+    )
+    assert not batch.complete
+    assert isinstance(batch.items[0].result, Failure)
+    assert batch.items[0].result.code == "deferred"
+    assert batch.items[0].attempted_requests == 0
+    assert transport.urls == []
+    assert clock.monotonic() == started
+    assert not selected.destination.exists()
+
+
+def test_separate_batches_wait_for_local_spacing_within_the_request_deadline(
+    tmp_path: Path, clock: ControlledClock
+) -> None:
+    transport = RecordedTransport([plain(), plain()])
+    started = clock.monotonic()
+    for identity in ("first", "second"):
+        selected = request(tmp_path, identity, "one", 5)
+        completed = unwrap(
+            download_batch(
+                (selected,),
+                tmp_path / "network",
+                "assignment",
+                clock=clock,
+                resolver=FixedResolver(),
+                transport=transport,
+            )
+        )
+        assert completed.complete and completed.items[0].attempted_requests == 1
+    assert clock.monotonic() - started == 5
+    assert len(transport.urls) == 2
+
+
 def test_existing_download_is_not_requested_again(tmp_path: Path, clock: ControlledClock) -> None:
     existing = request(tmp_path, "existing", "one")
     existing.destination.write_bytes(b"saved")

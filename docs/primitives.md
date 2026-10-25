@@ -89,6 +89,9 @@ destination, not included in the outcome. An existing destination causes no HTTP
 request. Timeout/cancellation leaves explicit unfinished results and conservative
 usage. A completed batch means only that supplied batch completed, not that a
 publisher or discovery tree was exhausted. Submit remaining selections explicitly.
+Local spacing/slot waits consume the current request deadline. An existing
+publisher cooldown or exhausted allowance returns a deferral immediately, even
+when its retry time is short; starting another batch does not wait it out.
 
 ### Caller-owned acquisition operations
 

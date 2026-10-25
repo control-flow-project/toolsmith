@@ -31,11 +31,15 @@ def validate_queries(queries: tuple[SearchQuery, ...]) -> tuple[SearchQuery, ...
     if not isinstance(queries, tuple):
         raise ToolsmithError("invalid_input", "Supply a tuple of typed search queries")
     seen: set[str] = set()
+    used = 0
     for query in queries:
         if not isinstance(query, SearchQuery):
             raise ToolsmithError("invalid_input", "Supply typed search queries")
         identity = text(query.id, 300, "Query id")
-        text(query.text, 16_384, "Query text")
+        selected_text = text(query.text, 16_384, "Query text")
+        used += len(identity.encode()) + len(selected_text.encode())
+        if used > 32 * 1024 * 1024:
+            raise ToolsmithError("limit", "Query input exceeds its 32 MiB batch budget")
         if identity in seen:
             raise ToolsmithError("invalid_input", "Query ids must be unique")
         seen.add(identity)
