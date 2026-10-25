@@ -59,6 +59,15 @@ def hostname(value: object) -> str:
     raise ToolsmithError("denied", "IP-literal hosts are not permitted")
 
 
+def approved_hosts(value: object) -> tuple[str, ...]:
+    if not isinstance(value, tuple) or not 1 <= len(value) <= 32:
+        raise ToolsmithError("invalid_input", "Supply one to 32 explicit approved HTTPS hosts")
+    selected = tuple(hostname(host) for host in value)
+    if len(set(selected)) != len(selected):
+        raise ToolsmithError("invalid_input", "Approved hosts must be unique")
+    return tuple(sorted(selected))
+
+
 def canonical_url(value: object) -> str:
     selected = text(value, 8192, "URL")
     if (

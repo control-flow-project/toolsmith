@@ -1,5 +1,27 @@
 # Verification
 
+## Complete package review — 25 October 2026
+
+The review covered every first-party source, test, script, example and guide,
+plus the complete modified vec1 implementation. Two boundary defects were
+reproduced: duplicate DNS hosts were accepted or silently removed differently
+between typed/JSON HTTP policies, and raw HTTP CLI requests fetched before
+rejecting an existing or relative destination. One shared host validator now
+normalizes before rejecting duplicates; destination validation precedes HTTP
+and final publication remains atomic and no-replace. Scheduler wording uses
+caller-defined buckets. Current guides now match feed limits, transport exports,
+optional PDF support and output-directory behavior.
+
+The added controls initially produced nine failures and seven passes. After the
+corrections, all 497 tests in 42 isolated files pass without warnings or skips;
+Ruff format/lint, strict Mypy over 122 files and wheel/sdist builds pass. Tests
+run under the existing 8-GiB, zero-swap, 256-task limits. Clean wheel and sdist
+installations pass base/optional-dependency checks, library/CLI calls, native PDF
+text/rendering and actual pinned MiniLM/API-30 acceptance with no added threads.
+The small example corpus has warm query medians of 8.342 ms and 8.219 ms in these
+two installations; these are observations, not production latency guarantees.
+No live news completeness, registry release or fleet activation is certified.
+
 ## PR review corrections — 25 October 2026
 
 Controlled regressions reproduced two automatic-wait defects: a new download

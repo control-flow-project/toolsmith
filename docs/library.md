@@ -147,6 +147,12 @@ DNS/TLS/HTTPS. These are injected call boundaries, not alternative product paths
 or runtime plugins. DNS approval and byte/deadline checks remain in acquisition;
 custom callers remain responsible for their own transport's actual network behavior.
 
+Raw `HttpPolicy` and archive `SourcePolicy` accept one to 32 exact public DNS
+hosts. Typed and JSON policies normalize case, sort the hosts and reject duplicate
+names after normalization; neither silently removes aliases. The raw HTTP CLI
+rejects an existing or relative destination before fetching and publishes the
+completed response atomically without replacing another file.
+
 Importing the HTTP module does not import its optional DNS dependency. Missing
 dependency fails on selected network acquisition, not on text/storage import.
 

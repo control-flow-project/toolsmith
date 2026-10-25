@@ -81,7 +81,8 @@ Neither reader certifies source completeness.
 
 Applications enforce their own format-specific admission limits before calling
 generic readers, copies or ZIP operations. The agreement and research consumers
-limit source PDFs to 32 MiB (33,554,432 bytes); that PDF policy remains theirs,
-not a format-specific rule in Toolsmith. The generic 128 MiB ZIP-member ceiling
-remains unchanged and does not authorize larger PDFs. Derived text, aggregate
-bundles and database backups retain their separate budgets.
+limit source PDFs to 32 MiB (33,554,432 bytes). Those admission policies remain
+application-owned. Toolsmith's optional PDF reader independently enforces a
+32 MiB parsing limit. The generic 128 MiB ZIP-member ceiling remains unchanged
+and does not authorize larger PDF input. Derived text, aggregate bundles and
+database backups retain their separate budgets.

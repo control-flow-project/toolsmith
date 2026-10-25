@@ -1,6 +1,6 @@
 from toolsmith.acquisition.budgets import BudgetPolicy, validate_policy
 from toolsmith.acquisition.client import HttpPolicy, validate_http_policy
-from toolsmith.acquisition.urls import hostname
+from toolsmith.acquisition.urls import approved_hosts
 from toolsmith.result import ToolsmithError, boundary
 from toolsmith.validation import fields, identity, integer, number, parse_json
 
@@ -21,7 +21,7 @@ def read_http_policy(content: bytes) -> HttpPolicy:
     hosts = value["hosts"]
     if not isinstance(hosts, list) or not 1 <= len(hosts) <= 32:
         raise ToolsmithError("invalid_input", "HTTP policy needs a bounded explicit host list")
-    defaults = HttpPolicy(tuple(hostname(host) for host in hosts))
+    defaults = HttpPolicy(approved_hosts(tuple(hosts)))
     return validate_http_policy(
         HttpPolicy(
             defaults.hosts,

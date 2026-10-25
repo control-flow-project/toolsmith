@@ -215,6 +215,60 @@ def test_generic_raw_http_cli_returns_receipt_and_explicit_file_without_archive(
     assert not list(tmp_path.rglob("*.sqlite3"))
 
 
+@pytest.mark.parametrize("kind", ["file", "directory", "symlink", "relative"])
+def test_http_destination_is_rejected_before_any_fetch(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], kind: str
+) -> None:
+    policy, budget = tmp_path / "http.json", tmp_path / "budget.json"
+    policy.write_text('{"hosts":["example.com"]}')
+    budget.write_text(
+        '{"group":"public","period_seconds":60,"group_requests":5,"group_bytes":10485760,"task_requests":3,"task_bytes":5242880}'
+    )
+    destination = tmp_path / "response.txt"
+    if kind == "file":
+        destination.write_bytes(b"preserved")
+    elif kind == "directory":
+        destination.mkdir()
+    elif kind == "symlink":
+        destination.symlink_to(tmp_path / "missing")
+    else:
+        destination = Path("relative-response.txt")
+    response = FetchResponse(
+        "https://example.com/", "text/plain", b"response", 1, 8, "2026-10-25T00:00:00+00:00"
+    )
+    with patch("toolsmith.cli.commands.fetch_http", return_value=Success(response)) as fetch:
+        code = main(
+            [
+                "--json",
+                "http",
+                "request",
+                "https://example.com/",
+                "--policy",
+                str(policy),
+                "--budget-policy",
+                str(budget),
+                "--network-state",
+                str(tmp_path / "quotas"),
+                "--task",
+                "task",
+                "--destination",
+                str(destination),
+            ]
+        )
+    assert code == (2 if kind == "relative" else 4)
+    assert json.loads(capsys.readouterr().out)["error"]["code"] == (
+        "invalid_input" if kind == "relative" else "conflict"
+    )
+    fetch.assert_not_called()
+    assert not (tmp_path / "quotas").exists()
+    if kind == "file":
+        assert destination.read_bytes() == b"preserved"
+    elif kind == "directory":
+        assert destination.is_dir() and not list(destination.iterdir())
+    elif kind == "symlink":
+        assert destination.is_symlink() and not (tmp_path / "missing").exists()
+
+
 def test_read_table_and_json_cli_call_generic_readers(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

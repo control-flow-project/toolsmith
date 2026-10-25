@@ -1,9 +1,10 @@
 # Consumer capability mapping
 
-Reviewed 2026-10-13/14. Toolsmith implementation target: **0.4.1**. Consumer
-snapshots: GAAP agents `52c2cc7`; Bad Bets agents `08e4461`. Neither consumer is
-modified, installed or deployed by this work. Inspection covers their local tool
-interfaces and owning modules, not a certification of every provider or analysis.
+Consumer snapshots were reviewed on 2026-10-13/14: GAAP agents `52c2cc7` and Bad
+Bets agents `08e4461`. The public Toolsmith interfaces below were updated for
+**0.5.0** on 2026-10-25. These historical consumer snapshots do not describe their
+current deployment state. The mapping covers ownership and integration contracts,
+not certification of every provider, consumer migration or analysis.
 
 ## Adoption contract
 
@@ -69,7 +70,7 @@ Tests without a live provider establish contracts, not publisher certification.
 | H02 | Public DNS, pinned address, original-host TLS, redirect rechecks, no proxy/cookie/credential forwarding | Same transport/URL owner | `test_http.py`, `test_transport.py`, `test_policy_limits.py`; native approved source |
 | H03 | One deadline, compressed/expanded/total byte limits and no automatic retry loop | `HttpPolicy`, transport | Slow-read/gzip/framing/deadline/redirect/request-cap tests |
 | H04 | Durable admission hook lets the consumer keep its existing job/receipt owner | `fetch_http(before_request=...)` | Failure increments admission before I/O; existing archive recovery/replay tests |
-| H05 | Native transports reuse pinned DNS/TLS and bounded framing/decompression while owning their headers | `transport.NativeResolver`, `PinnedConnection`, `read_response` | Transport tests and consumer native browser tests; high-level public HTTP remains cookie-free |
+| H05 | Native transports reuse pinned DNS/TLS and bounded framing/decompression while owning their headers | `transport.NativeResolver`, `request_pinned`, `request_pinned_async`; `streams.DeadlineReader` for caller-owned raw socket reads | Transport tests and consumer native browser tests; high-level public HTTP remains cookie-free |
 | Q01 | Shared group and task request/byte reservations for HTTP and external browser operations | `acquisition.budgets` | Cross-source task conservation and exhaustion tests |
 | Q02 | Reserve before I/O; uncertain usage stays charged; settle only known received bytes | `reserve_budget`, `settle_budget` | Crash/unknown-charge/reservation-mismatch/counter-corruption tests |
 | Q03 | Source spacing and server cooldowns, including unknown/unrepresentable ends | Same budget owner | Long Retry-After/unknown cooldown/window rollover tests |
@@ -80,7 +81,7 @@ Tests without a live provider establish contracts, not publisher certification.
 | T01 | Optional text/file archive, exact immutable versions, citations, permissions and operation IDs | `storage`, `retrieval`; higher-level composition | Existing store/CLI/maintenance/recovery tests; no duplicated lexical engine |
 | T02 | Verified backup/restore/integrity/rebuild/preview-bound staging cleanup | `operations` | Existing maintenance/corruption/restore/change/symlink tests |
 | T03 | One current archive structure; explicit initialization and verified same-schema restore | `storage.database`, `operations.backup` | `test_store.py`, `test_maintenance.py`; exact structure, identity, object, scope and collision tests |
-| C01 | Same library in installed CLI, with caller-owned `--database/--sources`, metadata-only `--references` and no archive | `cli.indexes`, `search lexical/semantic` | `test_standalone_cli.py` and installed wheel/sdist acceptance |
+| C01 | Same library in installed CLI, with caller-owned `--database/--sources`, metadata-only `--scope` status and no archive | `cli.indexes`, `search lexical/semantic` | `test_standalone_cli.py` and installed wheel/sdist acceptance |
 | C02 | Standalone raw HTTPS receipt/file, readers and streaming filesystem commands | CLI composition only | Generic CLI tests and installed acceptance; source paths not echoed in receipts |
 | X01 | Optional zero-dependency base, selected extras, no services/threads/helper processes/domain code/CI | Package boundaries and metadata | Architecture tests, clean installs, native thread checks and artifact audit |
 

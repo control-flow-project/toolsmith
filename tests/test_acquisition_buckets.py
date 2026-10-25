@@ -29,15 +29,14 @@ def test_one_hundred_selections_run_in_five_parallel_serial_throttled_buckets() 
         arrived: asyncio.Queue[tuple[int, int, float]] = asyncio.Queue()
         releases = [asyncio.Event() for _ in range(20)]
         buckets = tuple(
-            Bucket(str(publisher), tuple((publisher, item) for item in range(20)), 10)
-            for publisher in range(5)
+            Bucket(str(group), tuple((group, item) for item in range(20)), 10) for group in range(5)
         )
 
         async def acquire(item: tuple[int, int]) -> str:
-            publisher, index = item
-            arrived.put_nowait((publisher, index, clock.monotonic()))
+            group, index = item
+            arrived.put_nowait((group, index, clock.monotonic()))
             await releases[index].wait()
-            return f"{publisher}:{index}"
+            return f"{group}:{index}"
 
         async with asyncio.timeout(5):
             running = asyncio.create_task(run_buckets_async(buckets, acquire, clock=clock))
@@ -56,8 +55,8 @@ def test_one_hundred_selections_run_in_five_parallel_serial_throttled_buckets() 
             results = unwrap(await running)
         assert len(results) == 5
         assert sum(len(bucket.items) for bucket in results) == 100
-        for publisher, bucket in enumerate(results):
-            assert bucket.items == tuple(f"{publisher}:{index}" for index in range(20))
+        for group, bucket in enumerate(results):
+            assert bucket.items == tuple(f"{group}:{index}" for index in range(20))
 
     asyncio.run(exercise())
 
@@ -67,16 +66,16 @@ def test_invalid_throttles_fail_before_an_operation(spacing: float) -> None:
     async def acquire(value: int) -> int:
         raise AssertionError("Invalid throttle reached acquisition")
 
-    result = asyncio.run(run_buckets_async((Bucket("publisher", (1,), spacing),), acquire))
+    result = asyncio.run(run_buckets_async((Bucket("group", (1,), spacing),), acquire))
     assert isinstance(result, Failure) and result.code == "invalid_input"
 
 
-def test_publisher_aliases_cannot_create_two_parallel_buckets() -> None:
+def test_group_aliases_cannot_create_two_parallel_buckets() -> None:
     async def acquire(value: int) -> int:
-        raise AssertionError("Duplicate publisher reached acquisition")
+        raise AssertionError("Duplicate group reached acquisition")
 
     result = asyncio.run(
-        run_buckets_async((Bucket("publisher", (1,), 10), Bucket("publisher", (2,), 10)), acquire)
+        run_buckets_async((Bucket("group", (1,), 10), Bucket("group", (2,), 10)), acquire)
     )
     assert isinstance(result, Failure)
 

@@ -9,7 +9,9 @@ calls are installed or started.
 ## Files rather than console payloads
 
 Use the global `--output` option for complete bulk results. The destination must
-be an absolute path with an owned, non-group-writable parent and must not exist.
+be an absolute path in an existing directory and must not exist. Directory
+traversal never follows symlinks; the new file has private permissions. The caller
+selects and controls the destination directory.
 The console receives only the new file's path and byte count; the JSON result
 is not truncated. Output paths are local operational references, not public URLs.
 
@@ -81,7 +83,7 @@ downloader never assumes that a recently changed approval still permits work.
 toolsmith --output /private/work/downloads.json http batch --profiles /private/work/profiles.json --requests /private/work/requests.json --network-state /private/network --task assignment --concurrency 8 --deadline-seconds 300
 ```
 
-By default every publisher group runs concurrently; `--concurrency` is an explicit
+By default every caller-defined group runs concurrently; `--concurrency` is an explicit
 optional network ceiling, not a default eight-group limit. Each group is serial and its persistent request slot,
 spacing and upstream cooldown are shared by cooperating callers using the same
 network-state directory. Each successful body is written directly to its private

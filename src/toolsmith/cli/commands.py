@@ -10,7 +10,7 @@ from toolsmith.cli.downloads import execute_downloads
 from toolsmith.cli.formats import execute_formats
 from toolsmith.cli.indexes import execute_index
 from toolsmith.cli.parser import Arguments
-from toolsmith.files import copy_file, hash_file, read_bytes, write_new_bytes
+from toolsmith.files import absolute_path, copy_file, hash_file, read_bytes, write_new_bytes
 from toolsmith.operations.backup import backup_store, restore_store
 from toolsmith.operations.cleanup import (
     apply_cleanup,
@@ -188,6 +188,9 @@ def execute(arguments: Arguments) -> Result[object]:
         return execute_index(arguments)
     if action.startswith("http."):
         if action == "http.request":
+            destination = absolute_path(required_path(arguments.destination))
+            if destination.exists() or destination.is_symlink():
+                raise ToolsmithError("conflict", "Destination exists; no request was sent")
             response = unwrap(
                 fetch_http(
                     required_text(arguments.url, "URL"),
@@ -203,7 +206,7 @@ def execute(arguments: Arguments) -> Result[object]:
                     required_text(arguments.task, "Task"),
                 )
             )
-            unwrap(write_new_bytes(required_path(arguments.destination), response.content))
+            unwrap(write_new_bytes(destination, response.content))
             return Success(
                 {
                     "final_url": response.final_url,

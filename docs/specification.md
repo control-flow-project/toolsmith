@@ -61,7 +61,7 @@ publication dates, article selection or executable code.
 - Immutable local text/file versions and exact citations, with lexical FTS5 search.
 - Approved HTTPS acquisition, bounded DNS/TLS/body/redirect handling and persistent
   local request pacing, quotas and cooldowns shared by cooperating callers.
-- Finite caller-selected acquisition buckets: all publisher buckets run concurrently,
+- Finite caller-selected acquisition buckets: all caller-defined buckets run concurrently,
   each bucket is sequential and carries explicit start spacing. The downloader and
   caller-owned asynchronous producers use one scheduler. Local spacing does not
   replace shared upstream quotas, cooldowns or caller authorization. No model,

@@ -36,7 +36,7 @@ async def run_buckets_async[Item, Value](
             raise ToolsmithError("invalid_input", "Supply typed buckets with tuple inputs")
         identity = text(bucket.id, 300, "Bucket id")
         if identity in identities:
-            raise ToolsmithError("invalid_input", "Each publisher requires exactly one bucket")
+            raise ToolsmithError("invalid_input", "Bucket ids must be unique")
         pacing = bucket.minimum_interval_seconds
         if (
             isinstance(pacing, bool)
