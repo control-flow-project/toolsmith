@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 from typing import Never
 
+from toolsmith import __version__
 from toolsmith.lexical.query import QueryMode
 from toolsmith.result import ToolsmithError
 
@@ -50,7 +51,7 @@ class Arguments(argparse.Namespace):
     dpi: int = 144
     profiles: Path | None = None
     requests: Path | None = None
-    concurrency: int = 8
+    concurrency: int | None = None
     deadline_seconds: float = 300
     member: str | None = None
 
@@ -73,7 +74,7 @@ def make_parser() -> Parser:
     parser.add_argument("--json", action="store_true", help="Compact structured result")
     parser.add_argument("--output", type=Path, help="Write the result to a new explicit file")
     families = parser.add_subparsers(dest="family", required=True)
-    parser.add_argument("--version", action="version", version="toolsmith 0.4.3")
+    parser.add_argument("--version", action="version", version=f"toolsmith {__version__}")
     capabilities = families.add_parser("capabilities")
     capabilities.set_defaults(action="capabilities")
     store = families.add_parser("store").add_subparsers(dest="command", required=True)
@@ -226,7 +227,7 @@ def make_parser() -> Parser:
     batch.add_argument("--requests", type=Path, required=True)
     batch.add_argument("--network-state", type=Path, required=True)
     batch.add_argument("--task", required=True)
-    batch.add_argument("--concurrency", type=int, default=8)
+    batch.add_argument("--concurrency", type=int)
     batch.add_argument("--deadline-seconds", type=float, default=300)
     request = http.add_parser("request")
     request.set_defaults(action="http.request")

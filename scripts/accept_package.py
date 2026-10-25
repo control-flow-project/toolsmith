@@ -230,6 +230,8 @@ def main() -> int:
                 run([str(environment / "bin/toolsmith"), "--json", "capabilities"], workspace)
             )
             assert capability["ok"] is True
+            version_output = run([str(environment / "bin/toolsmith"), "--version"], workspace)
+            assert version_output.strip() == "toolsmith 0.5.0"
             command = json.loads(
                 run(
                     [

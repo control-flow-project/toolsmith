@@ -1,5 +1,21 @@
 # Verification
 
+## Selected acquisition buckets — 25 October 2026
+
+The current source gate passes 469 tests in 41 isolated files, strict typing,
+lint/format and wheel/sdist builds. The bucket scheduler is shared by approved
+HTTP downloads and caller-owned asynchronous acquisition operations. Its default
+is one concurrent coroutine per publisher bucket, not an eight-request ceiling.
+
+A controlled-clock test submits 100 selections in five buckets. All five
+publishers enter each round concurrently; each bucket remains sequential and its
+20 starts occur at 0, 10, ..., 190 simulated seconds. This is scheduling evidence,
+not a live network throughput benchmark. Invalid throttles and duplicate publisher
+buckets fail before operations. Unexpected producer failure cancels and joins
+other workers. Installed wheel/sdist acceptance checks the bucket API and the
+current CLI version. Shared HTTP authorization, persistent budgets, cooldowns,
+timeouts and interrupted-download accounting retain their existing tests.
+
 ## Generic primitives — 2026-10-24, 0.5.0
 
 The integrated local gate passes 461 tests in 40 isolated files, Ruff formatting

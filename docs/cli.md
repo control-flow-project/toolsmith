@@ -11,7 +11,7 @@ within its byte/structure bounds and no longer accepts an entry-count limit.
 `search lexical/semantic` uses an explicit caller-owned `--database`. `init` adds
 derivatives, not a canonical source database or application schema version.
 `index` takes one bounded `--sources FILE` JSON batch of `{reference,text,language?}`.
-`query` and `status` take `--scope TABLE_OR_VIEW` in the selected database, exposing
+`query`, `batch` and `status` take `--scope TABLE_OR_VIEW` in the selected database, exposing
 unique `reference` and current `text_digest` columns. No source bodies or million-ID
 JSON list are resupplied for a query. `status` returns aggregate coverage without
 reading vectors. `check` uses `--scope` with an additional canonical `text` column
@@ -43,14 +43,24 @@ toolsmith capabilities
 toolsmith store init | inspect
 toolsmith read text FILE --title TITLE
 toolsmith read html FILE [--title TITLE]
-toolsmith read feed FILE --source-url URL [--limit N]
+toolsmith read html-links FILE
+toolsmith read feed FILE --source-url URL
 toolsmith read json FILE
+toolsmith read jsonl FILE
+toolsmith read xml FILE
+toolsmith read pdf FILE [--start N] [--limit N]
+toolsmith render pdf FILE --page N [--dpi N] --destination FILE
 toolsmith read table FILE --column COLUMN [--filter COLUMN=VALUE] [--format csv|zip-csv|gzip-csv]
+toolsmith url resolve BASE_URL --file TARGETS_JSON
+toolsmith archive list FILE
+toolsmith archive read FILE MEMBER --destination FILE [--maximum-bytes N]
+toolsmith decompress gzip FILE --destination FILE [--maximum-bytes N]
 toolsmith filesystem hash FILE --maximum-bytes N
 toolsmith filesystem copy FILE DESTINATION --maximum-bytes N
 toolsmith search lexical|semantic init --database FILE
 toolsmith search lexical|semantic index --database FILE --sources FILE [--limit N]
 toolsmith search lexical|semantic query QUERY --database FILE --scope TABLE_OR_VIEW [--limit N]
+toolsmith search lexical|semantic batch --database FILE --scope TABLE_OR_VIEW --queries FILE [--limit N]
 toolsmith search lexical|semantic status --database FILE --scope TABLE_OR_VIEW
 toolsmith search lexical|semantic check --database FILE --scope TABLE_OR_VIEW
 toolsmith search lexical|semantic delete REFERENCE --database FILE
@@ -68,6 +78,7 @@ toolsmith file inspect | read VERSION
 toolsmith file export VERSION DESTINATION
 toolsmith http inspect-policy --policy FILE
 toolsmith http request URL --policy FILE --budget-policy FILE --network-state DIR --task ID --destination FILE
+toolsmith http batch --profiles FILE --requests FILE --network-state DIR --task ID [--concurrency N] [--deadline-seconds N]
 toolsmith http limits --policy FILE --network-state DIR
 toolsmith http fetch URL --policy FILE --network-state DIR --request-id ID [--item ITEM] [--name NAME]
 toolsmith http resume --policy FILE --network-state DIR --request-id ID

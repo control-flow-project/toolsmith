@@ -81,13 +81,33 @@ downloader never assumes that a recently changed approval still permits work.
 toolsmith --output /private/work/downloads.json http batch --profiles /private/work/profiles.json --requests /private/work/requests.json --network-state /private/network --task assignment --concurrency 8 --deadline-seconds 300
 ```
 
-Independent groups overlap. Each group is serial and its persistent request slot,
+By default every publisher group runs concurrently; `--concurrency` is an explicit
+optional network ceiling, not a default eight-group limit. Each group is serial and its persistent request slot,
 spacing and upstream cooldown are shared by cooperating callers using the same
 network-state directory. Each successful body is written directly to its private
 destination, not included in the outcome. An existing destination causes no HTTP
 request. Timeout/cancellation leaves explicit unfinished results and conservative
 usage. A completed batch means only that supplied batch completed, not that a
 publisher or discovery tree was exhausted. Submit remaining selections explicitly.
+
+### Caller-owned acquisition operations
+
+`acquisition.buckets.Bucket(id, items, minimum_interval_seconds)` and
+`run_buckets_async(buckets, operation)` supply the same finite scheduling used by
+the downloader. Submit the selected inputs once: one coroutine runs per bucket,
+each bucket runs its items sequentially, and starts respect that bucket's supplied
+spacing. Every bucket runs concurrently; no model call or per-item scheduling by
+an agent is required. Results retain bucket and input order. Duplicate bucket
+identities and invalid throttles fail before effects. Cancellation or unexpected
+producer failure cancels and joins the other coroutines.
+
+The caller supplies an asynchronous operation and owns its actual effects,
+permissions, per-item time bounds and durable outcomes. For example, a
+browser-owning application can submit its approved page acquisitions without
+putting browser processes or application policy in Toolsmith. The library starts
+no process or thread. Local batch spacing never replaces shared upstream
+request quotas, cooldowns or authorization checks. The application must reject
+model-supplied throttles that weaken its approved publisher policy.
 
 ## PDF pages
 

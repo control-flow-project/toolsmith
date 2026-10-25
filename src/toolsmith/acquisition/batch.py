@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from toolsmith.acquisition.buckets import Bucket, run_buckets_async
 from toolsmith.acquisition.budgets import BudgetPolicy, common_definition, validate_policy
 from toolsmith.acquisition.client import HttpPolicy, fetch_http_async, validate_http_policy
 from toolsmith.acquisition.transport import Resolver, Transport
@@ -148,7 +149,7 @@ async def download_batch_async(
     network_state: Path,
     task: str,
     *,
-    concurrency: int = 8,
+    concurrency: int | None = None,
     deadline_seconds: float = 300,
     clock: Clock | None = None,
     resolver: Resolver | None = None,
@@ -157,25 +158,33 @@ async def download_batch_async(
     validate_requests(requests)
     absolute_path(network_state)
     identity(task, "Task identity")
-    maximum = integer(concurrency, 1, 16, "Concurrent network operations")
     duration = number(deadline_seconds, 0.1, 3600, "Batch deadline seconds")
     selected_clock = clock or SystemClock()
     started = selected_clock.monotonic()
     deadline = started + duration
-    semaphore = asyncio.Semaphore(maximum)
     groups: dict[str, list[DownloadRequest]] = defaultdict(list)
     for request in requests:
         groups[request.budget.group].append(request)
+    maximum = (
+        max(1, len(groups))
+        if concurrency is None
+        else integer(concurrency, 1, 2**31 - 1, "Concurrent network operations")
+    )
+    semaphore = asyncio.Semaphore(maximum)
     outcomes: dict[str, DownloadOutcome] = {}
+    blocked: dict[str, Failure] = {}
 
-    async def run_group(group: list[DownloadRequest]) -> None:
-        blocked: Failure | None = None
-        for request in group:
-            if blocked is not None:
-                outcomes[request.id] = DownloadOutcome(request.id, 0, blocked)
-                continue
-            if selected_clock.monotonic() >= deadline:
-                break
+    async def download(request: DownloadRequest) -> DownloadOutcome:
+        previous = blocked.get(request.budget.group)
+        if previous is not None:
+            outcome = DownloadOutcome(request.id, 0, previous)
+        elif selected_clock.monotonic() >= deadline:
+            outcome = DownloadOutcome(
+                request.id,
+                0,
+                Failure("deferred", "Batch deadline reached; input remains unfinished"),
+            )
+        else:
             try:
                 outcome = await download_one(
                     request, network_state, task, selected_clock, semaphore, resolver, transport
@@ -190,23 +199,20 @@ async def download_batch_async(
                     ),
                 )
                 raise
-            outcomes[request.id] = outcome
-            if isinstance(outcome.result, Failure) and outcome.result.code == "deferred":
-                blocked = outcome.result
+        outcomes[request.id] = outcome
+        if isinstance(outcome.result, Failure) and outcome.result.code == "deferred":
+            blocked[request.budget.group] = outcome.result
+        return outcome
 
-    tasks = [asyncio.create_task(run_group(group)) for group in groups.values()]
+    buckets = tuple(
+        Bucket(name, tuple(group), group[0].budget.minimum_interval_seconds)
+        for name, group in groups.items()
+    )
     try:
         async with asyncio.timeout(duration):
-            await asyncio.gather(*tasks)
+            unwrap(await run_buckets_async(buckets, download, clock=selected_clock))
     except TimeoutError:
-        for active in tasks:
-            active.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-    finally:
-        for active in tasks:
-            if not active.done():
-                active.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        pass
     items = tuple(
         outcomes.get(
             request.id,
@@ -228,7 +234,7 @@ def download_batch(
     network_state: Path,
     task: str,
     *,
-    concurrency: int = 8,
+    concurrency: int | None = None,
     deadline_seconds: float = 300,
     clock: Clock | None = None,
     resolver: Resolver | None = None,

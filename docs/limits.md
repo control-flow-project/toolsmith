@@ -59,7 +59,7 @@ structure. They are not ceilings on the application database's total entries.
 | Feed | 2 MiB, two million nodes, depth 32; all distinct entries are returned, without an item-count ceiling |
 | XML / JSONL | Default 32 MiB input; XML has explicit node/depth/field bounds and rejects DTD/entities; invalid JSONL never drops a line silently |
 | PDF | 32 MiB input; paged text defaults to twenty pages with an explicit continuation; rendering checks DPI/pixels/output bytes before publication |
-| Download batch | 32 MiB manifest, 1..16 concurrent network operations, explicit total deadline; no item-count cap, and unfinished inputs are reported |
+| Download batch | 32 MiB manifest, all publisher groups concurrent by default, optional explicit network ceiling and explicit total deadline; no item-count cap, and unfinished inputs are reported |
 | Batch search | 32 MiB query input; existing per-query expression/model/output limits apply, never a corpus-count or query-count sample |
 | CSV | 32 MiB compressed / 64 MiB expanded, 256 columns; row budget is explicit and configurable |
 | Tree inventory | Default 10,000 / maximum 100,000 returned entries, explicit byte budget, depth 64; a bounded materialized tree report |

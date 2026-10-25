@@ -1,3 +1,4 @@
+import asyncio
 import importlib.metadata
 import io
 import json
@@ -7,6 +8,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from toolsmith.acquisition.buckets import Bucket, run_buckets_async
 from toolsmith.acquisition.urls import resolve_urls
 from toolsmith.archives import list_archive, read_archive_member
 from toolsmith.cli import main as cli
@@ -35,8 +37,19 @@ def blank_pdf() -> bytes:
     return bytes(content)
 
 
+async def accept_buckets() -> None:
+    async def selected(value: str) -> str:
+        return value
+
+    results = unwrap(
+        await run_buckets_async((Bucket("publisher", ("first", "second"), 0),), selected)
+    )
+    assert results[0].items == ("first", "second")
+
+
 def main() -> int:
     assert importlib.metadata.version("ctlflow-toolsmith") == "0.5.0"
+    asyncio.run(accept_buckets())
     assert "aiohttp" not in sys.modules and "pypdfium2" not in sys.modules
     threads = len(list(Path("/proc/self/task").iterdir()))
     inspected = unwrap(
