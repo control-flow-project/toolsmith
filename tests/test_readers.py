@@ -39,9 +39,7 @@ def test_rss_dates_are_not_retrieval_dates() -> None:
     assert feed.entries[0].published_at == "2026-10-11T04:30:00+00:00"
     assert feed.entries[1].published_at is None
     assert feed.entries[1].published_original == "yesterday"
-    limited = unwrap(read_feed(supplied, "https://example.com/feed", 1))
-    assert len(limited.entries) == 1
-    assert len(limited.warnings) == 2
+    assert len(feed.entries) == 2
 
 
 def test_atom_alternate_link_and_missing_date() -> None:

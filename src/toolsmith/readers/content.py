@@ -74,7 +74,7 @@ def validate_content(
     elif format_name == "feed":
         if source_url is None:
             raise ToolsmithError("invalid_input", "Feed validation needs an explicit source URL")
-        unwrap(read_feed(content, source_url, 1000))
+        unwrap(read_feed(content, source_url))
     else:
         raise ToolsmithError("invalid_input", "Choose an explicitly supported content format")
     return ("Format checks do not establish source completeness or factual correctness.",)

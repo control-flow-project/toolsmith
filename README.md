@@ -44,17 +44,21 @@ The CLI calls the same validated library functions that applications import.
 ## Available tools
 
 - Streaming regular-file hash/copy, private tree inventory/publication and exact-file ZIPs.
-- UTF-8/strict JSON, static HTML/articles, CSV/ZIP-CSV/GZIP-CSV and RSS/Atom readers.
+- UTF-8/strict JSON/JSONL, XML, static HTML with links/metadata, CSV and RSS/Atom readers.
+- Optional in-process PDF text extraction and PNG page rendering; no OCR or table interpretation.
+- URL resolution, ZIP inspection/exact-member reads and bounded gzip decompression.
 - Literal passages and lexical indexes over caller-owned sources and authorized database scopes.
 - Optional offline English MiniLM embeddings and semantic search, with complete
   token-aware chunks, exact source spans and caller-owned SQLite integration.
 - Optional approved HTTPS responses with bounded DNS/TLS, redirects, compressed
   responses and persistent shared group/task budgets.
+- Concurrent file-download batches, serial within each caller-defined quota group.
+- Batch lexical/semantic queries with one authorized coverage snapshot per batch.
 - Generic bounded JSON journals; applications own event meaning and retention.
 - A separately optional text/file archive: exact versions/citations, acquisition
   receipts/recovery, verified backup/restore, integrity and staging cleanup.
 
-Browser automation, PDF/OCR helpers and hybrid retrieval are
+Browser automation, process-based PDF/OCR helpers and hybrid retrieval are
 not implemented. No substitute or placeholder is provided. Skills, source-specific
 connectors, domain analysis, financial calculations and fleet runtime remain with
 their existing owners.
@@ -74,7 +78,7 @@ git clone https://github.com/control-flow-project/toolsmith.git
 cd toolsmith
 uv build --no-sources
 python3 -m venv .venv
-.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.4.2-py3-none-*.whl
+.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.5.0-py3-none-*.whl
 .venv/bin/toolsmith --json capabilities
 .venv/bin/toolsmith --root "$PWD/local-store" --collection sample store init
 ```

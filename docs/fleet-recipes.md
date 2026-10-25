@@ -82,7 +82,9 @@ digests without imposing an agreement bundle manifest or recipient policy.
 Semantic analysis can additionally use the same page references on this caller-owned
 connection. Prepare vectors outside its transaction, recheck current text when
 publishing, invalidate corrections atomically and use metadata-only `inspect_index`
-for readiness. No PDF parser, OCR assurance or legal conclusion is supplied.
+for readiness. Indexing supplies no extraction assurance or legal conclusion.
+Toolsmith's separately optional PDF reader extracts text/renders pages; GAAP
+still owns physical-page mapping, extraction methods and any OCR process.
 
 ## Optional retained-text demonstration
 

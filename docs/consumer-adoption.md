@@ -72,14 +72,17 @@ unresolved access dialogs. A browser-owning consumer supplies its computed-visib
 DOM to `read_html`; a hidden template is not an active login gate. Inspection's
 password-control signal describes raw markup, not a visibility assertion.
 `read_feed` preserves original/resolved links, raw/source-aware/UTC dates, feed kind
-and duplicate counts. Consumers own URL normalization and publisher acceptance.
+and duplicate counts. Its `next_url` describes an explicit feed-level Atom next
+link in RSS/Atom; inherited XML bases apply to page and article links. Consumers
+own request authorization, finite pagination and publisher acceptance.
 Neither reader certifies source completeness.
 
 ## Application input limits
 
 Applications enforce their own format-specific admission limits before calling
 generic readers, copies or ZIP operations. The agreement and research consumers
-limit source PDFs to 32 MiB (33,554,432 bytes); that PDF policy remains theirs,
-not a format-specific rule in Toolsmith. The generic 128 MiB ZIP-member ceiling
-remains unchanged and does not authorize larger PDFs. Derived text, aggregate
-bundles and database backups retain their separate budgets.
+limit source PDFs to 32 MiB (33,554,432 bytes). Those admission policies remain
+application-owned. Toolsmith's optional PDF reader independently enforces a
+32 MiB parsing limit. The generic 128 MiB ZIP-member ceiling remains unchanged
+and does not authorize larger PDF input. Derived text, aggregate bundles and
+database backups retain their separate budgets.

@@ -1,6 +1,6 @@
 # Installation
 
-Toolsmith 0.4.1 has public MIT-licensed source and wheel/sdist artifacts. Metadata
+Toolsmith 0.5.0 has public MIT-licensed source and wheel/sdist artifacts. Metadata
 declares the SPDX expression `MIT`; both artifacts include LICENSE. There is no
 PyPI/npm release yet and no automatic publishing workflow. Build from the public
 repository or install a built wheel:
@@ -17,17 +17,21 @@ store/network requirement. Unsupported platforms fail without a weakened path.
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.4.1-py3-none-*.whl
+.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.5.0-py3-none-*.whl
 .venv/bin/toolsmith --json capabilities
 ```
 
 For selected network acquisition:
 
 ```sh
-.venv/bin/python -m pip install "$(printf '%s' dist/ctlflow_toolsmith-0.4.1-py3-none-*.whl)[http]"
+.venv/bin/python -m pip install "$(printf '%s' dist/ctlflow_toolsmith-0.5.0-py3-none-*.whl)[http]"
 ```
 
-The `http` extra installs the pinned bounded DNS resolver `dnspython==2.8.0`.
+The `http` extra installs `dnspython==2.8.0` and `aiohttp==3.14.5`. One cooperative
+async transport supplies both synchronous and asynchronous callers; no worker
+threads, proxy configuration or browser processes are used. The `pdf` extra
+installs `pypdfium2==5.14.0` and `Pillow==13.0.0` for in-process text extraction
+and PNG page rendering. Install only the extras the application needs.
 There are no base runtime dependencies. Nothing downloads browsers, OCR models,
 embeddings, skills or agent software. No global services or credentials are created.
 Supply an explicit private store and separate shared source-limit directory only

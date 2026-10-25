@@ -1,3 +1,4 @@
+import asyncio
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -7,7 +8,7 @@ from urllib.parse import urljoin, urlsplit
 
 from toolsmith.acquisition.budgets import (
     BudgetPolicy,
-    reserve_budget,
+    reserve_budget_async,
     settle_budget,
     validate_policy,
 )
@@ -20,10 +21,10 @@ from toolsmith.acquisition.transport import (
     one_header,
     remaining,
 )
-from toolsmith.acquisition.urls import canonical_url, hostname, public_address
+from toolsmith.acquisition.urls import approved_hosts, canonical_url, public_address
 from toolsmith.clock import Clock, SystemClock, utc_now
 from toolsmith.files import absolute_path
-from toolsmith.result import ToolsmithError, boundary, unwrap
+from toolsmith.result import ToolsmithError, async_boundary, boundary, unwrap
 from toolsmith.validation import integer, number
 
 
@@ -48,23 +49,16 @@ class FetchResponse:
 
 
 def validate_http_policy(policy: HttpPolicy) -> HttpPolicy:
-    if (
-        not isinstance(policy, HttpPolicy)
-        or not isinstance(policy.hosts, tuple)
-        or not 1 <= len(policy.hosts) <= 32
-    ):
-        raise ToolsmithError("invalid_input", "Supply one to 32 explicit approved HTTPS hosts")
-    for host in policy.hosts:
-        hostname(host)
-    if len(set(policy.hosts)) != len(policy.hosts):
-        raise ToolsmithError("invalid_input", "Approved hosts must be unique")
+    if not isinstance(policy, HttpPolicy):
+        raise ToolsmithError("invalid_input", "Supply a typed HTTP policy")
+    hosts = approved_hosts(policy.hosts)
     response_bytes = integer(policy.maximum_response_bytes, 1, 128 * 1024 * 1024, "Response bytes")
     integer(policy.maximum_total_bytes, response_bytes, 2**63 - 1, "Total wire bytes")
     integer(policy.maximum_requests, 1, 100, "Maximum requests")
     integer(policy.maximum_redirects, 0, 10, "Maximum redirects")
     number(policy.deadline_seconds, 0.1, 60, "Deadline seconds")
     return HttpPolicy(
-        tuple(sorted(hostname(host) for host in policy.hosts)),
+        hosts,
         response_bytes,
         policy.maximum_total_bytes,
         policy.maximum_requests,
@@ -90,8 +84,8 @@ def retry_after(response: Response, clock: Clock) -> float | None:
     return delay if math.isfinite(delay) and delay <= 2**53 - clock.wall() else None
 
 
-@boundary
-def fetch_http(
+@async_boundary
+async def fetch_http_async(
     url: str,
     policy: HttpPolicy,
     network_state: Path,
@@ -103,6 +97,8 @@ def fetch_http(
     transport: Transport | None = None,
     remaining_requests: int | None = None,
     before_request: Callable[[], None] | None = None,
+    network_limit: asyncio.Semaphore | None = None,
+    expected_configuration_digest: str | None = None,
 ) -> FetchResponse:
     current = canonical_url(url)
     checked, quota = validate_http_policy(policy), validate_policy(budget)
@@ -122,6 +118,7 @@ def fetch_http(
         resolver or NativeResolver(),
         transport or NativeTransport(),
     )
+    limiter = network_limit if network_limit is not None else asyncio.Semaphore(1)
     deadline = actual_clock.monotonic() + checked.deadline_seconds
     requests, redirects, used_total = 0, 0, 0
     while True:
@@ -132,21 +129,39 @@ def fetch_http(
             raise ToolsmithError(
                 "limit", "The supplied operation request or byte allowance is exhausted"
             )
-        addresses = selected_resolver.resolve(
-            urlsplit(current).hostname or "", deadline, actual_clock
-        )
+        try:
+            async with asyncio.timeout(remaining(deadline, actual_clock)), limiter:
+                addresses = await selected_resolver.resolve_async(
+                    urlsplit(current).hostname or "", deadline, actual_clock
+                )
+        except TimeoutError as error:
+            raise ToolsmithError("limit", "The explicit network deadline was exhausted") from error
         if not 1 <= len(addresses) <= 64:
             raise ToolsmithError("denied", "DNS must return a bounded nonempty public address set")
         pinned = tuple(public_address(address) for address in addresses)
         remaining(deadline, actual_clock)
         maximum = min(checked.maximum_response_bytes, checked.maximum_total_bytes - used_total)
         reservation = unwrap(
-            reserve_budget(network_state, quota, task, maximum, clock=actual_clock)
+            await reserve_budget_async(
+                network_state,
+                quota,
+                task,
+                maximum,
+                clock=actual_clock,
+                deadline_seconds=min(60, remaining(deadline, actual_clock)),
+                expected_configuration_digest=expected_configuration_digest,
+            )
         )
-        if before_request is not None:
-            before_request()
-        requests += 1
-        response = selected_transport.get(current, pinned, maximum, deadline, actual_clock)
+        try:
+            async with asyncio.timeout(remaining(deadline, actual_clock)), limiter:
+                if before_request is not None:
+                    before_request()
+                requests += 1
+                response = await selected_transport.get_async(
+                    current, pinned, maximum, deadline, actual_clock
+                )
+        except TimeoutError as error:
+            raise ToolsmithError("limit", "The explicit network deadline was exhausted") from error
         remaining(deadline, actual_clock)
         if (
             not isinstance(response, Response)
@@ -181,3 +196,37 @@ def fetch_http(
         return FetchResponse(
             current, media_type, response.content, requests, used_total, utc_now(actual_clock)
         )
+
+
+@boundary
+def fetch_http(
+    url: str,
+    policy: HttpPolicy,
+    network_state: Path,
+    budget: BudgetPolicy,
+    task: str,
+    *,
+    clock: Clock | None = None,
+    resolver: Resolver | None = None,
+    transport: Transport | None = None,
+    remaining_requests: int | None = None,
+    before_request: Callable[[], None] | None = None,
+    expected_configuration_digest: str | None = None,
+) -> FetchResponse:
+    return unwrap(
+        asyncio.run(
+            fetch_http_async(
+                url,
+                policy,
+                network_state,
+                budget,
+                task,
+                clock=clock,
+                resolver=resolver,
+                transport=transport,
+                remaining_requests=remaining_requests,
+                before_request=before_request,
+                expected_configuration_digest=expected_configuration_digest,
+            )
+        )
+    )

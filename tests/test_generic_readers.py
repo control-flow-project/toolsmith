@@ -81,28 +81,27 @@ def test_feed_retains_publication_and_update_offsets_and_unknown_dates() -> None
     assert entry.excerpt == "Excerpt"
 
 
-def test_feed_duplicate_counts_truncation_and_omitted_entry_validation() -> None:
+def test_feed_duplicate_counts_and_complete_entry_validation() -> None:
     first = '<entry><title>First</title><link href="/first"/></entry>'
     second = '<entry><title>Second</title><link href="/second"/></entry>'
     prefix = '<feed xmlns="http://www.w3.org/2005/Atom">'
     feed = unwrap(
         read_feed(
-            (prefix + first + first + second + "</feed>").encode(), "https://example.com/feed", 1
+            (prefix + first + first + second + "</feed>").encode(), "https://example.com/feed"
         )
     )
-    assert [entry.title for entry in feed.entries] == ["First"]
-    assert feed.total_entries == 3 and feed.duplicate_entries == 1 and feed.truncated
-    assert any("Entry limit reached" in warning for warning in feed.warnings)
+    assert [entry.title for entry in feed.entries] == ["First", "Second"]
+    assert feed.total_entries == 3 and feed.duplicate_entries == 1
     conflict = second.replace("/second", "/first")
     assert isinstance(
         read_feed(
-            (prefix + first + second + conflict + "</feed>").encode(), "https://example.com/feed", 1
+            (prefix + first + second + conflict + "</feed>").encode(), "https://example.com/feed"
         ),
         Failure,
     )
     invalid = "<entry><title>Invalid</title></entry>"
     assert isinstance(
-        read_feed((prefix + first + invalid + "</feed>").encode(), "https://example.com/feed", 1),
+        read_feed((prefix + first + invalid + "</feed>").encode(), "https://example.com/feed"),
         Failure,
     )
 

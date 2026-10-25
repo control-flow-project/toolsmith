@@ -7,6 +7,7 @@ from toolsmith.clock import SystemClock, utc_now
 from toolsmith.files import file_stamp, read_bytes
 from toolsmith.result import ToolsmithError, boundary, unwrap
 from toolsmith.scopes import Scope, coverage, identifier, scope_query
+from toolsmith.search_batch import read_queries
 from toolsmith.semantic.vector import load_vector_extension
 from toolsmith.sqlite import open_database, transaction
 from toolsmith.validation import fields, integer, parse_json, text
@@ -52,7 +53,7 @@ def execute_index(arguments: Arguments) -> object:
                 if kind == "lexical"
                 else semantic.invalidate_embedding(connection, arguments.reference)
             )
-        if action in {"status", "query", "check"}:
+        if action in {"status", "query", "batch", "check"}:
             if arguments.scope is None:
                 raise ToolsmithError(
                     "invalid_input", "Search and status require an explicit database --scope"
@@ -100,8 +101,31 @@ def execute_index(arguments: Arguments) -> object:
                         selected_scope,
                         "lexical_document",
                     )
-                    return dict(
-                        zip(("entries", "indexed", "missing", "stale"), totals[:4], strict=True)
+                    return {
+                        "entries": totals.entries,
+                        "indexed": totals.indexed,
+                        "missing": totals.missing,
+                        "stale": totals.stale,
+                    }
+            if action == "batch":
+                if arguments.queries is None:
+                    raise ToolsmithError("invalid_input", "Batch search requires --queries")
+                queries = unwrap(
+                    read_queries(unwrap(read_bytes(arguments.queries, 32 * 1024 * 1024)))
+                )
+                if kind == "lexical":
+                    return unwrap(
+                        lexical.search_batch(
+                            connection, queries, scope, arguments.limit, mode=arguments.mode
+                        )
+                    )
+                if arguments.model_directory is None:
+                    raise ToolsmithError(
+                        "invalid_input", "Semantic batch search requires --model-directory"
+                    )
+                with unwrap(semantic.load_model(arguments.model_directory)) as encoder:
+                    return unwrap(
+                        semantic.search_batch(connection, queries, scope, encoder, arguments.limit)
                     )
             query = text(arguments.query, 16_384 if kind == "semantic" else 2048, "Query")
             if kind == "lexical":

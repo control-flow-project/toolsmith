@@ -12,7 +12,7 @@ from toolsmith.files import (
     read_private,
     replace_private,
 )
-from toolsmith.result import ToolsmithError, boundary
+from toolsmith.result import ToolsmithError, async_boundary, boundary
 from toolsmith.validation import (
     JsonValue,
     canonical_json,
@@ -190,9 +190,16 @@ def load(
     task_usage = {identity(key): counters(value) for key, value in tasks.items()}
     for key, value in groups.items():
         identity(key)
-        group = fields(value, {"definition", "usage", "next", "cooldown"})
+        group = fields(
+            value, {"definition", "usage", "next", "cooldown", "active_until", "active_request"}
+        )
         identity(group["definition"], "Group policy definition")
         number(group["next"], 0, 2**53, "Next request")
+        active_until = number(group["active_until"], 0, 2**53, "Active request deadline")
+        if group["active_request"] is not None:
+            identity(group["active_request"], "Active request")
+        if (group["active_request"] is None) != (active_until == 0):
+            raise ToolsmithError("integrity", "Active request identity and deadline disagree")
         if group["cooldown"] is not None:
             number(group["cooldown"], 0, 2**53, "Cooldown")
         group_usage[key] = counters(group["usage"])
@@ -233,9 +240,11 @@ def load(
                     "usage": {"requests": 0, "bytes": 0},
                     "next": 0,
                     "cooldown": 0,
+                    "active_until": 0,
+                    "active_request": None,
                 },
             ),
-            {"definition", "usage", "next", "cooldown"},
+            {"definition", "usage", "next", "cooldown", "active_until", "active_request"},
         )
         delay = (
             None
@@ -244,11 +253,33 @@ def load(
                 last - wall,
                 number(current["next"], 0, 2**53, "Next") - wall,
                 number(current["cooldown"], 0, 2**53, "Cooldown") - wall,
+                number(current["active_until"], 0, 2**53, "Active request deadline") - wall,
             )
         )
         raise ToolsmithError("deferred", "Clock rollback prevents new reservations", delay)
     elapsed = wall - began
     if state["boot"] == boot:
+        elapsed_since_observation = monotonic - number(
+            state["last_monotonic"], 0, 2**53, "Previous monotonic observation"
+        )
+        expected_wall = (
+            number(state["last_wall"], 0, 2**53, "Previous wall observation")
+            + elapsed_since_observation
+        )
+        forward_shift = max(0, wall - expected_wall)
+        if forward_shift:
+            for value in groups.values():
+                if isinstance(value, dict):
+                    for column in ("next", "cooldown", "active_until"):
+                        deadline_value = value[column]
+                        if (
+                            deadline_value is not None
+                            and number(deadline_value, 0, 2**53, "Request deadline") > expected_wall
+                        ):
+                            value[column] = (
+                                number(deadline_value, 0, 2**53 - forward_shift, "Request deadline")
+                                + forward_shift
+                            )
         elapsed = min(
             elapsed,
             number(state["elapsed_before_boot"], 0, policy.period_seconds, "Retained elapsed time")
@@ -272,6 +303,14 @@ def load(
     elif state["boot"] != boot:
         state["started_monotonic"] = monotonic
         state["elapsed_before_boot"] = elapsed
+    for value in groups.values():
+        if (
+            isinstance(value, dict)
+            and value["active_request"] is not None
+            and number(value["active_until"], 0, 2**53, "Active deadline") <= wall
+        ):
+            pending.pop(identity(value["active_request"], "Active request"), None)
+            value["active_until"], value["active_request"] = 0, None
     state.update({"last_wall": wall, "last_monotonic": monotonic, "boot": boot})
     return state
 
@@ -294,8 +333,13 @@ def scope(
             "usage": {"requests": 0, "bytes": 0},
             "next": 0,
             "cooldown": 0,
+            "active_until": 0,
+            "active_request": None,
         }
-    group = fields(groups[policy.group], {"definition", "usage", "next", "cooldown"})
+    group = fields(
+        groups[policy.group],
+        {"definition", "usage", "next", "cooldown", "active_until", "active_request"},
+    )
     if group["definition"] != definition:
         raise ToolsmithError("conflict", "Group policy changed; quotas were not reset")
     if task not in tasks:
@@ -317,7 +361,9 @@ def status(state: dict[str, JsonValue], policy: BudgetPolicy, task: str) -> Budg
         None
         if group["cooldown"] is None
         else max(
-            number(group["next"], 0, 2**53, "Next"), number(group["cooldown"], 0, 2**53, "Cooldown")
+            number(group["next"], 0, 2**53, "Next"),
+            number(group["cooldown"], 0, 2**53, "Cooldown"),
+            number(group["active_until"], 0, 2**53, "Active request deadline"),
         ),
         len(records(state["reservations"])),
     )
@@ -340,8 +386,11 @@ def inspect_budget(
         return result
 
 
-@boundary
-def reserve_budget(
+class _SpacingDelay(ToolsmithError):
+    """Only local spacing/slot contention can be waited out automatically."""
+
+
+def _reserve_budget(
     root: Path,
     policy: BudgetPolicy,
     task: str,
@@ -350,9 +399,11 @@ def reserve_budget(
     clock: Clock | None = None,
     boot: str | None = None,
     expected_configuration_digest: str | None = None,
+    deadline_seconds: float = 60,
 ) -> Reservation:
     checked, selected = validate_policy(policy), identity(task, "Task")
     charged = integer(maximum_bytes, 1, 128 * 1024 * 1024, "Reservation bytes")
+    duration = number(deadline_seconds, 0.001, 60, "Active request deadline seconds")
     actual_clock = clock or SystemClock()
     with private_directory(root, create=True) as directory, directory_lock(directory):
         state = load(directory, checked, actual_clock, identity(boot or boot_identity()))
@@ -362,11 +413,15 @@ def reserve_budget(
             raise ToolsmithError("conflict", "Configuration changed before request reservation")
         observed = status(state, checked, selected)
         now = actual_clock.wall()
-        if observed.next_request_at is None or observed.next_request_at > now:
+        group, task_usage = scope(state, checked, selected)
+        cooldown = (
+            None if group["cooldown"] is None else number(group["cooldown"], 0, 2**53, "Cooldown")
+        )
+        if cooldown is None or cooldown > now:
             raise ToolsmithError(
                 "deferred",
-                "Source spacing/cooldown prevents a request",
-                None if observed.next_request_at is None else observed.next_request_at - now,
+                "Upstream cooldown prevents a request",
+                None if cooldown is None else cooldown - now,
             )
         if (
             observed.group_requests >= checked.group_requests
@@ -379,17 +434,24 @@ def reserve_budget(
                 "Group or task allowance is exhausted",
                 max(0.1, observed.period_started + checked.period_seconds - now),
             )
+        if observed.next_request_at is not None and observed.next_request_at > now:
+            raise _SpacingDelay(
+                "deferred",
+                "Source spacing or active slot prevents a request",
+                observed.next_request_at - now,
+            )
         pending = records(state["reservations"])
         reservation = Reservation(
             uuid4().hex, identity(state["period"]), checked.group, selected, charged
         )
-        group, task_usage = scope(state, checked, selected)
         usage = counters(group["usage"])
         for counter in (usage, task_usage):
             counter["requests"] = integer(counter["requests"], 0, MAX_BYTES - 1, "Requests") + 1
             counter["bytes"] = integer(counter["bytes"], 0, MAX_BYTES - charged, "Bytes") + charged
         group["usage"] = usage
         group["next"] = now + checked.minimum_interval_seconds
+        group["active_until"] = now + duration
+        group["active_request"] = reservation.identity
         pending[reservation.identity] = {
             "group": reservation.group,
             "task": reservation.task,
@@ -399,6 +461,68 @@ def reserve_budget(
         records(state["tasks"])[selected] = task_usage
         save(directory, state)
         return reservation
+
+
+@boundary
+def reserve_budget(
+    root: Path,
+    policy: BudgetPolicy,
+    task: str,
+    maximum_bytes: int,
+    *,
+    clock: Clock | None = None,
+    boot: str | None = None,
+    expected_configuration_digest: str | None = None,
+    deadline_seconds: float = 60,
+) -> Reservation:
+    return _reserve_budget(
+        root,
+        policy,
+        task,
+        maximum_bytes,
+        clock=clock,
+        boot=boot,
+        expected_configuration_digest=expected_configuration_digest,
+        deadline_seconds=deadline_seconds,
+    )
+
+
+@async_boundary
+async def reserve_budget_async(
+    root: Path,
+    policy: BudgetPolicy,
+    task: str,
+    maximum_bytes: int,
+    *,
+    clock: Clock | None = None,
+    boot: str | None = None,
+    expected_configuration_digest: str | None = None,
+    deadline_seconds: float = 60,
+) -> Reservation:
+    selected_clock = clock or SystemClock()
+    deadline = selected_clock.monotonic() + number(
+        deadline_seconds, 0.001, 60, "Request deadline seconds"
+    )
+    while True:
+        remaining = deadline - selected_clock.monotonic()
+        if remaining <= 0:
+            raise ToolsmithError("deferred", "Local pacing exhausted the request deadline")
+        try:
+            return _reserve_budget(
+                root,
+                policy,
+                task,
+                maximum_bytes,
+                clock=selected_clock,
+                boot=boot,
+                expected_configuration_digest=expected_configuration_digest,
+                deadline_seconds=remaining,
+            )
+        except _SpacingDelay as error:
+            delay = error.failure.retry_after_seconds
+            if delay is None or delay <= 0 or delay >= remaining:
+                raise
+            await selected_clock.wait(delay)
 
 
 @boundary
@@ -452,6 +576,8 @@ def settle_budget(
             group["usage"] = usage
             records(state["tasks"])[reservation.task] = task_usage
             completed = True
+        if group["active_request"] == reservation.identity:
+            group["active_until"], group["active_request"] = 0, None
         records(state["groups"])[checked.group] = group
         save(directory, state)
         return completed

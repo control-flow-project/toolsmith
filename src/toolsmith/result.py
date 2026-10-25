@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
 from functools import wraps
 from typing import Literal
@@ -63,3 +63,18 @@ def unwrap[Value](result: Result[Value]) -> Value:
     if isinstance(result, Failure):
         raise ToolsmithError(result.code, result.message, result.retry_after_seconds)
     return result.value
+
+
+def async_boundary[**Parameters, Value](
+    function: Callable[Parameters, Awaitable[Value]],
+) -> Callable[Parameters, Coroutine[object, object, Result[Value]]]:
+    @wraps(function)
+    async def checked(*args: Parameters.args, **kwargs: Parameters.kwargs) -> Result[Value]:
+        try:
+            return Success(await function(*args, **kwargs))
+        except ToolsmithError as error:
+            return error.failure
+        except OSError:
+            return Failure("io", "The explicit filesystem or network operation failed")
+
+    return checked

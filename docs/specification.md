@@ -10,7 +10,8 @@ The library and CLI use one implementation, typed expected results and validated
 boundaries. No compatibility aliases, local/remote alternatives, speculative
 adapters, placeholders or automatic fallback are allowed. Runtime dependencies
 are absent from the base package. Selected HTTP and semantic capabilities require
-their optional dependencies. No global config, storage root or credential is
+their optional dependencies. PDF text/rendering uses the separate `pdf` extra.
+No global config, storage root or credential is
 selected implicitly.
 
 ## Capabilities
@@ -32,10 +33,39 @@ HTML inspection reports markup signals and rejects document-title access screens
 it does not infer computed CSS visibility. Static text reading still rejects
 unresolved access dialogs. Browser-owning callers validate computed-visible DOM
 through that same text reader; Toolsmith neither runs a browser nor bypasses gates.
+Inspection also returns typed untrusted anchor/feed links, including navigation
+links separately from cleaned prose. Targets remain literal: callers resolve and
+authorize them before any request. Labels are bounded to 1,000 characters with
+an explicit truncation flag. The parser retains only attributes used by reading,
+visibility, resource and link inspection. Unused attributes do not acquire an
+independent value-size limit. Reading attributes also use the complete 4 MiB
+HTML input bound, not an 8,192-character per-value cutoff; a long decorative
+attribute must not erase the rest of a readable page. Node/depth/name budgets
+still apply. Form containers preserve ordinary text and links, including pages
+wrapped by ASP.NET forms; controls and their values remain excluded. Password
+signals and access-screen rejection remain unchanged.
+Duplicate HTML attributes retain their first value; later duplicates never
+replace link targets or visibility attributes. This tolerance does not relax
+XML/feed validation or the untrusted-link authorization boundary.
+RSS/Atom results expose a resolved feed-level next-page link, if declared,
+including inherited XML base resolution. Conflicting or unsafe next links fail.
+Pagination is metadata only; callers own authorization, requests and completeness.
+Every distinct validated feed entry is returned: no default sample, count cap or
+truncation contract. Input byte/structure bounds fail explicitly. Generic XML
+retains namespace names, attributes and mixed-content ordering; it rejects DTDs
+and entity declarations. JSONL fails the entire input on an invalid nonblank line.
+HTML inspection also preserves literal meta fields, JSON/JSON-LD blocks, time
+attributes and the document base. These are untrusted observations, not inferred
+publication dates, article selection or executable code.
 - Explicit safe regular-file reads and private artifact storage/export.
 - Immutable local text/file versions and exact citations, with lexical FTS5 search.
 - Approved HTTPS acquisition, bounded DNS/TLS/body/redirect handling and persistent
   local request pacing, quotas and cooldowns shared by cooperating callers.
+- Finite caller-selected acquisition buckets: all caller-defined buckets run concurrently,
+  each bucket is sequential and carries explicit start spacing. The downloader and
+  caller-owned asynchronous producers use one scheduler. Local spacing does not
+  replace shared upstream quotas, cooldowns or caller authorization. No model,
+  process, thread or autonomous link traversal is introduced.
 - Recorded operation outcomes and explicit interrupted HTTP resumption.
 - Consistent backup/verified restore, integrity checks, index rebuilding and
   preview-bound cleanup of inactive tool-owned staging files.
@@ -47,7 +77,11 @@ through that same text reader; Toolsmith neither runs a browser nor bypasses gat
 
 Browser automation and process-based PDF/OCR conflict with the no-helper-process
 rule and are not implemented. Do not substitute HTML parsing for a browser or
-UTF-8 reading for PDF/OCR. Hybrid retrieval remains excluded: lexical and semantic
+UTF-8 reading for PDF/OCR. Optional PDFium runs in the calling process, reads text
+with explicit page continuation and renders selected pages to bounded PNG images.
+It neither performs OCR nor interprets tables. It is not a native-parser sandbox;
+callers own execution isolation. The PDF input limit is 32 MiB.
+Hybrid retrieval remains excluded: lexical and semantic
 queries are explicit, never substituted or blended. No domain connectors, source
 catalogs, financial calculators, taxonomy, generative model calls, agent
 instructions or public hosting belong here.
@@ -107,6 +141,10 @@ private files, not permission changes to an existing parent. Replacement owns
 atomic publication only; callers own coordination and compare-and-swap semantics.
 No implicit lock file is added to an artifact directory. No-replace publication
 uses one pinned-descriptor rename, never a transient hard-link alias.
+Database metadata validation uses Linux O_PATH descriptors. Opening another
+connection must never open/close an ordinary database descriptor outside SQLite:
+that close would release the process's existing POSIX database locks. The shared
+SQLite connection owner retains private-file checks and pinned-parent URI opening.
 
 Network access is HTTPS port 443 only, with exact reviewed DNS hosts. Reject URL
 credentials, secret-like query keys, fragments and control characters. Resolve with
@@ -121,6 +159,16 @@ never shortened. An unrepresentable delay blocks requests until operator review;
 quota-window rollover cannot clear that block. Persist reservations before
 network I/O; interrupted unknown usage is conservatively charged. Policy identity
 and recorded requests cannot be silently changed to bypass limits.
+
+Download batches use the same HTTPS implementation, with bounded cooperative
+concurrency across caller-defined groups. A durable single-request slot, shared
+by cooperating processes using the same network state, prevents group overlap.
+Computed policy-spacing waits consume the request deadline; upstream cooldowns
+remain explicit deferrals, not automatic retries. A crashed request retains its
+charge and slot until its recorded deadline. Each outcome identifies completed,
+failed or unfinished input. An existing output is rejected before HTTP access.
+There is no total item-count ceiling; explicit batch deadlines and byte bounds
+are separate from an application's discovery/completion policy.
 
 Atomic metadata writes reference already durable immutable objects. A crash can
 leave an unreferenced immutable object, never a committed reference to unwritten
@@ -149,6 +197,10 @@ previous digest after encoding outside transactions. Search accepts an explicit 
 missing/stale coverage without any corpus-count or scanned-chunk cutoff, never other
 collections or silent lexical fallback. Text imports invalidate old derivatives
 without deleting citable originals. Semantic clear deletes only derivatives.
+Batch queries share one authorized scope/coverage snapshot and issue ordinary
+indexed queries per input. They do not scan bodies in Python or make model calls.
+Results retain input identity and individual failures; matching does not decide
+application-level duplicate equivalence.
 Integrity and verified backups include vector profiles, finite unit vectors,
 complete spans and canonical source bindings; no inference is required.
 Bulk readiness and lexical matching return database-resident reference/digest
@@ -162,6 +214,9 @@ Return completed/partial/failed outcomes, warnings, exact versions and bounded
 references. Publication, supplied observation and recording times remain distinct;
 unknown source dates stay unknown. Output excludes incidental machine paths and
 credentials. Export destinations are explicit and cannot overwrite existing files.
+The CLI's global `--output` writes the complete successful result to a new private
+file and returns only its path and byte count. This is the preferred mechanism
+for model-facing bulk operations; it does not truncate the result.
 
 Backup is consistent under the selected store lock. Restore verifies the complete
 backup before creating a new destination; it never overwrites production. Reject

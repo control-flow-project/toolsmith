@@ -5,6 +5,8 @@ from html.parser import HTMLParser
 from toolsmith.readers.text import decode_text, normalize_text
 from toolsmith.result import ToolsmithError
 
+MAX_HTML_BYTES = 4 * 1024 * 1024
+
 OMIT = {
     "script",
     "style",
@@ -13,7 +15,6 @@ OMIT = {
     "svg",
     "nav",
     "footer",
-    "form",
     "iframe",
     "button",
     "select",
@@ -64,9 +65,33 @@ BLOCK = {
     "figcaption",
 }
 NOISE = re.compile(
-    r"(?:^|[\s_-])(?:ads?|advert(?:isement|ising)?|navigation|navbar|sidebar|newsletter|"
+    r"(?:^|[\s_-])(?:ads?|advert(?:isement|ising)?|sidebar|newsletter|"
     r"cookie|consent|share|social|related|recommended|sponsored)(?:$|[\s_-])",
     re.I,
+)
+NAVIGATION = re.compile(r"(?:^|[\s_-])(?:navigation|navbar)(?:$|[\s_-])", re.I)
+READ_ATTRIBUTES = frozenset(
+    {
+        "aria-hidden",
+        "aria-modal",
+        "class",
+        "content",
+        "datetime",
+        "hidden",
+        "href",
+        "id",
+        "itemprop",
+        "name",
+        "poster",
+        "property",
+        "rel",
+        "role",
+        "src",
+        "srcset",
+        "style",
+        "title",
+        "type",
+    }
 )
 ACCESS_HEADING = re.compile(
     r"(?:access denied|forbidden|unauthori[sz]ed|verify (?:that )?you are human|"
@@ -90,18 +115,22 @@ class Node:
     children: list["Node | str"] = field(default_factory=list)
 
 
-def excluded(node: Node, *, include_forms: bool = False) -> bool:
+def excluded(node: Node, *, include_forms: bool = False, include_navigation: bool = False) -> bool:
     attributes = node.attributes
     style = re.sub(r"\s+", "", attributes.get("style", "").lower())
     return (
         node.tag in OMIT
-        and not (include_forms and node.tag in FORMS)
+        and not (include_forms and node.tag in FORMS or include_navigation and node.tag == "nav")
         or "hidden" in attributes
         or attributes.get("aria-hidden", "").lower() == "true"
-        or attributes.get("role", "").lower() in {"navigation", "banner", "complementary"}
+        or attributes.get("role", "").lower() in {"banner", "complementary"}
+        or not include_navigation
+        and attributes.get("role", "").lower() == "navigation"
         or "display:none" in style
         or "visibility:hidden" in style
         or bool(NOISE.search(attributes.get("id", "") + " " + attributes.get("class", "")))
+        or not include_navigation
+        and bool(NAVIGATION.search(attributes.get("id", "") + " " + attributes.get("class", "")))
     )
 
 
@@ -116,13 +145,15 @@ class MeaningfulParser(HTMLParser):
         self.nodes += 1
         if self.nodes > 50_000 or len(self.stack) >= 128 or len(attrs) > 100:
             raise ToolsmithError("limit", "HTML exceeds its node, attribute or nesting budget")
-        if len({name for name, _ in attrs}) != len(attrs):
-            raise ToolsmithError("invalid_input", "HTML contains ambiguous duplicate attributes")
-        if any(len(name) > 500 or len(value or "") > 8192 for name, value in attrs):
+        if any(len(name) > 500 for name, _ in attrs):
             raise ToolsmithError("limit", "HTML attribute exceeds its field budget")
+        selected: dict[str, str] = {}
+        for name, value in attrs:
+            if name in READ_ATTRIBUTES:
+                selected.setdefault(name, value or "")
         if tag in {"p", "li"} and self.stack[-1].tag == tag:
             self.stack.pop()
-        node = Node(tag, {name: value or "" for name, value in attrs})
+        node = Node(tag, selected)
         self.stack[-1].children.append(node)
         if tag not in VOID:
             self.stack.append(node)
@@ -145,7 +176,7 @@ class MeaningfulParser(HTMLParser):
 def parse_html(content: bytes) -> Node:
     parser = MeaningfulParser()
     try:
-        parser.feed(decode_text(content, 4 * 1024 * 1024))
+        parser.feed(decode_text(content, MAX_HTML_BYTES))
         parser.close()
     except (AssertionError, ValueError, RecursionError) as error:
         raise ToolsmithError(
@@ -154,12 +185,14 @@ def parse_html(content: bytes) -> Node:
     return parser.root
 
 
-def descendants(node: Node, *, include_forms: bool = False) -> list[Node]:
+def descendants(
+    node: Node, *, include_forms: bool = False, include_navigation: bool = False
+) -> list[Node]:
     output: list[Node] = []
     pending = [node]
     while pending:
         current = pending.pop()
-        if excluded(current, include_forms=include_forms):
+        if excluded(current, include_forms=include_forms, include_navigation=include_navigation):
             continue
         output.append(current)
         pending.extend(child for child in reversed(current.children) if isinstance(child, Node))

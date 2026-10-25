@@ -5,6 +5,7 @@ from typing import cast
 
 import pytest
 
+from toolsmith import __version__
 from toolsmith.cli import main
 from toolsmith.operations.cleanup import preview_cleanup
 from toolsmith.readers.models import Document, TextPart
@@ -15,6 +16,13 @@ from toolsmith.validation import JsonValue, canonical_json
 
 def output(capture: pytest.CaptureFixture[str]) -> dict[str, JsonValue]:
     return cast(dict[str, JsonValue], json.loads(capture.readouterr().out))
+
+
+def test_cli_reports_the_current_package_version(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as stopped:
+        main(["--version"])
+    assert stopped.value.code == 0
+    assert capsys.readouterr().out == f"toolsmith {__version__}\n"
 
 
 def test_cli_calls_the_library_and_formats_expected_errors(

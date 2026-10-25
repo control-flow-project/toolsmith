@@ -47,7 +47,14 @@ assert importlib.util.find_spec('onnxruntime') is None
 assert importlib.util.find_spec('tokenizers') is None
 from toolsmith.semantic import Scope, Source, encode_query, initialize_index, inspect_model
 assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
-assert importlib.metadata.version('ctlflow-toolsmith') == '0.4.2'
+assert importlib.metadata.version('ctlflow-toolsmith') == '0.5.0'
+assert importlib.util.find_spec('aiohttp') is None
+assert importlib.util.find_spec('pypdfium2') is None
+from toolsmith.readers import read_xml, read_json_lines, read_pdf
+assert unwrap(read_xml(b'<root><value>one</value></root>')).root.name == 'root'
+assert len(unwrap(read_json_lines(b'{"id":1}\\n{"id":2}\\n'))) == 2
+assert isinstance(read_pdf(b'%PDF-1.7\\n'), Failure)
+assert 'pypdfium2' not in sys.modules
 metadata = importlib.metadata.metadata('ctlflow-toolsmith')
 assert metadata['License-Expression'] == 'MIT'
 assert metadata.get_all('License-File') == ['LICENSE']
@@ -55,6 +62,7 @@ assert not any(value.startswith('Private ::') for value in metadata.get_all('Cla
 assert set(parent.iterdir()) == before
 assert unwrap(read_html(b'<main>Meaningful text</main>')).parts[0].text == 'Meaningful text'
 assert len(unwrap(read_feed(b'<rss><channel><item><title>A</title><link>https://example.com/a</link></item></channel></rss>', 'https://example.com/feed')).entries) == 1
+assert unwrap(read_feed(b'<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="?page=2"/></feed>', 'https://example.com/feed')).next_url == 'https://example.com/feed?page=2'
 root = parent / 'store'
 unwrap(initialize_store(root, 'sample'))
 document = unwrap(read_text(b'Installed package lexical words', 'Installed'))
@@ -91,6 +99,9 @@ before_audit = (settings / 'budget.json').read_bytes()
 assert unwrap(check_budget(settings, (selected,))) == 0
 assert (settings / 'budget.json').read_bytes() == before_audit
 assert unwrap(inspect_html(b'<main>Public text</main><input type="password">')).password_controls
+linked = unwrap(inspect_html(b'<nav><a href="/section">Section</a></nav><main data-unused="' + b'x' * 20000 + b'"><a href="/article">Article</a></main>'))
+assert tuple(link.target for link in linked.links) == ('/section', '/article')
+assert linked.links[1].label == 'Article' and not linked.links[1].label_truncated
 assert unwrap(replace_bytes(parent / 'explicit-output.txt', b'private output')) == 14
 assert not (parent / '.lock').exists()
 assert unwrap(project_table(unwrap(decode_table(b'Name,Value\\nA,10\\n')), ('Value',), {'Name':'A'})).matched == 1
@@ -135,7 +146,7 @@ def check_archives(wheel: Path, source: Path) -> None:
         metadata = archive.read(next(name for name in names if name.endswith("/METADATA"))).decode()
         check_license(metadata, archive.read(license_path).decode())
         assert all(
-            "extra == 'http'" in line or "extra == 'semantic'" in line
+            any("extra == '" + name + "'" in line for name in ("http", "pdf", "semantic"))
             for line in metadata.splitlines()
             if line.startswith("Requires-Dist:")
         )
@@ -174,11 +185,11 @@ def check_archives(wheel: Path, source: Path) -> None:
 
 def main() -> int:
     require_limits()
-    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.4.2-py3-none-*.whl"))
+    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.5.0-py3-none-*.whl"))
     if len(wheels) != 1 or wheels[0].name.endswith("-any.whl"):
         raise RuntimeError("Expected one platform-tagged native wheel")
     wheel = wheels[0]
-    source = ROOT / "dist/ctlflow_toolsmith-0.4.2.tar.gz"
+    source = ROOT / "dist/ctlflow_toolsmith-0.5.0.tar.gz"
     check_archives(wheel, source)
     uv = os.environ.get("TOOLSMITH_UV") or shutil.which("uv")
     if uv is None:
@@ -186,6 +197,8 @@ def main() -> int:
     interpreter = os.environ.get("TOOLSMITH_PYTHON", sys.executable)
     with tempfile.TemporaryDirectory(prefix="toolsmith-installed-") as directory:
         parent = Path(directory)
+        constraints = parent / "security-constraints.txt"
+        constraints.write_text("certifi==2026.10.19\nfilelock==4.2.1\n")
         for label, artifact in (("wheel", wheel), ("sdist", source)):
             environment = parent / (label + "-venv")
             run([uv, "venv", "--python", interpreter, str(environment)], parent)
@@ -198,7 +211,13 @@ def main() -> int:
                     "--python",
                     str(python),
                     "--exclude-newer",
-                    "2026-10-04T00:00:00Z",
+                    "2026-10-17T00:00:00Z",
+                    "--exclude-newer-package",
+                    "certifi=2026-10-25T00:00:00Z",
+                    "--exclude-newer-package",
+                    "filelock=2026-10-25T00:00:00Z",
+                    "--constraint",
+                    str(constraints),
                     "--no-deps",
                     str(artifact),
                 ],
@@ -211,6 +230,8 @@ def main() -> int:
                 run([str(environment / "bin/toolsmith"), "--json", "capabilities"], workspace)
             )
             assert capability["ok"] is True
+            version_output = run([str(environment / "bin/toolsmith"), "--version"], workspace)
+            assert version_output.strip() == "toolsmith 0.5.0"
             command = json.loads(
                 run(
                     [
@@ -229,6 +250,26 @@ def main() -> int:
             )
             assert command["ok"] is True and command["result"]
             print(label + " installed CLI/library acceptance passed", flush=True)
+            run(
+                [
+                    uv,
+                    "pip",
+                    "install",
+                    "--python",
+                    str(python),
+                    "--exclude-newer",
+                    "2026-10-17T00:00:00Z",
+                    "--exclude-newer-package",
+                    "certifi=2026-10-25T00:00:00Z",
+                    "--exclude-newer-package",
+                    "filelock=2026-10-25T00:00:00Z",
+                    "--constraint",
+                    str(constraints),
+                    str(artifact) + "[http,pdf]",
+                ],
+                parent,
+            )
+            print(run([str(python), str(ROOT / "scripts/accept_primitives.py")], workspace), end="")
             model_directory = os.environ.get("TOOLSMITH_MODEL_DIRECTORY")
             api_header = os.environ.get("TOOLSMITH_API_HEADER")
             if model_directory is not None and api_header is not None:
@@ -240,7 +281,13 @@ def main() -> int:
                         "--python",
                         str(python),
                         "--exclude-newer",
-                        "2026-10-04T00:00:00Z",
+                        "2026-10-17T00:00:00Z",
+                        "--exclude-newer-package",
+                        "certifi=2026-10-25T00:00:00Z",
+                        "--exclude-newer-package",
+                        "filelock=2026-10-25T00:00:00Z",
+                        "--constraint",
+                        str(constraints),
                         str(artifact) + "[semantic]",
                     ],
                     parent,
@@ -309,7 +356,13 @@ def main() -> int:
                 "--python",
                 str(parent / "wheel-venv/bin/python"),
                 "--exclude-newer",
-                "2026-10-04T00:00:00Z",
+                "2026-10-17T00:00:00Z",
+                "--exclude-newer-package",
+                "certifi=2026-10-25T00:00:00Z",
+                "--exclude-newer-package",
+                "filelock=2026-10-25T00:00:00Z",
+                "--constraint",
+                str(constraints),
                 str(wheel) + "[http]",
             ],
             parent,
@@ -333,7 +386,13 @@ def main() -> int:
                 "--python",
                 str(parent / "wheel-venv/bin/python"),
                 "--exclude-newer",
-                "2026-10-04T00:00:00Z",
+                "2026-10-17T00:00:00Z",
+                "--exclude-newer-package",
+                "certifi=2026-10-25T00:00:00Z",
+                "--exclude-newer-package",
+                "filelock=2026-10-25T00:00:00Z",
+                "--constraint",
+                str(constraints),
                 str(wheel) + "[semantic]",
             ],
             parent,

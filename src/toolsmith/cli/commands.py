@@ -6,9 +6,11 @@ from toolsmith.acquisition.config import read_budget_policy, read_http_policy
 from toolsmith.acquisition.http import acquire_http, resume_http
 from toolsmith.acquisition.limits import inspect_limits
 from toolsmith.acquisition.policy import read_policy
+from toolsmith.cli.downloads import execute_downloads
+from toolsmith.cli.formats import execute_formats
 from toolsmith.cli.indexes import execute_index
 from toolsmith.cli.parser import Arguments
-from toolsmith.files import copy_file, hash_file, read_bytes, write_new_bytes
+from toolsmith.files import absolute_path, copy_file, hash_file, read_bytes, write_new_bytes
 from toolsmith.operations.backup import backup_store, restore_store
 from toolsmith.operations.cleanup import (
     apply_cleanup,
@@ -16,8 +18,16 @@ from toolsmith.operations.cleanup import (
     validate_cleanup_plan,
 )
 from toolsmith.operations.integrity import check_integrity, rebuild_index
-from toolsmith.readers import read_feed, read_html, read_text
-from toolsmith.readers.json import read_json
+from toolsmith.readers import (
+    inspect_html,
+    read_feed,
+    read_html,
+    read_pdf,
+    read_text,
+    read_xml,
+    render_pdf_page,
+)
+from toolsmith.readers.json import read_json, read_json_lines
 from toolsmith.readers.tables import TableFormat, decode_table, project_table
 from toolsmith.result import Result, Success, ToolsmithError, unwrap
 from toolsmith.retrieval import read_citation, search_text
@@ -48,6 +58,10 @@ def required_path(value: Path | None) -> Path:
 
 def execute(arguments: Arguments) -> Result[object]:
     action = arguments.action
+    if action == "http.batch":
+        return execute_downloads(arguments)
+    if action.startswith(("archive.", "url.", "decompress.")):
+        return execute_formats(arguments)
     if action == "capabilities":
         return Success(
             {
@@ -55,6 +69,15 @@ def execute(arguments: Arguments) -> Result[object]:
                     "text",
                     "html",
                     "rss-atom",
+                    "xml",
+                    "json-lines",
+                    "html-links-metadata",
+                    "pdf-text-images",
+                    "batch-https-files",
+                    "batch-indexed-search",
+                    "url-resolution",
+                    "archive-inspection",
+                    "gzip-decompression",
                     "local-text",
                     "private-files",
                     "lexical-search",
@@ -87,16 +110,24 @@ def execute(arguments: Arguments) -> Result[object]:
                     "helper-processes",
                     "threads",
                     "browser",
-                    "pdf",
                     "ocr",
                     "skills",
                     "fleet-runtime",
                 ],
                 "semantic_dependency": "semantic extra; verified operator-supplied local assets, no download",
+                "pdf_dependency": "pdf extra; in-process PDFium text extraction and page rendering",
             }
         )
     if action.startswith("read."):
         content = unwrap(read_bytes(required_path(arguments.file), 32 * 1024 * 1024))
+        if action == "read.html-links":
+            return inspect_html(content)
+        if action == "read.xml":
+            return read_xml(content)
+        if action == "read.jsonl":
+            return read_json_lines(content)
+        if action == "read.pdf":
+            return read_pdf(content, arguments.start, arguments.limit)
         if action == "read.text":
             return read_text(content, required_text(arguments.title, "Title"))
         if action == "read.html":
@@ -108,9 +139,7 @@ def execute(arguments: Arguments) -> Result[object]:
                 selection="article" if arguments.selection == "article" else "text",
             )
         if action == "read.feed":
-            return read_feed(
-                content, required_text(arguments.source_url, "Source URL"), arguments.limit
-            )
+            return read_feed(content, required_text(arguments.source_url, "Source URL"))
         if action == "read.json":
             return read_json(content)
         if arguments.format not in {"csv", "zip-csv", "gzip-csv"}:
@@ -135,6 +164,19 @@ def execute(arguments: Arguments) -> Result[object]:
             arguments.limit,
             header_row=arguments.header_row,
         )
+    if action == "render.pdf":
+        content = unwrap(read_bytes(required_path(arguments.file), 32 * 1024 * 1024))
+        rendered = unwrap(render_pdf_page(content, arguments.page, arguments.dpi))
+        unwrap(write_new_bytes(required_path(arguments.destination), rendered.content))
+        return Success(
+            {
+                "page": rendered.page,
+                "width": rendered.width,
+                "height": rendered.height,
+                "media_type": rendered.media_type,
+                "bytes": len(rendered.content),
+            }
+        )
     if action.startswith("filesystem."):
         source = required_path(arguments.file)
         return (
@@ -146,6 +188,9 @@ def execute(arguments: Arguments) -> Result[object]:
         return execute_index(arguments)
     if action.startswith("http."):
         if action == "http.request":
+            destination = absolute_path(required_path(arguments.destination))
+            if destination.exists() or destination.is_symlink():
+                raise ToolsmithError("conflict", "Destination exists; no request was sent")
             response = unwrap(
                 fetch_http(
                     required_text(arguments.url, "URL"),
@@ -161,7 +206,7 @@ def execute(arguments: Arguments) -> Result[object]:
                     required_text(arguments.task, "Task"),
                 )
             )
-            unwrap(write_new_bytes(required_path(arguments.destination), response.content))
+            unwrap(write_new_bytes(destination, response.content))
             return Success(
                 {
                     "final_url": response.final_url,

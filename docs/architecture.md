@@ -50,7 +50,10 @@ This describes the implemented paths. The [full proposed layout](proposed-layout
 moves them into explicit capability namespaces once approved; it creates no aliases,
 parallel implementations or runtime placeholders.
 
-No browser/PDF/OCR substitute exists. No application source approvals, financial
+Optional PDF text/rendering runs in process; no browser or OCR substitute exists.
+One cooperative HTTPS transport serves single requests and batches. Group request
+slots and pacing live in the shared budget owner, not application schedulers.
+No application source approvals, financial
 schemas/calculations, summary model or agent instructions are copied here.
 
 ## Application-owned data and derivatives

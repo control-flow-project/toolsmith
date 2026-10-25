@@ -4,8 +4,16 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from importlib.resources import files
 
-from toolsmith.result import ToolsmithError, boundary
-from toolsmith.scopes import Scope, coverage, scope_query
+from toolsmith.result import Failure, Success, ToolsmithError, boundary, unwrap
+from toolsmith.scopes import Coverage, Scope, coverage, scope_query
+from toolsmith.search_batch import (
+    EmbeddingQuery,
+    QueryResult,
+    SearchBatch,
+    SearchQuery,
+    validate_queries,
+)
+from toolsmith.semantic.chunks import Encoder, encode_query
 from toolsmith.semantic.profile import (
     MAX_CHUNKS,
     MAX_SOURCE_BYTES,
@@ -20,7 +28,7 @@ from toolsmith.semantic.profile import (
 )
 from toolsmith.semantic.vector import load_vector_extension
 from toolsmith.sqlite import execute, transaction
-from toolsmith.validation import digest, integer, source_reference, timestamp
+from toolsmith.validation import digest, integer, source_reference, text, timestamp
 
 SCHEMA_SQL = files("toolsmith.semantic").joinpath("schema.sql").read_text(encoding="utf-8")
 
@@ -258,23 +266,17 @@ def invalidate_embedding(connection: sqlite3.Connection, reference: str) -> bool
 
 
 @boundary
-def search_embeddings(
+def _search_in_scope(
     connection: sqlite3.Connection,
     query: bytes,
-    scope: Scope,
-    maximum_records: int = 20,
+    selected: str,
+    observed: Coverage,
+    maximum: int,
 ) -> SearchReport:
-    maximum = integer(maximum_records, 1, 100, "Maximum records")
     unpack_vector(query)
-    load_vector_extension(connection)
     seen: set[str] = set()
     winners: list[Hit] = []
     with transaction(connection, "toolsmith_embedding"):
-        validate_profile(connection)
-        selected = scope_query(connection, scope)
-        candidates, indexed, missing, stale, largest, _chunks = coverage(
-            connection, selected, "embedding_document"
-        )
         rows = execute(
             connection,
             "SELECT c.id, c.reference, d.text_digest, c.start_offset, c.end_offset, c.text_digest, v.distance FROM embedding_vector(?, ?) v CROSS JOIN embedding_chunk c CROSS JOIN embedding_document d CROSS JOIN ("
@@ -282,7 +284,7 @@ def search_embeddings(
             + ") s WHERE v.chunk_id IN (SELECT allowed.id FROM embedding_chunk allowed JOIN embedding_document current ON current.reference = allowed.reference JOIN ("
             + selected
             + ") permitted ON permitted.reference = current.reference AND permitted.text_digest = current.text_digest) AND c.id = v.rowid AND v.chunk_id = c.id AND d.reference = c.reference AND s.reference = d.reference AND s.text_digest = d.text_digest",
-            (query, '{"K":' + str(maximum * max(1, largest)) + "}"),
+            (query, '{"K":' + str(maximum * max(1, observed.largest_source_chunks)) + "}"),
         )
         try:
             for row in rows:
@@ -316,13 +318,106 @@ def search_embeddings(
                     Hit(reference, digest(row[2]), max(-1.0, min(1.0, 1.0 - row[6])), start, end)
                 )
                 seen.add(reference)
-                if len(winners) == min(maximum, indexed):
+                if len(winners) == min(maximum, observed.indexed):
                     break
         finally:
             rows.close()
-        if len(winners) != min(maximum, indexed):
+        if len(winners) != min(maximum, observed.indexed):
             raise ToolsmithError("integrity", "Indexed scope has incomplete retained vector hits")
-    return SearchReport(tuple(winners), candidates, indexed, missing, stale)
+    return SearchReport(
+        tuple(winners), observed.entries, observed.indexed, observed.missing, observed.stale
+    )
+
+
+@boundary
+def search_embeddings(
+    connection: sqlite3.Connection,
+    query: bytes,
+    scope: Scope,
+    maximum_records: int = 20,
+) -> SearchReport:
+    maximum = integer(maximum_records, 1, 100, "Maximum records")
+    load_vector_extension(connection)
+    with transaction(connection, "toolsmith_embedding_search"):
+        validate_profile(connection)
+        selected = scope_query(connection, scope)
+        observed = coverage(connection, selected, "embedding_document")
+        return unwrap(_search_in_scope(connection, query, selected, observed, maximum))
+
+
+@boundary
+def search_batch(
+    connection: sqlite3.Connection,
+    queries: tuple[SearchQuery, ...],
+    scope: Scope,
+    encoder: Encoder,
+    maximum_records: int = 20,
+) -> SearchBatch[SearchReport]:
+    checked = validate_queries(queries)
+    maximum = integer(maximum_records, 1, 100, "Maximum records")
+    if not checked:
+        return SearchBatch(())
+    encoded = tuple(QueryResult(query.id, encode_query(query.text, encoder)) for query in checked)
+    return _search_encoded_batch(connection, encoded, scope, maximum)
+
+
+@boundary
+def search_embeddings_batch(
+    connection: sqlite3.Connection,
+    queries: tuple[EmbeddingQuery, ...],
+    scope: Scope,
+    maximum_records: int = 20,
+) -> SearchBatch[SearchReport]:
+    maximum = integer(maximum_records, 1, 100, "Maximum records")
+    if not isinstance(queries, tuple) or any(
+        not isinstance(query, EmbeddingQuery) for query in queries
+    ):
+        raise ToolsmithError("invalid_input", "Supply typed embedding queries")
+    identities = [text(query.id, 300, "Query id") for query in queries]
+    if len(set(identities)) != len(identities) or any(
+        not isinstance(query.vector, bytes) for query in queries
+    ):
+        raise ToolsmithError(
+            "invalid_input", "Embedding query ids must be unique and vectors must be bytes"
+        )
+    if sum(len(query.vector) + len(query.id.encode()) for query in queries) > 32 * 1024 * 1024:
+        raise ToolsmithError(
+            "limit", "Embedding query input exceeds 32 MiB; process remaining inputs explicitly"
+        )
+    return _search_encoded_batch(
+        connection,
+        tuple(QueryResult(query.id, Success(query.vector)) for query in queries),
+        scope,
+        maximum,
+    )
+
+
+def _search_encoded_batch(
+    connection: sqlite3.Connection,
+    queries: tuple[QueryResult[bytes], ...],
+    scope: Scope,
+    maximum: int,
+) -> SearchBatch[SearchReport]:
+    if not queries:
+        return SearchBatch(())
+    load_vector_extension(connection)
+    with transaction(connection, "toolsmith_embedding_batch"):
+        validate_profile(connection)
+        selected = scope_query(connection, scope)
+        observed = coverage(connection, selected, "embedding_document")
+        return SearchBatch(
+            tuple(
+                QueryResult(
+                    query.id,
+                    query.result
+                    if isinstance(query.result, Failure)
+                    else _search_in_scope(
+                        connection, query.result.value, selected, observed, maximum
+                    ),
+                )
+                for query in queries
+            )
+        )
 
 
 @boundary

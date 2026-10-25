@@ -7,10 +7,64 @@ from conftest import ControlledClock
 from toolsmith.acquisition.budget_import import BudgetSnapshot, GroupUsage, Usage, import_budget
 from toolsmith.acquisition.budgets import boot_identity
 from toolsmith.acquisition.client import HttpPolicy, validate_http_policy
+from toolsmith.acquisition.config import read_http_policy
 from toolsmith.acquisition.limits import budget_policy, inspect_limits, reserve, settle
 from toolsmith.acquisition.policy import SourcePolicy, read_policy, validate_policy
 from toolsmith.acquisition.urls import canonical_url, public_address
 from toolsmith.result import Failure, ToolsmithError, unwrap
+from toolsmith.validation import canonical_json
+
+
+@pytest.mark.parametrize("kind", ["http", "source"])
+@pytest.mark.parametrize("encoded", [False, True])
+@pytest.mark.parametrize("hosts", [("example.com", "example.com"), ("example.com", "EXAMPLE.COM")])
+def test_duplicate_approved_hosts_are_rejected_after_normalization(
+    kind: str, encoded: bool, hosts: tuple[str, ...]
+) -> None:
+    if encoded:
+        result = (
+            read_http_policy(canonical_json({"hosts": hosts}))
+            if kind == "http"
+            else read_policy(
+                canonical_json(
+                    {"format": 1, "group": "source", "hosts": hosts, "retention": "text_only"}
+                )
+            )
+        )
+        assert isinstance(result, Failure) and result.code == "invalid_input"
+    else:
+        with pytest.raises(ToolsmithError) as rejected:
+            if kind == "http":
+                validate_http_policy(HttpPolicy(hosts))
+            else:
+                validate_policy(SourcePolicy("source", hosts, "text_only"))
+        assert rejected.value.failure.code == "invalid_input"
+
+
+@pytest.mark.parametrize("kind", ["http", "source"])
+@pytest.mark.parametrize("encoded", [False, True])
+def test_approved_hosts_have_one_sorted_canonical_representation(kind: str, encoded: bool) -> None:
+    hosts = ("SECOND.example.com", "EXAMPLE.COM")
+    checked: HttpPolicy | SourcePolicy
+    if kind == "http":
+        checked = (
+            unwrap(read_http_policy(canonical_json({"hosts": hosts})))
+            if encoded
+            else validate_http_policy(HttpPolicy(hosts))
+        )
+    else:
+        checked = (
+            unwrap(
+                read_policy(
+                    canonical_json(
+                        {"format": 1, "group": "source", "hosts": hosts, "retention": "text_only"}
+                    )
+                )
+            )
+            if encoded
+            else validate_policy(SourcePolicy("source", hosts, "text_only"))
+        )
+    assert checked.hosts == ("example.com", "second.example.com")
 
 
 def test_archive_http_limits_do_not_reintroduce_hidden_counter_ceilings(
@@ -157,6 +211,7 @@ def test_unknown_cooldown_survives_other_responses_and_window_rollover(
     root = tmp_path / "network"
     policy = SourcePolicy("source", ("example.com",), "text_only")
     first = reserve(root, policy, clock)
+    clock.advance(60)
     second = reserve(root, policy, clock)
     settle(root, policy, clock, first, 20, None)
     settle(root, policy, clock, second, 20, 30)

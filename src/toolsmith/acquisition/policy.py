@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from toolsmith.acquisition.urls import hostname
+from toolsmith.acquisition.urls import approved_hosts
 from toolsmith.files import MAX_FILE_BYTES
 from toolsmith.result import ToolsmithError, boundary
 from toolsmith.validation import fields, identity, integer, json_value, number, parse_json
@@ -43,10 +43,7 @@ def validate_policy(policy: SourcePolicy) -> SourcePolicy:
             "minimum_interval_seconds",
         },
     )
-    hosts = value["hosts"]
-    if not isinstance(hosts, list) or not 1 <= len(hosts) <= 32:
-        raise ToolsmithError("invalid_input", "Source policy requires one to 32 exact DNS hosts")
-    selected = tuple(sorted({hostname(host) for host in hosts}))
+    selected = approved_hosts(policy.hosts)
     if not isinstance(value["retention"], str) or value["retention"] not in {
         "text_only",
         "original",
@@ -96,7 +93,7 @@ def read_policy(content: bytes) -> SourcePolicy:
     defaults = SourcePolicy("source", ("example.com",), "text_only")
     policy = SourcePolicy(
         identity(value["group"], "Source group"),
-        tuple(hostname(host) for host in hosts),
+        approved_hosts(tuple(hosts)),
         "original" if value["retention"] == "original" else "text_only",
         integer(
             value.get("maximum_response_bytes", defaults.maximum_response_bytes),

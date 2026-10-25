@@ -1,7 +1,123 @@
 # Verification
 
+## Complete package review — 25 October 2026
+
+The review covered every first-party source, test, script, example and guide,
+plus the complete modified vec1 implementation. Two boundary defects were
+reproduced: duplicate DNS hosts were accepted or silently removed differently
+between typed/JSON HTTP policies, and raw HTTP CLI requests fetched before
+rejecting an existing or relative destination. One shared host validator now
+normalizes before rejecting duplicates; destination validation precedes HTTP
+and final publication remains atomic and no-replace. Scheduler wording uses
+caller-defined buckets. Current guides now match feed limits, transport exports,
+optional PDF support and output-directory behavior.
+
+The added controls initially produced nine failures and seven passes. After the
+corrections, all 497 tests in 42 isolated files pass without warnings or skips;
+Ruff format/lint, strict Mypy over 122 files and wheel/sdist builds pass. Tests
+run under the existing 8-GiB, zero-swap, 256-task limits. Clean wheel and sdist
+installations pass base/optional-dependency checks, library/CLI calls, native PDF
+text/rendering and actual pinned MiniLM/API-30 acceptance with no added threads.
+The small example corpus has warm query medians of 8.342 ms and 8.219 ms in these
+two installations; these are observations, not production latency guarantees.
+No live news completeness, registry release or fleet activation is certified.
+
+## PR review corrections — 25 October 2026
+
+Controlled regressions reproduced two automatic-wait defects: a new download
+waited out an existing publisher cooldown or exhausted quota instead of returning
+a deferral. Budget admission now waits only for local spacing/slot contention;
+separate batches retain permitted spacing. Typed query batches enforce the same
+32-MiB aggregate bound as file input before index/model work.
+
+Live consumer qualification exposed database corruption. The file preflight
+opened and closed an ordinary descriptor while another connection held SQLite
+locks. That close releases all POSIX record locks for that file in the process,
+allowing a competing writer. Metadata inspection now uses Linux O_PATH at the
+shared connection owner. External-process tests verify that secondary generic,
+index and archive connections retain the original writer lock; symlink, hardlink,
+permission and nonregular-file rejection remain covered. The consumer adds the
+same regression for companion-database validation. This follows SQLite's
+[documented close/locking hazard](https://www.sqlite.org/howtocorrupt.html).
+
+The corrected source passes 481 tests across 42 isolated files, with zero failed
+tests or warnings, Ruff formatting/lint, strict Mypy over 122 files, and wheel/sdist
+builds. Fresh independent wheel and sdist installations pass CLI/library,
+XML/JSONL/HTML/URL/ZIP/PDF primitives, archive contents, optional HTTP and optional
+semantic installation checks. These runs use the verified 8-GiB, zero-swap,
+256-task scope. Actual MiniLM assets were not supplied to this package rerun;
+the earlier dated real-model evidence remains separate. Consumer recovery and
+full live collection are not certified by these library checks. The installed
+third-party dependency audit reports no known vulnerabilities; it skips the
+editable first-party distribution. Dependency records did not change in these
+review corrections.
+
+## Selected acquisition buckets — 25 October 2026
+
+The pre-review source gate passed 469 tests in 41 isolated files, strict typing,
+lint/format and wheel/sdist builds. The bucket scheduler is shared by approved
+HTTP downloads and caller-owned asynchronous acquisition operations. Its default
+is one concurrent coroutine per publisher bucket, not an eight-request ceiling.
+
+A controlled-clock test submits 100 selections in five buckets. All five
+publishers enter each round concurrently; each bucket remains sequential and its
+20 starts occur at 0, 10, ..., 190 simulated seconds. This is scheduling evidence,
+not a live network throughput benchmark. Invalid throttles and duplicate publisher
+buckets fail before operations. Unexpected producer failure cancels and joins
+other workers. Installed wheel/sdist acceptance checks the bucket API and the
+current CLI version. Shared HTTP authorization, persistent budgets, cooldowns,
+timeouts and interrupted-download accounting retain their existing tests.
+
+## Generic primitives — 2026-10-24, 0.5.0
+
+The integrated local gate passes 461 tests in 40 isolated files, Ruff formatting
+and lint, strict Mypy and wheel/sdist builds. It runs with an aggregate 8-GiB
+memory limit, zero swap and at most 256 tasks. Tests cover complete 2,500-entry
+feeds, 250 selected downloads, cross-group concurrency, same-group serialization,
+crash/deadline accounting, strict HTTP framing, typed XML/JSONL/HTML metadata,
+native PDF text/rendering, output-file safety and one coverage read per batch
+of 250 indexed queries. These are not live discovery or summary-quality claims.
+Form-wrapped public pages retain their text and links without leaking control
+values. Password/access checks remain covered. Long reading attributes use the
+whole 4 MiB HTML bound; oversized complete input still fails. Fresh independent
+wheel/sdist acceptance includes the form case, actual MiniLM and native PDF checks.
+
+The optional primitives and actual MiniLM installation checks pass in independent
+wheel and sdist environments, with no added native worker threads. Direct HTTPS
+smoke requests fetch the ET OPML directory (30,863 bytes), Mint markets feed
+(40,972 bytes) and Business Standard markets feed (55,650 bytes). Those requests
+verify the transport only, not complete news coverage or Luna decisions.
+
+The locked runtime dependency audit reports no known vulnerabilities. On
+2026-10-24 the maintainer approved certifi 2026.10.19 and filelock 4.2.1 as exact
+security-fix exceptions to the seven-day release-age cutoff. Lock resolution and
+installed-package verification retain that cutoff for every other dependency.
+Pillow uses the eligible fixed 13.0.0 release. No audit failure is waived.
+
 This file documents reproducible gates. Release evidence is recorded after the
 actual run; fixture results are not certification of every publisher/network.
+
+## Linked HTML and feed pagination — 2026-10-24
+
+Version 0.4.3 exposes typed anchor/feed links through the existing HTML inspector.
+Literal targets remain untrusted; no link is requested automatically. Navigation
+links are distinct from cleaned prose. Long labels expose a truncation flag.
+Unused data attributes no longer fail the reader solely because of value length;
+relevant attributes, input bytes, nodes, nesting, duplicate-attribute and access
+checks remain enforced. Feed results also expose the declared Atom next-page
+link in RSS/Atom. Inherited XML bases apply to next and article links;
+conflicting or unsafe next targets fail, and no page is requested automatically.
+Protocol ownership follows RFC 5005 feed pagination, not publisher selectors.
+
+The complete gate passes 381 tests in 32 isolated files, Ruff lint/format and
+strict Mypy over 103 source/test/script files. Wheel and sdist build and install
+into independent clean environments; installed CLI/library, linked HTML,
+feed pagination, license/archive contents, optional HTTP and
+optional semantic installation checks pass. No skipped case or failed test is
+reported in this run. Verification uses an aggregate 8-GiB, zero-swap, 256-task
+scope. The dependency lock changes only the first-party version record.
+These are offline/package checks, not live publisher or model-quality evidence.
+No registry publication, service or fleet activation occurs.
 
 ## Current-schema cleanup — 2026-10-22
 
