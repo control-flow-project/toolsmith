@@ -54,6 +54,7 @@ def parse_tree(
     limits: XmlLimits,
     selected_name: str | None = None,
     accept: Callable[[XmlElement], None] | None = None,
+    expected_root: str | None = None,
 ) -> tuple[ET.Element, int, dict[int, dict[str, str]]]:
     checked = validate_limits(limits)
     decoded = decode_text(content, checked.maximum_bytes)
@@ -115,6 +116,11 @@ def parse_tree(
                     scopes.append(scope)
                     stack.append(element)
                     if root is None:
+                        if expected_root is not None and element.tag != expected_root:
+                            raise ToolsmithError(
+                                "invalid_input",
+                                "XML root differs from the selected document contract",
+                            )
                         root = element
                     depth += 1
                     nodes += 1
@@ -181,6 +187,8 @@ def read_xml_records[Value](
     element_name: str,
     convert: Callable[[XmlElement], Value],
     limits: XmlLimits | None = None,
+    *,
+    root_name: str | None = None,
 ) -> tuple[Value, ...]:
     """Transform non-nested selected elements without retaining the document tree.
 
@@ -190,6 +198,8 @@ def read_xml_records[Value](
     """
     if not isinstance(element_name, str) or not element_name or not callable(convert):
         raise ToolsmithError("invalid_input", "Supply an exact XML element name and pure converter")
+    if root_name is not None and (not isinstance(root_name, str) or not root_name):
+        raise ToolsmithError("invalid_input", "XML root name must be a nonempty exact name")
     records: list[Value] = []
 
     def accept(element: XmlElement) -> None:
@@ -198,5 +208,5 @@ def read_xml_records[Value](
         except (ValueError, TypeError) as error:
             raise ToolsmithError("invalid_input", "XML record conversion failed") from error
 
-    parse_tree(content, XmlLimits() if limits is None else limits, element_name, accept)
+    parse_tree(content, XmlLimits() if limits is None else limits, element_name, accept, root_name)
     return tuple(records)

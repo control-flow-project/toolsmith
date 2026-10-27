@@ -159,3 +159,7 @@ malformed tail returns failure, never a publishable partial prefix. Selected
 elements cannot nest. Callers may explicitly select up to 128 MiB and eight
 million nodes for known large originals; defaults remain 32 MiB/two million.
 Namespace, depth and field limits still apply to selected and unselected content.
+
+The selected-record reader accepts `root_name` to require an exact expanded root
+name before any conversion, so a nested match cannot impersonate another document
+format. This shares the same parser and does not inspect a partial input twice.

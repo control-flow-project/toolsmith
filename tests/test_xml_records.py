@@ -84,3 +84,17 @@ def test_converter_failure_nested_selection_and_dtd_fail_explicitly() -> None:
         (b"<!DOCTYPE root><root><row/></root>", value),
     ]:
         assert isinstance(read_xml_records(original, "row", converter), Failure)
+
+
+def test_selected_records_require_the_explicit_root_before_conversion() -> None:
+    calls: list[str] = []
+    result = read_xml_records(
+        b"<other><row>value</row></other>",
+        "row",
+        lambda element: calls.append(value(element)),
+        root_name="root",
+    )
+    assert isinstance(result, Failure) and calls == []
+    assert unwrap(
+        read_xml_records(b"<root><row>value</row></root>", "row", value, root_name="root")
+    ) == ("value",)
