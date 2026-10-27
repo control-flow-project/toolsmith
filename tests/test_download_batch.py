@@ -16,7 +16,7 @@ from toolsmith.acquisition.budgets import (
 )
 from toolsmith.acquisition.client import HttpPolicy
 from toolsmith.acquisition.configuration import configure_budget
-from toolsmith.acquisition.transport import Response
+from toolsmith.acquisition.transport import HttpMethod, Response
 from toolsmith.clock import Clock
 from toolsmith.result import Failure, Success, unwrap
 
@@ -116,13 +116,16 @@ def test_distinct_groups_overlap_but_each_group_is_serial_and_spaced(
             self.active: set[str] = set()
             self.overlapped = False
 
-        async def get_async(
+        async def request_async(
             self,
             url: str,
             addresses: tuple[str, ...],
             maximum_bytes: int,
             deadline: float,
             selected_clock: Clock,
+            *,
+            method: HttpMethod = "GET",
+            body: bytes | None = None,
         ) -> Response:
             host = urlsplit(url).hostname or ""
             assert host not in self.active
@@ -161,13 +164,16 @@ def test_distinct_groups_overlap_but_each_group_is_serial_and_spaced(
 
 def test_upstream_cooldown_is_local_to_its_group(tmp_path: Path, clock: ControlledClock) -> None:
     class CoolingTransport:
-        async def get_async(
+        async def request_async(
             self,
             url: str,
             addresses: tuple[str, ...],
             maximum_bytes: int,
             deadline: float,
             selected_clock: Clock,
+            *,
+            method: HttpMethod = "GET",
+            body: bytes | None = None,
         ) -> Response:
             if "one.example.com" in url:
                 return Response(429, (("Retry-After", "60"),), b"", 0)

@@ -61,7 +61,7 @@ HTTP client for a Toolsmith service, skill installation or fleet integration.
 | `toolsmith.acquisition.urls` | `resolve_url`, `resolve_urls`, `ResolvedUrl`; resolution does not authorize requests |
 | `toolsmith.acquisition.batch` | `DownloadRequest`, `DownloadedFile`, `DownloadOutcome`, `DownloadBatch`, `download_batch`, `download_batch_async` |
 | `toolsmith.acquisition.buckets` | `Bucket`, `BucketResult`, `run_buckets_async`; finite caller-selected acquisition with per-bucket spacing |
-| `toolsmith.acquisition.transport` | `NativeResolver`, `NativeTransport`, `request_pinned`, `request_pinned_async`; bounded DNS and pinned HTTPS transport |
+| `toolsmith.acquisition.transport` | `HttpMethod`, `NativeResolver`, `NativeTransport.request`/`request_async`, `request_pinned`, `request_pinned_async`; bounded DNS and pinned HTTPS transport |
 | `toolsmith.acquisition.client` | `HttpPolicy`, `FetchResponse`, `fetch_http`, `fetch_http_async` without an archive |
 | `toolsmith.acquisition.config` | `read_http_policy`, `read_budget_policy` |
 | `toolsmith.acquisition.budgets` | `BudgetPolicy`, `Reservation`, `BudgetStatus`, `inspect_budget`, `reserve_budget`, `reserve_budget_async`, `settle_budget`; asynchronous admission waits only for local spacing/slots within its deadline, never upstream cooldowns or exhausted quota |
@@ -202,3 +202,13 @@ independent. Failures distinguish node, nesting and attribute counts.
 `XmlLimits.maximum_bytes` defaults to 32 MiB and can explicitly reach 144 MiB; node/depth/field limits remain
 separate. `read_text` and safe explicit `read_bytes` share that 144 MiB input
 ceiling; their default budgets and file-write/storage limits are unchanged.
+
+The low-level `request_pinned` and `request_pinned_async` accept keyword-only
+`method="GET"` and `body=None`. Explicit POST requires one to 65,536 opaque body
+bytes; GET rejects a body. Caller-owned adapters supply their reviewed Content-Type
+through `headers`, authorize the endpoint and own quotas/retries. The transport
+sets Host and body framing, verifies TLS against the original host, uses the
+validated pinned address and returns redirect/error statuses without following
+or retrying them. Do not forward POST bodies to redirect targets without a new
+caller authorization. High-level `fetch_http`, archive acquisition, batches and
+the HTTP CLI remain GET-only.

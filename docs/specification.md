@@ -160,7 +160,18 @@ Network access is HTTPS port 443 only, with exact reviewed DNS hosts. Reject URL
 credentials, secret-like query keys, fragments and control characters. Resolve with
 a finite lifetime, reject any non-public result and connect to a validated pinned
 address while validating TLS against the original hostname. Recheck every redirect.
-Ignore proxy environment configuration. Never forward cookies or credentials.
+Ignore proxy environment configuration. The high-level GET client never forwards
+cookies or credentials. Caller-owned native adapters may supply reviewed headers
+to the same low-level pinned transport. `request_pinned` and
+`request_pinned_async` accept explicit `method="POST", body=...` for a caller-approved
+request; GET remains the default and rejects a body. POST requires one to 65,536
+opaque bytes. Callers own the body format, content type, endpoint authorization,
+quotas and any retries. The transport owns Host and request framing, returns every
+response status without following redirects or retrying, and preserves the same
+DNS pinning, TLS verification, deadlines and response bounds. Request bodies are
+never included in errors or response metadata. `NativeTransport.request` and
+`request_async` expose that same primitive; high-level HTTP/archive/batch commands
+continue to perform GET requests only.
 
 Bound compressed and expanded data, requests, redirects and total I/O deadline.
 Upstream Retry-After and policy spacing return explicit deferral; no unconditional

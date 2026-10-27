@@ -22,6 +22,21 @@ parent = Path.cwd()
 before = set(parent.iterdir())
 import toolsmith
 from toolsmith.acquisition.http import acquire_http
+from toolsmith.acquisition.transport import NativeTransport, request_pinned, request_pinned_async
+from toolsmith.clock import SystemClock
+from toolsmith.result import ToolsmithError
+import inspect
+for function in (request_pinned, request_pinned_async, NativeTransport.request, NativeTransport.request_async):
+    signature = inspect.signature(function)
+    assert signature.parameters['method'].default == 'GET'
+    assert signature.parameters['body'].default is None
+assert not hasattr(NativeTransport, 'get') and not hasattr(NativeTransport, 'get_async')
+try:
+    request_pinned('https://example.com/', ('8.8.8.8',), 100, 100, SystemClock(), method='POST', body=b'x' * 65537)
+except ToolsmithError as error:
+    assert error.failure.code == 'invalid_input'
+else:
+    raise AssertionError('Installed transport must reject oversized POST before optional network import')
 from toolsmith.acquisition.policy import SourcePolicy
 from toolsmith.readers import read_text, read_html, read_feed
 from toolsmith.result import Failure, unwrap

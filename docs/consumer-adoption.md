@@ -10,7 +10,11 @@ superseded generic implementation and do not require its optional text archive.
 
 Toolsmith does not approve a publisher, summarize news, interpret an HTML table
 or operate a browser. Native browser adapters may use low-level TLS/body primitives
-with their own reviewed headers; `fetch_http` remains cookie/credential-free.
+with their own reviewed headers and explicit bounded GET/POST method/body.
+Those adapters own JSON validation, exact endpoint approval, quota accounting,
+retry decisions and redirect/body-forwarding authorization. POST bodies remain
+opaque to Toolsmith and are not recorded in errors or response metadata.
+`fetch_http` remains a cookie/credential-free GET client.
 
 ## SQLite
 
