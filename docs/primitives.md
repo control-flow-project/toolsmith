@@ -156,7 +156,7 @@ limits)` uses that same bounded parser and a pure caller converter. It releases
 completed selected subtrees and returns compact converted records only after the
 complete document validates. The converter must perform no external effects; a
 malformed tail returns failure, never a publishable partial prefix. Selected
-elements cannot nest. Callers may explicitly select up to 128 MiB and eight
+elements cannot nest. Callers may explicitly select up to 144 MiB and eight
 million nodes for known large originals; defaults remain 32 MiB/two million.
 Namespace, depth and field limits still apply to selected and unselected content.
 

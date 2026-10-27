@@ -110,7 +110,7 @@ implementations to copy into Toolsmith.
 ## Capacity, safety and evidence limits
 
 - Streaming requires an explicit signed-64-bit byte budget. Buffered
-  reads support up to 128 MiB. ZIP member/total limits are 128 MiB/1 GiB, 10,000
+  reads support up to 144 MiB. ZIP member/total limits are 128 MiB/1 GiB, 10,000
   members and 4 MiB central directory. No prefix is silently returned on overflow.
 - Generic CSV compressed/expanded input is 32/64 MiB; default 1,000,000 rows with larger explicit budgets,
   256 columns and explicitly bounded projections. Data remains strings.

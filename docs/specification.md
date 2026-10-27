@@ -285,7 +285,7 @@ pure caller converter while releasing completed nodes. It validates the entire
 XML before returning any compact record population; it exposes no successful
 partial iterator. One parser owns full-tree and selected-record reading, including
 DTD rejection, namespace scope and text/tail budgets across input chunks. Known
-large documents may explicitly select 128 MiB/eight million nodes; the default
+large documents may explicitly select 144 MiB/eight million nodes; the default
 input and node budgets remain 32 MiB/two million.
 
 ## Optional BIFF workbook reader
