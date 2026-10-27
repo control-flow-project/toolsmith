@@ -196,7 +196,9 @@ Importing either loads no optional native package or model. See
 
 HTML `inspect_html` and `read_html` accept keyword-only `maximum_bytes`: default
 4 MiB, explicit ceiling 8 MiB. They use the same parser and retain independent
-structure, access/password and extracted-text limits. `XmlLimits.maximum_bytes`
-defaults to 32 MiB and can explicitly reach 144 MiB; node/depth/field limits remain
+access/password and extracted-text limits. Their keyword-only maximum_nodes
+defaults to 50,000 and accepts at most 500,000; depth 128 and attributes 100 remain
+independent. Failures distinguish node, nesting and attribute counts.
+`XmlLimits.maximum_bytes` defaults to 32 MiB and can explicitly reach 144 MiB; node/depth/field limits remain
 separate. `read_text` and safe explicit `read_bytes` share that 144 MiB input
 ceiling; their default budgets and file-write/storage limits are unchanged.

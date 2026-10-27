@@ -26,6 +26,8 @@ Table output includes complete scan/match counts and explicit truncation.
 defaults to 32 MiB. Their explicit `--maximum-bytes` ceilings are 144 MiB for
 UTF-8/XML and 8 MiB for HTML. The selected byte bound does not increase structure,
 access-screen or extracted-output limits.
+HTML and HTML-links also accept --maximum-nodes: default 50,000, ceiling 500,000.
+This does not change depth 128, attributes 100, byte, access or output bounds.
 `filesystem hash/copy FILE --maximum-bytes N` streams selected regular files.
 
 `http request URL --policy FILE --budget-policy FILE --network-state DIR --task ID
@@ -46,8 +48,8 @@ No command starts a server, helper process, listener or fleet.
 toolsmith capabilities
 toolsmith store init | inspect
 toolsmith read text FILE --title TITLE [--maximum-bytes N]
-toolsmith read html FILE [--title TITLE] [--maximum-bytes N]
-toolsmith read html-links FILE [--maximum-bytes N]
+toolsmith read html FILE [--title TITLE] [--maximum-bytes N] [--maximum-nodes N]
+toolsmith read html-links FILE [--maximum-bytes N] [--maximum-nodes N]
 toolsmith read feed FILE --source-url URL
 toolsmith read json FILE
 toolsmith read jsonl FILE

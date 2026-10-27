@@ -48,8 +48,11 @@ Duplicate HTML attributes retain their first value; later duplicates never
 replace link targets or visibility attributes. This tolerance does not relax
 XML/feed validation or the untrusted-link authorization boundary.
 HTML inspection and reading retain a 4 MiB default input budget; explicit
-`maximum_bytes` can select up to 8 MiB through the same DOM parser. Independent
-node/depth/attribute, password/access and extracted-text budgets remain unchanged.
+`maximum_bytes` can select up to 8 MiB through the same DOM parser.
+HTML maximum_nodes defaults to 50,000 and can explicitly select up to 500,000
+through that same parser. Node, nesting and attribute-count failures report
+the actual observed/maximum count separately. Depth 128, attributes 100,
+password/access and extracted-text budgets remain unchanged.
 XML retains its 32 MiB default, with an explicit byte ceiling of 144 MiB; its
 independent node, depth and field limits remain in force. The shared UTF-8 reader
 and explicit regular-file reads support the same 144 MiB ceiling, without

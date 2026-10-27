@@ -131,7 +131,11 @@ def execute(arguments: Arguments) -> Result[object]:
             )
         )
         if action == "read.html-links":
-            return inspect_html(content, maximum_bytes=arguments.maximum_bytes)
+            return inspect_html(
+                content,
+                maximum_bytes=arguments.maximum_bytes,
+                maximum_nodes=arguments.maximum_nodes,
+            )
         if action == "read.xml":
             return read_xml(content, XmlLimits(maximum_bytes=arguments.maximum_bytes))
         if action == "read.jsonl":
@@ -152,6 +156,7 @@ def execute(arguments: Arguments) -> Result[object]:
                 arguments.title,
                 selection="article" if arguments.selection == "article" else "text",
                 maximum_bytes=arguments.maximum_bytes,
+                maximum_nodes=arguments.maximum_nodes,
             )
         if action == "read.feed":
             return read_feed(content, required_text(arguments.source_url, "Source URL"))

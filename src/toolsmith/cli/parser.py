@@ -27,6 +27,7 @@ class Arguments(argparse.Namespace):
     limit: int = 20
     offset: int = 0
     maximum_bytes: int = 16 * 1024 * 1024
+    maximum_nodes: int = 50_000
     destination: Path | None = None
     output: Path | None = None
     minimum_age: float = 86_400
@@ -101,6 +102,8 @@ def make_parser() -> Parser:
             command.add_argument(
                 "--maximum-bytes", type=int, default=(32 if name == "xml" else 4) * 1024 * 1024
             )
+        if name in {"html", "html-links"}:
+            command.add_argument("--maximum-nodes", type=int, default=50_000)
         if name == "text":
             command.add_argument("--title", required=True)
         elif name == "html":

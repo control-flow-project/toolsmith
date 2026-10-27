@@ -78,6 +78,15 @@ bounded_html.write_bytes(large_html)
 assert main(['--json', 'read', 'html', str(bounded_html), '--maximum-bytes', str(8 * 1024 * 1024)]) == 0
 bounded_html.unlink()
 del large_html
+dense_html = b'<main>' + b'<br>' * 50000 + b'Installed nodes</main>'
+assert isinstance(inspect_html(dense_html), Failure)
+assert unwrap(inspect_html(dense_html, maximum_nodes=500000)).text == 'Installed nodes'
+assert unwrap(read_html(dense_html, maximum_nodes=500000)).parts[0].text == 'Installed nodes'
+bounded_html.write_bytes(dense_html)
+for reader in ('html', 'html-links'):
+    assert main(['--json', 'read', reader, str(bounded_html), '--maximum-nodes', '500000']) == 0
+bounded_html.unlink()
+del dense_html
 assert len(unwrap(read_feed(b'<rss><channel><item><title>A</title><link>https://example.com/a</link></item></channel></rss>', 'https://example.com/feed')).entries) == 1
 assert unwrap(read_feed(b'<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="?page=2"/></feed>', 'https://example.com/feed')).next_url == 'https://example.com/feed?page=2'
 root = parent / 'store'
