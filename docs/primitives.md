@@ -143,3 +143,10 @@ Use `search lexical batch` or `search semantic batch` with `--database`, `--scop
 and `--queries`; semantic queries also require `--model-directory`. The table or
 view named by the scope must contain authorized `reference` and `text_digest` columns.
 Applications own authorization, candidate dates and interpretation of matches.
+
+XML elements expose `namespaces`, the complete in-scope prefix-to-URI bindings,
+including the implicit `xml` prefix and explicit default namespace removal.
+Expanded names do not resolve QName values in text or attributes for callers;
+use the containing element’s bindings. Prefix rebinding stays local to its
+element subtree. Namespace declarations share the attribute count/name/value
+bounds; the same count bound limits the number of in-scope bindings.

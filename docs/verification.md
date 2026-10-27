@@ -1,5 +1,21 @@
 # Verification
 
+## XML namespace scope — 27 October 2026
+
+Lexical QName values require the containing element's namespace declarations.
+The single XML reader now preserves complete in-scope prefix bindings, local
+rebinding, default namespace removal and the implicit `xml` prefix. Namespace
+metadata follows the existing field and attribute bounds, including a bound on
+in-scope binding count. Feed reading uses the same bounded parser.
+
+The complete gate passes 504 tests in 42 isolated files with no failures or
+skips, Ruff formatting/lint, strict Mypy over 122 files and wheel/sdist builds.
+Verification uses a 4-GiB, zero-swap, 256-task scope on 24 available cores. Clean
+wheel/sdist installed base, CLI/library and optional HTTP/semantic installation
+checks pass. Scoped XML bindings are checked in both source and installed
+primitives. No network source completeness, registry publication or fleet
+activation is certified.
+
 ## Complete package review — 25 October 2026
 
 The review covered every first-party source, test, script, example and guide,

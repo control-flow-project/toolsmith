@@ -262,3 +262,10 @@ coupling. Tests use controlled clocks and fake transport boundaries; no local te
 server or indefinite sleep. Actual approved network acceptance is separate from
 fixtures. Build/test tooling runs in an aggregate-memory/swap/task-bounded group.
 No runtime or production deployment is authorized by package installation.
+
+XML elements expose `namespaces`, the complete in-scope prefix-to-URI bindings,
+including the implicit `xml` prefix and explicit default namespace removal.
+Expanded names do not resolve QName values in text or attributes for callers;
+use the containing element’s bindings. Prefix rebinding stays local to its
+element subtree. Namespace declarations share the attribute count/name/value
+bounds; the same count bound limits the number of in-scope bindings.

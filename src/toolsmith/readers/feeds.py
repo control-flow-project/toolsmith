@@ -159,7 +159,7 @@ def feed_entry(element: ET.Element, source: str, atom: bool) -> FeedEntry:
 @boundary
 def read_feed(content: bytes, source_url: str) -> Feed:
     source = canonical_url(source_url)
-    root, _ = parse_tree(
+    root, _, _namespaces = parse_tree(
         content,
         XmlLimits(
             maximum_bytes=2 * 1024 * 1024,
