@@ -38,7 +38,7 @@ links separately from cleaned prose. Targets remain literal: callers resolve and
 authorize them before any request. Labels are bounded to 1,000 characters with
 an explicit truncation flag. The parser retains only attributes used by reading,
 visibility, resource and link inspection. Unused attributes do not acquire an
-independent value-size limit. Reading attributes also use the complete 4 MiB
+independent value-size limit. Reading attributes also use the complete selected
 HTML input bound, not an 8,192-character per-value cutoff; a long decorative
 attribute must not erase the rest of a readable page. Node/depth/name budgets
 still apply. Form containers preserve ordinary text and links, including pages
@@ -47,6 +47,13 @@ signals and access-screen rejection remain unchanged.
 Duplicate HTML attributes retain their first value; later duplicates never
 replace link targets or visibility attributes. This tolerance does not relax
 XML/feed validation or the untrusted-link authorization boundary.
+HTML inspection and reading retain a 4 MiB default input budget; explicit
+`maximum_bytes` can select up to 8 MiB through the same DOM parser. Independent
+node/depth/attribute, password/access and extracted-text budgets remain unchanged.
+XML retains its 32 MiB default, with an explicit byte ceiling of 144 MiB; its
+independent node, depth and field limits remain in force. The shared UTF-8 reader
+and explicit regular-file reads support the same 144 MiB ceiling, without
+changing their default budgets or file-write/storage limits.
 RSS/Atom results expose a resolved feed-level next-page link, if declared,
 including inherited XML base resolution. Conflicting or unsafe next links fail.
 Pagination is metadata only; callers own authorization, requests and completeness.

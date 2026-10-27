@@ -4,8 +4,10 @@ from html.parser import HTMLParser
 
 from toolsmith.readers.text import decode_text, normalize_text
 from toolsmith.result import ToolsmithError
+from toolsmith.validation import integer
 
-MAX_HTML_BYTES = 4 * 1024 * 1024
+DEFAULT_HTML_BYTES = 4 * 1024 * 1024
+MAX_HTML_BYTES = 8 * 1024 * 1024
 
 OMIT = {
     "script",
@@ -173,10 +175,11 @@ class MeaningfulParser(HTMLParser):
         self.stack[-1].children.append(data)
 
 
-def parse_html(content: bytes) -> Node:
+def parse_html(content: bytes, *, maximum_bytes: int = DEFAULT_HTML_BYTES) -> Node:
+    maximum = integer(maximum_bytes, 1, MAX_HTML_BYTES, "Maximum HTML bytes")
     parser = MeaningfulParser()
     try:
-        parser.feed(decode_text(content, MAX_HTML_BYTES))
+        parser.feed(decode_text(content, maximum))
         parser.close()
     except (AssertionError, ValueError, RecursionError) as error:
         raise ToolsmithError(

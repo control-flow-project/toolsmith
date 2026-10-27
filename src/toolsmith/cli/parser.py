@@ -97,6 +97,10 @@ def make_parser() -> Parser:
         command = readers.add_parser(name)
         command.set_defaults(action="read." + name)
         command.add_argument("file", type=Path)
+        if name in {"text", "html", "html-links", "xml"}:
+            command.add_argument(
+                "--maximum-bytes", type=int, default=(32 if name == "xml" else 4) * 1024 * 1024
+            )
         if name == "text":
             command.add_argument("--title", required=True)
         elif name == "html":

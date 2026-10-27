@@ -39,7 +39,7 @@ class XmlDocument:
 def validate_limits(limits: XmlLimits) -> XmlLimits:
     if not isinstance(limits, XmlLimits):
         raise ToolsmithError("invalid_input", "Supply explicit XML structural limits")
-    integer(limits.maximum_bytes, 1, 128 * 1024 * 1024, "Maximum XML bytes")
+    integer(limits.maximum_bytes, 1, 144 * 1024 * 1024, "Maximum XML bytes")
     integer(limits.maximum_nodes, 1, 8_000_000, "Maximum XML nodes")
     integer(limits.maximum_depth, 1, 128, "Maximum XML depth")
     integer(limits.maximum_attributes, 1, 10_000, "Maximum XML attributes")

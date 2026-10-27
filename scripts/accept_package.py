@@ -66,6 +66,18 @@ assert metadata.get_all('License-File') == ['LICENSE']
 assert not any(value.startswith('Private ::') for value in metadata.get_all('Classifier', []))
 assert set(parent.iterdir()) == before
 assert unwrap(read_html(b'<main>Meaningful text</main>')).parts[0].text == 'Meaningful text'
+large_html = b'<main data-padding="' + b'x' * (4 * 1024 * 1024) + b'">Installed bound</main>'
+assert isinstance(inspect_html(large_html), Failure)
+assert unwrap(inspect_html(large_html, maximum_bytes=8 * 1024 * 1024)).text == 'Installed bound'
+assert unwrap(read_html(large_html, maximum_bytes=8 * 1024 * 1024)).parts[0].text == 'Installed bound'
+from toolsmith.readers import XmlLimits
+assert unwrap(read_xml(b'<root/>', XmlLimits(maximum_bytes=144 * 1024 * 1024))).root.name == 'root'
+from toolsmith.cli import main
+bounded_html = parent / 'explicit-bound.html'
+bounded_html.write_bytes(large_html)
+assert main(['--json', 'read', 'html', str(bounded_html), '--maximum-bytes', str(8 * 1024 * 1024)]) == 0
+bounded_html.unlink()
+del large_html
 assert len(unwrap(read_feed(b'<rss><channel><item><title>A</title><link>https://example.com/a</link></item></channel></rss>', 'https://example.com/feed')).entries) == 1
 assert unwrap(read_feed(b'<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="?page=2"/></feed>', 'https://example.com/feed')).next_url == 'https://example.com/feed?page=2'
 root = parent / 'store'

@@ -14,7 +14,7 @@ from toolsmith.result import ToolsmithError, boundary
 from toolsmith.validation import integer
 
 MAX_FILE_BYTES = 128 * 1024 * 1024
-MAX_READ_BYTES = 128 * 1024 * 1024
+MAX_READ_BYTES = 144 * 1024 * 1024
 MAX_STREAM_BYTES = 2**63 - 1
 
 
@@ -497,7 +497,7 @@ def read_bytes(path: Path, maximum_bytes: int = MAX_FILE_BYTES) -> bytes:
 @boundary
 def write_new_bytes(path: Path, content: bytes) -> dict[str, int | bool]:
     absolute_path(path)
-    if not isinstance(content, bytes) or len(content) > MAX_READ_BYTES:
+    if not isinstance(content, bytes) or len(content) > MAX_FILE_BYTES:
         raise ToolsmithError("invalid_input", "Output must be bounded bytes")
     with directory_descriptor(path.parent) as parent:
         directory = PrivateDirectory(parent)
@@ -515,7 +515,7 @@ def write_new_bytes(path: Path, content: bytes) -> dict[str, int | bool]:
 @boundary
 def replace_bytes(path: Path, content: bytes) -> int:
     absolute_path(path)
-    if not isinstance(content, bytes) or len(content) > MAX_READ_BYTES:
+    if not isinstance(content, bytes) or len(content) > MAX_FILE_BYTES:
         raise ToolsmithError("invalid_input", "Replacement must be bounded bytes")
     with directory_descriptor(path.parent) as parent:
         metadata = os.fstat(parent)

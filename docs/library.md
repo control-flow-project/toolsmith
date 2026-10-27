@@ -193,3 +193,10 @@ Importing either loads no optional native package or model. See
 `toolsmith.readers.read_xls(content, sheet=0, start=0, limit=1000)` returns `Result[XlsSheet]`. Rows contain `XlsCell(kind, value, number_format)`. Number/date values are exact decimal expansions of stored binary64 values, not formatted display strings. Text values remain literal Unicode; Boolean and error cells remain Boolean and integer error codes. Empty and formatted blank cells are distinguished with null values. `date_mode`, sheet names, merged ranges, total dimensions and explicit continuation accompany each page. Callers own any documented rounding, currency interpretation or calendar conversion. Cached formula results are read without formula extraction or recalculation; xlrd does not identify whether a cell came from a formula. The optional `xls` dependency is loaded only on an XLS call.
 
 `read_xml_records` selects one exact element name or a nonempty tuple of distinct exact names in one parsing pass. Selected elements must not nest; all selected populations share full-document validation, namespace scope and structural budgets.
+
+HTML `inspect_html` and `read_html` accept keyword-only `maximum_bytes`: default
+4 MiB, explicit ceiling 8 MiB. They use the same parser and retain independent
+structure, access/password and extracted-text limits. `XmlLimits.maximum_bytes`
+defaults to 32 MiB and can explicitly reach 144 MiB; node/depth/field limits remain
+separate. `read_text` and safe explicit `read_bytes` share that 144 MiB input
+ceiling; their default budgets and file-write/storage limits are unchanged.
