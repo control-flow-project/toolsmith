@@ -25,6 +25,7 @@ from toolsmith.validation import (
 
 MAX_STATE_BYTES = 4 * 1024 * 1024
 MAX_BYTES = 2**63 - 1
+MAX_RESERVATION_SECONDS = 120
 
 
 @dataclass(frozen=True)
@@ -403,7 +404,9 @@ def _reserve_budget(
 ) -> Reservation:
     checked, selected = validate_policy(policy), identity(task, "Task")
     charged = integer(maximum_bytes, 1, 128 * 1024 * 1024, "Reservation bytes")
-    duration = number(deadline_seconds, 0.001, 60, "Active request deadline seconds")
+    duration = number(
+        deadline_seconds, 0.001, MAX_RESERVATION_SECONDS, "Active request deadline seconds"
+    )
     actual_clock = clock or SystemClock()
     with private_directory(root, create=True) as directory, directory_lock(directory):
         state = load(directory, checked, actual_clock, identity(boot or boot_identity()))
@@ -501,7 +504,7 @@ async def reserve_budget_async(
 ) -> Reservation:
     selected_clock = clock or SystemClock()
     deadline = selected_clock.monotonic() + number(
-        deadline_seconds, 0.001, 60, "Request deadline seconds"
+        deadline_seconds, 0.001, MAX_RESERVATION_SECONDS, "Request deadline seconds"
     )
     while True:
         remaining = deadline - selected_clock.monotonic()

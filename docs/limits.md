@@ -68,6 +68,7 @@ structure. They are not ceilings on the application database's total entries.
 | Optional archive import | 4 MiB combined text / 1,000 parts per immutable import, with explicit citation paging; not a corpus limit |
 | Optional archive list | At most 100 returned records per page; offset does not cap total retained records |
 | Public HTTP | At most 128 MiB per response, 100 requests, ten redirects and sixty-second total deadline; separate reviewed quotas apply |
+| Generic budget reservation | Explicit active-operation deadline up to 120 seconds; expiry releases the active slot while retaining unknown charged requests and bytes |
 | Shared quota metadata | 4 MiB durable state; caller-configured allowances, periods, spacing and cooldowns remain authoritative |
 
 Network allowlists, TLS/DNS checks, credentials exclusion, private/no-follow file

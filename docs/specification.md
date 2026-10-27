@@ -177,6 +177,10 @@ Computed policy-spacing waits consume the request deadline; upstream cooldowns
 remain explicit deferrals, not automatic retries. A crashed request retains its
 charge and slot until its recorded deadline. Each outcome identifies completed,
 failed or unfinished input. An existing output is rejected before HTTP access.
+Generic caller-owned budget reservations accept explicit deadlines up to 120
+seconds so an interrupted consumer operation retains its slot for that actual
+operation's lifetime. Expiry releases the slot, never its unknown charged usage.
+The standalone HTTP client's separate sixty-second request ceiling is unchanged.
 There is no total item-count ceiling; explicit batch deadlines and byte bounds
 are separate from an application's discovery/completion policy.
 
