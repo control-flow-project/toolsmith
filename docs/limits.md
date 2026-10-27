@@ -85,3 +85,5 @@ made. Local `accept_corpus.py` measurements, independent numerical-oracle tests,
 filtered-query tests and actual MiniLM acceptance are recorded separately in
 verification.md. A synthetic capacity fixture is not production latency or
 million-document semantic-quality certification.
+
+XLS input is at most 32 MiB. A selected row page defaults to at most 100,000 returned cells and 4 MiB of value/format text; callers can explicitly select at most 16,777,216 cells and 32 MiB. Over-budget pages fail without partial success. Parsing uses the in-process optional xlrd backend; callers own process isolation. Input and returned-output limits are not a claim of a hard backend memory bound.

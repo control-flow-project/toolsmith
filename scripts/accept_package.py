@@ -50,6 +50,11 @@ assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
 assert importlib.metadata.version('ctlflow-toolsmith') == '0.5.0'
 assert importlib.util.find_spec('aiohttp') is None
 assert importlib.util.find_spec('pypdfium2') is None
+assert importlib.util.find_spec('xlrd') is None
+from toolsmith.readers import read_xls
+xls_missing = read_xls(bytes.fromhex('d0cf11e0a1b11ae1'))
+assert isinstance(xls_missing, Failure) and xls_missing.code == 'unavailable'
+assert 'xlrd' not in sys.modules
 from toolsmith.readers import read_xml, read_json_lines, read_pdf
 assert unwrap(read_xml(b'<root><value>one</value></root>')).root.name == 'root'
 assert len(unwrap(read_json_lines(b'{"id":1}\\n{"id":2}\\n'))) == 2
@@ -146,7 +151,7 @@ def check_archives(wheel: Path, source: Path) -> None:
         metadata = archive.read(next(name for name in names if name.endswith("/METADATA"))).decode()
         check_license(metadata, archive.read(license_path).decode())
         assert all(
-            any("extra == '" + name + "'" in line for name in ("http", "pdf", "semantic"))
+            any("extra == '" + name + "'" in line for name in ("http", "pdf", "semantic", "xls"))
             for line in metadata.splitlines()
             if line.startswith("Requires-Dist:")
         )
@@ -265,7 +270,7 @@ def main() -> int:
                     "filelock=2026-10-25T00:00:00Z",
                     "--constraint",
                     str(constraints),
-                    str(artifact) + "[http,pdf]",
+                    str(artifact) + "[http,pdf,xls]",
                 ],
                 parent,
             )

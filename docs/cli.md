@@ -153,3 +153,5 @@ reset production or overwrite existing stores.
 See [semantic retrieval](semantic.md) and the [fleet recipes](fleet-recipes.md)
 for model preparation, bounded indexing, coverage, exact citations, corrections
 and generic caller-owned SQLite integration.
+
+`toolsmith read xls FILE [--sheet N] [--start N] [--limit N]` selects a zero-based sheet and row page (default 1,000 rows). `next_row` is explicit. Numeric and date cells retain exact binary64 decimal strings and source number formats; date serials retain the workbook date mode.

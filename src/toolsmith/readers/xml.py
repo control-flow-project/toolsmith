@@ -52,7 +52,7 @@ def validate_limits(limits: XmlLimits) -> XmlLimits:
 def parse_tree(
     content: bytes,
     limits: XmlLimits,
-    selected_name: str | None = None,
+    selected_names: tuple[str, ...] = (),
     accept: Callable[[XmlElement], None] | None = None,
     expected_root: str | None = None,
 ) -> tuple[ET.Element, int, dict[int, dict[str, str]]]:
@@ -134,7 +134,7 @@ def parse_tree(
                         for key, value in element.attrib.items()
                     ):
                         raise ToolsmithError("limit", "XML metadata exceeds its field budget")
-                    if accept is not None and element.tag == selected_name:
+                    if accept is not None and element.tag in selected_names:
                         if selected_depth is not None:
                             raise ToolsmithError(
                                 "invalid_input", "Selected XML record elements cannot nest"
@@ -184,7 +184,7 @@ def read_xml(content: bytes, limits: XmlLimits | None = None) -> XmlDocument:
 @boundary
 def read_xml_records[Value](
     content: bytes,
-    element_name: str,
+    element_name: str | tuple[str, ...],
     convert: Callable[[XmlElement], Value],
     limits: XmlLimits | None = None,
     *,
@@ -196,7 +196,14 @@ def read_xml_records[Value](
     document validates. No iterator exposes a partial-success prefix. The caller
     owns the compact record type and may persist only the successful result.
     """
-    if not isinstance(element_name, str) or not element_name or not callable(convert):
+    names = (element_name,) if isinstance(element_name, str) else element_name
+    if (
+        not isinstance(names, tuple)
+        or not names
+        or any(not isinstance(name, str) or not name or len(name) > 8192 for name in names)
+        or len(names) != len(set(names))
+        or not callable(convert)
+    ):
         raise ToolsmithError("invalid_input", "Supply an exact XML element name and pure converter")
     if root_name is not None and (not isinstance(root_name, str) or not root_name):
         raise ToolsmithError("invalid_input", "XML root name must be a nonempty exact name")
@@ -208,5 +215,5 @@ def read_xml_records[Value](
         except (ValueError, TypeError) as error:
             raise ToolsmithError("invalid_input", "XML record conversion failed") from error
 
-    parse_tree(content, XmlLimits() if limits is None else limits, element_name, accept, root_name)
+    parse_tree(content, XmlLimits() if limits is None else limits, names, accept, root_name)
     return tuple(records)

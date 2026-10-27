@@ -12,7 +12,14 @@ from toolsmith.acquisition.buckets import Bucket, run_buckets_async
 from toolsmith.acquisition.urls import resolve_urls
 from toolsmith.archives import list_archive, read_archive_member
 from toolsmith.cli import main as cli
-from toolsmith.readers import XmlElement, inspect_html, read_json_lines, read_xml, read_xml_records
+from toolsmith.readers import (
+    XmlElement,
+    inspect_html,
+    read_json_lines,
+    read_xls,
+    read_xml,
+    read_xml_records,
+)
 from toolsmith.readers.pdf import read_pdf, render_pdf_page
 from toolsmith.result import unwrap
 
@@ -84,6 +91,11 @@ def main() -> int:
     with zipfile.ZipFile(archive, "w") as writer:
         writer.writestr("folder/", b"")
         writer.writestr("folder/report.txt", b"Report")
+    xls = Path(__file__).resolve().parents[1] / "tests/fixtures/typed-cells.xls"
+    workbook = unwrap(read_xls(xls.read_bytes()))
+    assert workbook.rows[2][0].number_format == "0.00"
+    assert workbook.rows[2][0].value == "30.10000000000000142108547152020037174224853515625"
+    assert workbook.date_mode == 0 and workbook.rows[2][1].kind == "date"
     pdf = blank_pdf()
     assert unwrap(read_pdf(pdf)).total_pages == 1
     rendered = unwrap(render_pdf_page(pdf, 0, dpi=72))
@@ -100,7 +112,28 @@ def main() -> int:
         assert cli(["--output", str(output), "read", "xml", str(source)]) == 0
         assert json.loads(output.read_text())["result"]["root"]["name"] == "root"
         assert os.stat(output).st_mode & 0o777 == 0o600
-    print("Installed primitives: XML/JSONL/HTML/URL/ZIP/PDF/CLI passed; no added threads")
+        xls_output = root / "xls-result.json"
+        assert (
+            cli(
+                [
+                    "--output",
+                    str(xls_output),
+                    "read",
+                    "xls",
+                    str(xls),
+                    "--start",
+                    "2",
+                    "--limit",
+                    "1",
+                ]
+            )
+            == 0
+        )
+        assert (
+            json.loads(xls_output.read_text())["result"]["rows"][0][0]["value"]
+            == workbook.rows[2][0].value
+        )
+    print("Installed primitives: XML/JSONL/HTML/URL/ZIP/PDF/XLS/CLI passed; no added threads")
     return 0
 
 

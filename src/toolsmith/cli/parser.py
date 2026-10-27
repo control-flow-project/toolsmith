@@ -47,6 +47,7 @@ class Arguments(argparse.Namespace):
     columns: list[str] | None = None
     filters: list[str] | None = None
     header_row: int = 1
+    sheet: int = 0
     page: int = 0
     dpi: int = 144
     profiles: Path | None = None
@@ -81,7 +82,18 @@ def make_parser() -> Parser:
     for name in ("init", "inspect"):
         store.add_parser(name).set_defaults(action="store." + name)
     readers = families.add_parser("read").add_subparsers(dest="command", required=True)
-    for name in ("text", "html", "html-links", "feed", "json", "jsonl", "xml", "pdf", "table"):
+    for name in (
+        "text",
+        "html",
+        "html-links",
+        "feed",
+        "json",
+        "jsonl",
+        "xml",
+        "pdf",
+        "xls",
+        "table",
+    ):
         command = readers.add_parser(name)
         command.set_defaults(action="read." + name)
         command.add_argument("file", type=Path)
@@ -92,6 +104,10 @@ def make_parser() -> Parser:
             command.add_argument("--selection", choices=("text", "article"), default="text")
         elif name == "feed":
             command.add_argument("--source-url", required=True)
+        elif name == "xls":
+            command.add_argument("--sheet", type=int, default=0)
+            command.add_argument("--start", type=int, default=0)
+            command.add_argument("--limit", type=int, default=1000)
         elif name == "pdf":
             command.add_argument("--start", type=int, default=0)
             command.add_argument("--limit", type=int, default=20)

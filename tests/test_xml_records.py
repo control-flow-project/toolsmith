@@ -98,3 +98,41 @@ def test_selected_records_require_the_explicit_root_before_conversion() -> None:
     assert unwrap(
         read_xml_records(b"<root><row>value</row></root>", "row", value, root_name="root")
     ) == ("value",)
+
+
+def test_disjoint_selected_names_use_one_complete_validated_population() -> None:
+    xml = (
+        b'<root xmlns:p="urn:outer"><one>1</one><p:two>2</p:two><other><one>3</one></other></root>'
+    )
+    records = unwrap(
+        read_xml_records(
+            xml,
+            ("one", "{urn:outer}two"),
+            lambda element: (element.name, element.content, element.namespaces),
+            root_name="root",
+        )
+    )
+    assert tuple(record[0] for record in records) == ("one", "{urn:outer}two", "one")
+    assert records[1][2]["p"] == "urn:outer"
+    assert isinstance(
+        read_xml_records(xml[:-1], ("one", "{urn:outer}two"), lambda element: element.name), Failure
+    )
+    assert isinstance(
+        read_xml_records(
+            xml, ("one", "{urn:outer}two"), lambda element: element.name, root_name="wrong"
+        ),
+        Failure,
+    )
+    assert isinstance(
+        read_xml_records(
+            b"<root><one><two/></one></root>", ("one", "two"), lambda element: element.name
+        ),
+        Failure,
+    )
+
+
+def test_selected_name_tuple_requires_distinct_nonempty_exact_names() -> None:
+    for names in ((), ("one", "one"), ("",)):
+        assert isinstance(
+            read_xml_records(b"<root/>", names, lambda element: element.name), Failure
+        )

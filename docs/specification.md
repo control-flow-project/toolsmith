@@ -277,3 +277,9 @@ partial iterator. One parser owns full-tree and selected-record reading, includi
 DTD rejection, namespace scope and text/tail budgets across input chunks. Known
 large documents may explicitly select 128 MiB/eight million nodes; the default
 input and node budgets remain 32 MiB/two million.
+
+## Optional BIFF workbook reader
+
+The `xls` extra pins xlrd 2.0.2. One in-process reader owns library and CLI BIFF `.xls` parsing. It returns bounded row pages with typed cells, exact decimal expansions of stored binary64 numbers, source number formats, date mode, merged ranges and explicit row continuation. It preserves literal text and distinguishes blank/empty cells. It neither renders display values, infers currency/units, converts date serials, evaluates formulas nor supports `.xlsx`. Formula cells expose cached values, without a claim that xlrd identifies formula origin. Input is limited to 32 MiB; returned-cell/text budgets are explicit and violations never return partial success. Caller-owned isolation remains required for untrusted backend execution.
+
+`read_xml_records` selects one exact element name or a nonempty tuple of distinct exact names in one parsing pass. Selected elements must not nest; all selected populations share full-document validation, namespace scope and structural budgets.

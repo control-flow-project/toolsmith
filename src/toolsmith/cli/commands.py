@@ -24,6 +24,7 @@ from toolsmith.readers import (
     read_html,
     read_pdf,
     read_text,
+    read_xls,
     read_xml,
     render_pdf_page,
 )
@@ -92,6 +93,7 @@ def execute(arguments: Arguments) -> Result[object]:
                     "semantic-search",
                     "streaming-files",
                     "tabular-readers",
+                    "xls-workbooks",
                     "caller-owned-lexical-index",
                     "caller-owned-search-cli",
                     "semantic-metadata-status",
@@ -115,6 +117,7 @@ def execute(arguments: Arguments) -> Result[object]:
                     "fleet-runtime",
                 ],
                 "semantic_dependency": "semantic extra; verified operator-supplied local assets, no download",
+                "xls_dependency": "xls extra; in-process BIFF cells, formats and date mode",
                 "pdf_dependency": "pdf extra; in-process PDFium text extraction and page rendering",
             }
         )
@@ -126,6 +129,8 @@ def execute(arguments: Arguments) -> Result[object]:
             return read_xml(content)
         if action == "read.jsonl":
             return read_json_lines(content)
+        if action == "read.xls":
+            return read_xls(content, arguments.sheet, arguments.start, arguments.limit)
         if action == "read.pdf":
             return read_pdf(content, arguments.start, arguments.limit)
         if action == "read.text":

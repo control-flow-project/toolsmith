@@ -157,3 +157,5 @@ Copyright 2026 Jeswin P Kumar. Licensed under the [MIT License](LICENSE).
 Maintainer: jeswinpk@agilehead.com. Third-party dependencies and model assets retain
 their own licenses; model weights are not distributed with Toolsmith. This license
 does not apply to consumer projects or their private data.
+
+Optional `xls` support reads BIFF `.xls` workbook cells in process. It preserves typed values, exact stored binary64 numbers, source number formats, merged ranges and date mode; it does not infer currency or render display values.
