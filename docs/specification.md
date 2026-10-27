@@ -269,3 +269,11 @@ Expanded names do not resolve QName values in text or attributes for callers;
 use the containing element’s bindings. Prefix rebinding stays local to its
 element subtree. Namespace declarations share the attribute count/name/value
 bounds; the same count bound limits the number of in-scope bindings.
+
+The generic XML reader also transforms selected non-nested subtrees through a
+pure caller converter while releasing completed nodes. It validates the entire
+XML before returning any compact record population; it exposes no successful
+partial iterator. One parser owns full-tree and selected-record reading, including
+DTD rejection, namespace scope and text/tail budgets across input chunks. Known
+large documents may explicitly select 128 MiB/eight million nodes; the default
+input and node budgets remain 32 MiB/two million.

@@ -12,7 +12,7 @@ from toolsmith.acquisition.buckets import Bucket, run_buckets_async
 from toolsmith.acquisition.urls import resolve_urls
 from toolsmith.archives import list_archive, read_archive_member
 from toolsmith.cli import main as cli
-from toolsmith.readers import XmlElement, inspect_html, read_json_lines, read_xml
+from toolsmith.readers import XmlElement, inspect_html, read_json_lines, read_xml, read_xml_records
 from toolsmith.readers.pdf import read_pdf, render_pdf_page
 from toolsmith.result import unwrap
 
@@ -73,6 +73,11 @@ def main() -> int:
     nested = scoped.content[0]
     assert isinstance(nested, XmlElement)
     assert scoped.namespaces["p"] == "urn:outer" and nested.namespaces["p"] == "urn:inner"
+    assert unwrap(
+        read_xml_records(
+            b"<root><row>one</row><row>two</row></root>", "row", lambda element: element.content
+        )
+    ) == (("one",), ("two",))
     assert unwrap(read_json_lines(b'{"id":1}\n{"id":2}\n')) == ({"id": 1}, {"id": 2})
     assert len(unwrap(resolve_urls("https://example.com/index", ("/one", "/two")))) == 2
     archive = io.BytesIO()

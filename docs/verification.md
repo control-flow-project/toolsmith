@@ -1,5 +1,24 @@
 # Verification
 
+## Bounded XML record conversion — 27 October 2026
+
+`read_xml_records` uses the existing XML parser and a pure caller conversion of
+selected subtrees. Completed tree nodes and namespace metadata are released.
+The returned population becomes available only after complete XML validation;
+malformed tails and invalid unselected content fail the entire call. Full-tree
+reading shares the same tail-text budget checks across parser input chunks.
+Defaults remain 32 MiB/two million nodes. Known larger inputs may explicitly
+select 128 MiB/eight million nodes without weakening depth or field bounds.
+
+The full gate passes 512 tests in 43 isolated files with no failures or skips,
+Ruff formatting/lint, strict Mypy over 123 files and wheel/sdist builds, inside a
+4-GiB, zero-swap, 256-task scope. Clean installed wheel/sdist primitive, CLI/base,
+optional HTTP and optional semantic installation checks pass. Consumer source
+qualification reads a retained 82,109,956-byte worksheet with 77,050 data rows
+through a pure compact-row conversion in a 4-GiB scope; this verifies XML reading,
+not financial meaning or completed database admission. No registry publication
+or fleet activation is included.
+
 ## XML namespace scope — 27 October 2026
 
 Lexical QName values require the containing element's namespace declarations.

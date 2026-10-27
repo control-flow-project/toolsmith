@@ -150,3 +150,12 @@ Expanded names do not resolve QName values in text or attributes for callers;
 use the containing element’s bindings. Prefix rebinding stays local to its
 element subtree. Namespace declarations share the attribute count/name/value
 bounds; the same count bound limits the number of in-scope bindings.
+
+For large record-oriented XML, `read_xml_records(content, element_name, convert,
+limits)` uses that same bounded parser and a pure caller converter. It releases
+completed selected subtrees and returns compact converted records only after the
+complete document validates. The converter must perform no external effects; a
+malformed tail returns failure, never a publishable partial prefix. Selected
+elements cannot nest. Callers may explicitly select up to 128 MiB and eight
+million nodes for known large originals; defaults remain 32 MiB/two million.
+Namespace, depth and field limits still apply to selected and unselected content.
