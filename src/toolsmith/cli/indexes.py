@@ -77,8 +77,8 @@ def execute_index(arguments: Arguments) -> object:
                             + relation
                             + " WHERE "
                             + identifier(scope.reference)
-                            + " = ?",
-                            (reference,),
+                            + " = :reference",
+                            {"reference": reference},
                         ).fetchone()
                         return (
                             None

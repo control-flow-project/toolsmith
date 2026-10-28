@@ -51,7 +51,7 @@ def temporary_relation(connection: sqlite3.Connection, name: str, selection: str
     relation = identifier(name)
     definition = f"CREATE VIEW {relation} AS {selection}"
     existing = execute(
-        connection, "SELECT type,sql FROM sqlite_temp_master WHERE name = ?", (name,)
+        connection, "SELECT type,sql FROM sqlite_temp_master WHERE name = :name", {"name": name}
     ).fetchone()
     if existing is None:
         execute(connection, f"CREATE TEMP VIEW {relation} AS {selection}")
@@ -73,12 +73,12 @@ class Coverage:
 def coverage(connection: sqlite3.Connection, selected: str, document: str) -> Coverage:
     row = execute(
         connection,
-        "SELECT count(*), coalesce(sum(d.reference IS NOT NULL AND d.text_digest = s.text_digest),0), coalesce(sum(d.reference IS NULL),0), coalesce(sum(d.reference IS NOT NULL AND d.text_digest != s.text_digest),0), coalesce(max(CASE WHEN d.text_digest = s.text_digest THEN d.chunks ELSE 0 END),0), count(DISTINCT s.reference), coalesce(sum(CASE WHEN typeof(s.reference) != 'text' OR length(CAST(s.reference AS BLOB)) NOT BETWEEN 1 AND 200 OR typeof(s.text_digest) != 'text' OR length(s.text_digest) != 64 THEN 1 WHEN d.text_digest = s.text_digest THEN 0 WHEN s.text_digest GLOB '*[^0-9a-f]*' OR instr(s.reference,char(0)) OR s.reference GLOB ('*[' || char(1) || '-' || char(31) || char(127) || ']*') OR length(trim(s.reference,?))=0 THEN 1 ELSE 0 END),0), coalesce(sum(CASE WHEN d.text_digest=s.text_digest THEN d.chunks ELSE 0 END),0) FROM ("
+        "SELECT count(*), coalesce(sum(d.reference IS NOT NULL AND d.text_digest = s.text_digest),0), coalesce(sum(d.reference IS NULL),0), coalesce(sum(d.reference IS NOT NULL AND d.text_digest != s.text_digest),0), coalesce(max(CASE WHEN d.text_digest = s.text_digest THEN d.chunks ELSE 0 END),0), count(DISTINCT s.reference), coalesce(sum(CASE WHEN typeof(s.reference) != 'text' OR length(CAST(s.reference AS BLOB)) NOT BETWEEN 1 AND 200 OR typeof(s.text_digest) != 'text' OR length(s.text_digest) != 64 THEN 1 WHEN d.text_digest = s.text_digest THEN 0 WHEN s.text_digest GLOB '*[^0-9a-f]*' OR instr(s.reference,char(0)) OR s.reference GLOB ('*[' || char(1) || '-' || char(31) || char(127) || ']*') OR length(trim(s.reference,:whitespace))=0 THEN 1 ELSE 0 END),0), coalesce(sum(CASE WHEN d.text_digest=s.text_digest THEN d.chunks ELSE 0 END),0) FROM ("
         + selected
         + ") s LEFT JOIN "
         + identifier(document)
         + " d ON d.reference = s.reference",
-        (REFERENCE_WHITESPACE,),
+        {"whitespace": REFERENCE_WHITESPACE},
     ).fetchone()
     if row[0] != row[5] or row[6]:
         raise ToolsmithError(

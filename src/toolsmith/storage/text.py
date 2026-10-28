@@ -23,8 +23,8 @@ from toolsmith.validation import (
 
 def text_reference(store: Store, version: str, *, reused: bool = False) -> TextReference:
     row = store.connection.execute(
-        "SELECT v.*, (SELECT count(*) FROM part WHERE version_id = v.id) AS parts FROM text_version v WHERE v.id = ?",
-        (digest(version, "Text version"),),
+        "SELECT v.*, (SELECT count(*) FROM part WHERE version_id = v.id) AS parts FROM text_version v WHERE v.id = :id",
+        {"id": digest(version, "Text version")},
     ).fetchone()
     if row is None:
         raise ToolsmithError("not_found", "Exact text version was not found")
@@ -47,45 +47,48 @@ def insert_document(store: Store, item: str, document: Document, clock: Clock) -
         canonical_json({"item": selected, "document": json_value(checked)})
     ).hexdigest()
     if (
-        store.connection.execute("SELECT 1 FROM text_version WHERE id = ?", (version,)).fetchone()
+        store.connection.execute(
+            "SELECT 1 FROM text_version WHERE id = :id", {"id": version}
+        ).fetchone()
         is not None
     ):
         reconcile_current_embeddings(store, selected, version)
         store.connection.execute(
-            "UPDATE item SET latest_version = ? WHERE id = ?", (version, selected)
+            "UPDATE item SET latest_version = :latest_version WHERE id = :id",
+            {"latest_version": version, "id": selected},
         )
         return text_reference(store, version, reused=True)
     store.connection.execute(
-        "INSERT INTO item (id, latest_version) VALUES (?, NULL) ON CONFLICT (id) DO NOTHING",
-        (selected,),
+        "INSERT INTO item (id, latest_version) VALUES (:id, NULL) ON CONFLICT (id) DO NOTHING",
+        {"id": selected},
     )
     store.connection.execute(
-        "INSERT INTO text_version (id, item_id, title, method, source_url, published_at, observed_at, recorded_at, content_bytes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            version,
-            selected,
-            checked.title,
-            checked.method,
-            checked.source_url,
-            checked.published_at,
-            checked.observed_at,
-            utc_now(clock),
-            sum(len(part.text.encode()) for part in checked.parts),
-        ),
+        "INSERT INTO text_version (id, item_id, title, method, source_url, published_at, observed_at, recorded_at, content_bytes) VALUES (:id, :item_id, :title, :method, :source_url, :published_at, :observed_at, :recorded_at, :content_bytes)",
+        {
+            "id": version,
+            "item_id": selected,
+            "title": checked.title,
+            "method": checked.method,
+            "source_url": checked.source_url,
+            "published_at": checked.published_at,
+            "observed_at": checked.observed_at,
+            "recorded_at": utc_now(clock),
+            "content_bytes": sum(len(part.text.encode()) for part in checked.parts),
+        },
     )
     for ordinal, part in enumerate(checked.parts, start=1):
         cursor = store.connection.execute(
-            "INSERT INTO part (version_id, ordinal, label, physical_page, text, text_digest, has_text, warnings) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                version,
-                ordinal,
-                part.label,
-                part.physical_page,
-                part.text,
-                hashlib.sha256(part.text.encode()).hexdigest(),
-                int(bool(part.text.strip())),
-                canonical_json(json_value(part.warnings)).decode(),
-            ),
+            "INSERT INTO part (version_id, ordinal, label, physical_page, text, text_digest, has_text, warnings) VALUES (:version_id, :ordinal, :label, :physical_page, :text, :text_digest, :has_text, :warnings)",
+            {
+                "version_id": version,
+                "ordinal": ordinal,
+                "label": part.label,
+                "physical_page": part.physical_page,
+                "text": part.text,
+                "text_digest": hashlib.sha256(part.text.encode()).hexdigest(),
+                "has_text": int(bool(part.text.strip())),
+                "warnings": canonical_json(json_value(part.warnings)).decode(),
+            },
         )
         if cursor.lastrowid is None:
             raise ToolsmithError("integrity", "Inserted text part has no identity")
@@ -97,15 +100,17 @@ def insert_document(store: Store, item: str, document: Document, clock: Clock) -
             )
         )
     reconcile_current_embeddings(store, selected, version)
-    store.connection.execute("UPDATE item SET latest_version = ? WHERE id = ?", (version, selected))
+    store.connection.execute(
+        "UPDATE item SET latest_version = :latest_version WHERE id = :id",
+        {"latest_version": version, "id": selected},
+    )
     return text_reference(store, version)
 
 
 def reconcile_current_embeddings(store: Store, item: str, version: str) -> None:
     previous = store.connection.execute(
-        "SELECT p.id, p.ordinal FROM part p JOIN item i ON i.latest_version = p.version_id "
-        "WHERE i.id = ? AND i.latest_version != ?",
-        (item, version),
+        "SELECT p.id, p.ordinal FROM part p JOIN item i ON i.latest_version = p.version_id WHERE i.id = :id AND i.latest_version != :latest_version",
+        {"id": item, "latest_version": version},
     ).fetchall()
     references = tuple("part:" + str(row["id"]) for row in previous)
     states = {
@@ -118,8 +123,8 @@ def reconcile_current_embeddings(store: Store, item: str, version: str) -> None:
         if previous_digest is None:
             continue
         current = store.connection.execute(
-            "SELECT id, text_digest, text FROM part WHERE version_id = ? AND ordinal = ?",
-            (version, old["ordinal"]),
+            "SELECT id, text_digest, text FROM part WHERE version_id = :version_id AND ordinal = :ordinal",
+            {"version_id": version, "ordinal": old["ordinal"]},
         ).fetchone()
         if current is not None and current["text_digest"] == previous_digest:
             unwrap(
@@ -197,12 +202,12 @@ def list_text(
         rows: list[sqlite3.Row]
         if selected is None:
             rows = store.connection.execute(
-                "SELECT latest_version AS id FROM item ORDER BY id LIMIT ? OFFSET ?",
-                (maximum, start),
+                "SELECT latest_version AS id FROM item ORDER BY id LIMIT :limit OFFSET :offset",
+                {"limit": maximum, "offset": start},
             ).fetchall()
         else:
             rows = store.connection.execute(
-                "SELECT id FROM text_version WHERE item_id = ? ORDER BY recorded_at DESC, id LIMIT ? OFFSET ?",
-                (selected, maximum, start),
+                "SELECT id FROM text_version WHERE item_id = :item_id ORDER BY recorded_at DESC, id LIMIT :limit OFFSET :offset",
+                {"item_id": selected, "limit": maximum, "offset": start},
             ).fetchall()
         return tuple(text_reference(store, row_text(row, "id")) for row in rows)

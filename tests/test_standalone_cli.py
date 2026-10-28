@@ -111,12 +111,12 @@ def test_caller_owned_lexical_cli_uses_no_text_archive(
             import hashlib
 
             connection.execute(
-                "INSERT INTO canonical VALUES (?,?,?)",
-                (
-                    entry["reference"],
-                    hashlib.sha256(entry["text"].encode()).hexdigest(),
-                    entry["text"],
-                ),
+                "INSERT INTO canonical VALUES (:reference,:value,:text)",
+                {
+                    "reference": entry["reference"],
+                    "value": hashlib.sha256(entry["text"].encode()).hexdigest(),
+                    "text": entry["text"],
+                },
             )
     assert main(common + ["check", "--database", str(database), "--scope", "canonical"]) == 0
     capsys.readouterr()

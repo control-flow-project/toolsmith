@@ -45,23 +45,31 @@ def main() -> int:
                     "CREATE TABLE entry (reference TEXT PRIMARY KEY, text_digest TEXT NOT NULL, ordinal INTEGER NOT NULL UNIQUE)"
                 )
                 connection.execute(
-                    "INSERT INTO embedding_profile VALUES (?, ?)", (PROFILE_ID, PROFILE_JSON)
+                    "INSERT INTO embedding_profile VALUES (:id, :definition)",
+                    {"id": PROFILE_ID, "definition": PROFILE_JSON},
                 )
                 connection.executemany(
-                    "INSERT INTO entry VALUES (?, ?, ?)",
-                    ((f"entry:{number:07}", digest, number) for number in range(options.entries)),
+                    "INSERT INTO entry VALUES (:reference, :text_digest, :ordinal)",
+                    (
+                        {
+                            "reference": f"entry:{number:07}",
+                            "text_digest": digest,
+                            "ordinal": number,
+                        }
+                        for number in range(options.entries)
+                    ),
                 )
                 connection.execute(
-                    "INSERT INTO embedding_document SELECT reference, ?, text_digest, ?, 1, '2026-10-17T00:00:00Z' FROM entry",
-                    (PROFILE_ID, len(text)),
+                    "INSERT INTO embedding_document SELECT reference, :profile, text_digest, :characters, 1, '2026-10-17T00:00:00Z' FROM entry",
+                    {"profile": PROFILE_ID, "characters": len(text)},
                 )
                 connection.execute(
-                    "INSERT INTO embedding_chunk (id, reference, ordinal, start_offset, end_offset, text_digest) SELECT ordinal + 1, reference, 0, 0, ?, text_digest FROM entry",
-                    (len(text),),
+                    "INSERT INTO embedding_chunk (id, reference, ordinal, start_offset, end_offset, text_digest) SELECT ordinal + 1, reference, 0, 0, :end_offset, text_digest FROM entry",
+                    {"end_offset": len(text)},
                 )
                 connection.execute(
-                    "INSERT INTO embedding_vector(rowid, vector, chunk_id) SELECT id, CASE WHEN id = ? THEN ? ELSE ? END, id FROM embedding_chunk",
-                    (options.entries, target, ordinary),
+                    "INSERT INTO embedding_vector(rowid, vector, chunk_id) SELECT id, CASE WHEN id = :id THEN :target ELSE :ordinary END, id FROM embedding_chunk",
+                    {"id": options.entries, "target": target, "ordinary": ordinary},
                 )
                 connection.execute(
                     "CREATE VIEW last_entries AS SELECT reference, text_digest FROM entry WHERE ordinal >= "

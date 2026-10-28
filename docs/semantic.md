@@ -86,8 +86,8 @@ with closing(sqlite3.connect(":memory:")) as connection:
     with unwrap(load_model(Path("/absolute/private-minilm"))) as encoder:
         prepared = unwrap(prepare_embedding(source, encoder))
         with connection:
-            connection.execute("INSERT INTO permitted_text VALUES (?, ?)",
-                (source.reference, hashlib.sha256(source.text.encode()).hexdigest()))
+            connection.execute("INSERT INTO permitted_text VALUES (:reference, :text_digest)",
+                {"reference": source.reference, "text_digest": hashlib.sha256(source.text.encode()).hexdigest()})
             unwrap(publish_embedding(connection, prepared, source,
                 "2026-10-17T00:00:00Z", expected_digest=None))
         query = unwrap(encode_query("plain English question", encoder))

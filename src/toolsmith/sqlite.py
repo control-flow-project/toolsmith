@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import quote
@@ -52,11 +52,17 @@ def connect_database(
 
 
 def execute(
-    connection: sqlite3.Connection, statement: str, parameters: tuple[object, ...] = ()
+    connection: sqlite3.Connection, statement: str, parameters: Mapping[str, object] | None = None
 ) -> sqlite3.Cursor:
+    if parameters is not None and not isinstance(parameters, Mapping):
+        raise ToolsmithError("invalid_input", "SQL parameters must be a named mapping")
     cursor = connection.cursor()
     cursor.row_factory = None
-    return cursor.execute(statement, parameters)
+    return (
+        cursor.execute(statement)
+        if parameters is None
+        else cursor.execute(statement, dict(parameters))
+    )
 
 
 @contextmanager

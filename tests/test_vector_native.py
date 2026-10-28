@@ -39,15 +39,18 @@ def test_integer_membership_matches_sqlite_for_every_metadata_representation(
         vector = struct.pack("<384f", 1.0, *([0.0] * 383))
         for ordinal, value in enumerate(values, 1):
             connection.execute(
-                "INSERT INTO vectors(rowid,vector,selected) VALUES (?,?,?)",
-                (ordinal, vector, value),
+                "INSERT INTO vectors(rowid,vector,selected) VALUES (:rowid,:vector,:selected)",
+                {"rowid": ordinal, "vector": vector, "selected": value},
             )
-            connection.execute("INSERT INTO ordinary VALUES (?,?)", (ordinal, value))
+            connection.execute(
+                "INSERT INTO ordinary VALUES (:ordinal,:value)",
+                {"ordinal": ordinal, "value": value},
+            )
         connection.execute("CREATE TABLE allowed (id)")
         connection.executemany(
-            "INSERT INTO allowed VALUES (?)",
+            "INSERT INTO allowed VALUES (:value)",
             (
-                (value,)
+                {"value": value}
                 for value in (
                     -(2**63),
                     -(2**31),
@@ -72,16 +75,16 @@ def test_integer_membership_matches_sqlite_for_every_metadata_representation(
         actual = {
             row[0]
             for row in connection.execute(
-                "SELECT rowid FROM vectors(?, '{K:100}') WHERE selected IN (SELECT id FROM allowed)",
-                (vector,),
+                "SELECT rowid FROM vectors(:vector, '{K:100}') WHERE selected IN (SELECT id FROM allowed)",
+                {"vector": vector},
             )
         }
         assert actual == expected
         connection.execute("DELETE FROM allowed")
         assert (
             connection.execute(
-                "SELECT rowid FROM vectors(?, '{K:100}') WHERE selected IN (SELECT id FROM allowed)",
-                (vector,),
+                "SELECT rowid FROM vectors(:vector, '{K:100}') WHERE selected IN (SELECT id FROM allowed)",
+                {"vector": vector},
             ).fetchall()
             == []
         )
@@ -114,9 +117,12 @@ def test_exact_native_ranking_matches_independent_double_precision_oracle() -> N
         connection.execute(
             "INSERT INTO vectors(cmd,arg) VALUES('rebuild','{index:\"flat\",distance:\"cos\"}')"
         )
-        connection.executemany("INSERT INTO vectors(rowid,vector) VALUES (?,?)", enumerate(vectors))
+        connection.executemany(
+            "INSERT INTO vectors(rowid,vector) VALUES (:rowid,:vector)",
+            ({"rowid": rowid, "vector": vector} for rowid, vector in enumerate(vectors)),
+        )
         actual = connection.execute(
-            "SELECT rowid, distance FROM vectors(?, '{K:20}')", (query,)
+            "SELECT rowid, distance FROM vectors(:query, '{K:20}')", {"query": query}
         ).fetchall()
         assert [row[0] for row in actual] == expected
         assert all(abs(1 - row[1] - score(vectors[row[0]])) < 0.000001 for row in actual)
@@ -135,11 +141,11 @@ def test_native_integer_sets_compose_with_multiple_in_and_range_predicates() -> 
         )
         connection.execute("CREATE TABLE ordinary (id INTEGER PRIMARY KEY, first_key, second_key)")
         for number in range(1, 65):
-            values = (number, number % 5, number % 7)
-            connection.execute("INSERT INTO ordinary VALUES (?,?,?)", values)
+            values = {"id": number, "first_key": number % 5, "second_key": number % 7}
+            connection.execute("INSERT INTO ordinary VALUES (:id,:first_key,:second_key)", values)
             connection.execute(
-                "INSERT INTO vectors(rowid, first_key, second_key, vector) VALUES (?,?,?,?)",
-                (*values, vector),
+                "INSERT INTO vectors(rowid, first_key, second_key, vector) VALUES (:id,:first_key,:second_key,:vector)",
+                {**values, "vector": vector},
             )
         condition = "first_key IN (1,3,4) AND second_key IN (2,3) AND first_key >= 2"
         expected = {
@@ -148,7 +154,8 @@ def test_native_integer_sets_compose_with_multiple_in_and_range_predicates() -> 
         actual = {
             row[0]
             for row in connection.execute(
-                "SELECT rowid FROM vectors(?, '{K:100}') WHERE " + condition, (vector,)
+                "SELECT rowid FROM vectors(:vector, '{K:100}') WHERE " + condition,
+                {"vector": vector},
             )
         }
         assert actual == expected and expected
@@ -184,19 +191,27 @@ def test_uncommitted_native_inserts_are_visible_and_rollback_keeps_earlier_rows(
             "INSERT INTO vectors(cmd,arg) VALUES('rebuild','{index:\"flat\",distance:\"cos\"}')"
         )
         vector = struct.pack("<384f", 1.0, *([0.0] * 383))
-        connection.execute("INSERT INTO vectors(rowid,vector) VALUES(1,?)", (vector,))
+        connection.execute(
+            "INSERT INTO vectors(rowid,vector) VALUES(1,:vector)", {"vector": vector}
+        )
         connection.commit()
         connection.execute("SAVEPOINT nested")
-        connection.execute("INSERT INTO vectors(rowid,vector) VALUES(2,?)", (vector,))
+        connection.execute(
+            "INSERT INTO vectors(rowid,vector) VALUES(2,:vector)", {"vector": vector}
+        )
         assert {
             row[0]
-            for row in connection.execute("SELECT rowid FROM vectors(?, '{K:10}')", (vector,))
+            for row in connection.execute(
+                "SELECT rowid FROM vectors(:vector, '{K:10}')", {"vector": vector}
+            )
         } == {1, 2}
         connection.execute("ROLLBACK TO nested")
         connection.execute("RELEASE nested")
         assert {
             row[0]
-            for row in connection.execute("SELECT rowid FROM vectors(?, '{K:10}')", (vector,))
+            for row in connection.execute(
+                "SELECT rowid FROM vectors(:vector, '{K:10}')", {"vector": vector}
+            )
         } == {1}
 
 

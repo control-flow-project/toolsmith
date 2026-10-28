@@ -50,8 +50,8 @@ def read_citation(
     maximum = integer(length, 1, 16_384, "Character count")
     with open_store(root, collection) as store:
         row = store.connection.execute(
-            "SELECT v.*, p.ordinal, p.physical_page, p.text, p.warnings FROM text_version v JOIN part p ON p.version_id = v.id WHERE v.id = ? AND p.ordinal = ?",
-            (selected, ordinal),
+            "SELECT v.*, p.ordinal, p.physical_page, p.text, p.warnings FROM text_version v JOIN part p ON p.version_id = v.id WHERE v.id = :id AND p.ordinal = :ordinal",
+            {"id": selected, "ordinal": ordinal},
         ).fetchone()
         if row is None:
             raise ToolsmithError("not_found", "Exact citation version and part were not found")
@@ -100,7 +100,8 @@ def search_text(
         output: list[SearchHit] = []
         for hit in report.hits:
             row = store.connection.execute(
-                "SELECT * FROM current_text WHERE reference = ?", (hit.reference,)
+                "SELECT * FROM current_text WHERE reference = :reference",
+                {"reference": hit.reference},
             ).fetchone()
             if row is None:
                 raise ToolsmithError("conflict", "Current text changed during lexical search")

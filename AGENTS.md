@@ -32,6 +32,9 @@ lifecycle must never depend on Toolsmith. No skills, domain connectors, financia
 calculations, taxonomies, prompts or agent definitions belong here. Do not modify
 Bad Bets, GAAP or Crossfire consumers without a separate explicit instruction.
 
+SQL values use named placeholders and mappings everywhere, including tests and
+dynamic/bulk queries. Positional placeholders and parameter sequences are banned.
+
 Use small functional modules, strict types without Any, typed expected results,
 named public functions and validation at every public boundary. Keep modules
 near 600 lines or less. Network and filesystem effects are explicit. Persist

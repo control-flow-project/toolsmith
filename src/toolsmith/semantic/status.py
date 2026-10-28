@@ -71,8 +71,8 @@ def pending_references(
             connection,
             "SELECT s.reference FROM ("
             + selected
-            + ") s LEFT JOIN embedding_document d ON d.reference = s.reference WHERE d.reference IS NULL OR d.text_digest != s.text_digest ORDER BY s.reference LIMIT ?",
-            (maximum,),
+            + ") s LEFT JOIN embedding_document d ON d.reference = s.reference WHERE d.reference IS NULL OR d.text_digest != s.text_digest ORDER BY s.reference LIMIT :limit",
+            {"limit": maximum},
         )
         return tuple(source_reference(row[0]) for row in rows)
 
@@ -90,9 +90,8 @@ def inspect_index(
         validate_profile(connection)
         rows = execute(
             connection,
-            "SELECT d.reference, d.text_digest, d.characters, d.chunks, d.indexed_at, d.profile_id "
-            "FROM embedding_document d JOIN json_each(?) r ON d.reference = r.value",
-            (canonical_json(selected).decode(),),
+            "SELECT d.reference, d.text_digest, d.characters, d.chunks, d.indexed_at, d.profile_id FROM embedding_document d JOIN json_each(:references) r ON d.reference = r.value",
+            {"references": canonical_json(selected).decode()},
         )
         found: dict[str, IndexState] = {}
         for row in rows:

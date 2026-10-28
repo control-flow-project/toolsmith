@@ -102,8 +102,8 @@ def index_text(
     with open_store(root, collection) as store:
         references = unwrap(pending_references(store.connection, current_scope(store), maximum))
         selected = store.connection.execute(
-            "SELECT p.part_id AS id, p.text_digest FROM current_text p JOIN json_each(?) requested ON requested.value = p.reference ORDER BY p.part_id",
-            (canonical_json(references).decode(),),
+            "SELECT p.part_id AS id, p.text_digest FROM current_text p JOIN json_each(:references) requested ON requested.value = p.reference ORDER BY p.part_id",
+            {"references": canonical_json(references).decode()},
         ).fetchall()
         if not selected:
             return TextIndexReport(0, current_status(store))
@@ -120,8 +120,8 @@ def index_parts(
         reference = "part:" + str(part_id)
         with open_store(root, collection) as store:
             row = store.connection.execute(
-                "SELECT p.text FROM part p JOIN item i ON i.latest_version = p.version_id WHERE p.id = ?",
-                (part_id,),
+                "SELECT p.text FROM part p JOIN item i ON i.latest_version = p.version_id WHERE p.id = :id",
+                {"id": part_id},
             ).fetchone()
             if row is None:
                 raise ToolsmithError(
@@ -132,8 +132,8 @@ def index_parts(
         prepared = unwrap(prepare_embedding(source, actual))
         with open_store(root, collection, write=True) as store, store.connection:
             row = store.connection.execute(
-                "SELECT p.text_digest FROM part p JOIN item i ON i.latest_version = p.version_id WHERE p.id = ?",
-                (part_id,),
+                "SELECT p.text_digest FROM part p JOIN item i ON i.latest_version = p.version_id WHERE p.id = :id",
+                {"id": part_id},
             ).fetchone()
             if row is None or row["text_digest"] != prepared.digest:
                 raise ToolsmithError(
@@ -196,8 +196,8 @@ def search_semantic_text(
         citations: list[SemanticCitation] = []
         for hit in report.hits:
             row = store.connection.execute(
-                "SELECT version_id, ordinal FROM current_text WHERE reference = ? AND text_digest = ?",
-                (hit.reference, hit.digest),
+                "SELECT version_id, ordinal FROM current_text WHERE reference = :reference AND text_digest = :text_digest",
+                {"reference": hit.reference, "text_digest": hit.digest},
             ).fetchone()
             if row is None:
                 raise ToolsmithError("conflict", "Current text changed during semantic search")
