@@ -180,8 +180,8 @@ def initialize_store(root: Path, collection: str, *, clock: Clock | None = None)
                         connection.executescript("BEGIN IMMEDIATE;\n" + schema_sql())
                         connection.execute(f"PRAGMA application_id = {APPLICATION_ID}")
                         connection.execute(
-                            "INSERT INTO collection (id, identity, created_at) VALUES (1, ?, ?)",
-                            (selected, utc_now(actual_clock)),
+                            "INSERT INTO collection (id, identity, created_at) VALUES (1, :identity, :created_at)",
+                            {"identity": selected, "created_at": utc_now(actual_clock)},
                         )
                         connection.commit()
                     except sqlite3.Error as error:

@@ -79,8 +79,8 @@ def document_row(connection: sqlite3.Connection, reference: str) -> tuple[str, i
     validate_profile(connection)
     row = execute(
         connection,
-        "SELECT text_digest, characters, chunks, profile_id, indexed_at FROM embedding_document WHERE reference = ?",
-        (source_reference(reference),),
+        "SELECT text_digest, characters, chunks, profile_id, indexed_at FROM embedding_document WHERE reference = :reference",
+        {"reference": source_reference(reference)},
     ).fetchone()
     if row is None:
         return None
@@ -101,8 +101,8 @@ def retained_chunks(
     ordinal = 0
     for row in execute(
         connection,
-        "SELECT c.ordinal, c.start_offset, c.end_offset, c.text_digest, v.vector, v.chunk_id, c.id FROM embedding_chunk c LEFT JOIN embedding_vector v ON v.rowid = c.id WHERE c.reference = ? ORDER BY c.ordinal",
-        (reference,),
+        "SELECT c.ordinal, c.start_offset, c.end_offset, c.text_digest, v.vector, v.chunk_id, c.id FROM embedding_chunk c LEFT JOIN embedding_vector v ON v.rowid = c.id WHERE c.reference = :reference ORDER BY c.ordinal",
+        {"reference": reference},
     ):
         start = integer(row[1], 0, characters, "Chunk start")
         end = integer(row[2], 1, characters, "Chunk end")
@@ -213,31 +213,37 @@ def publish_embedding(
         remove_embedding(connection, source.reference)
         execute(
             connection,
-            "INSERT OR IGNORE INTO embedding_profile (id, definition) VALUES (?, ?)",
-            (PROFILE_ID, PROFILE_JSON),
+            "INSERT OR IGNORE INTO embedding_profile (id, definition) VALUES (:id, :definition)",
+            {"id": PROFILE_ID, "definition": PROFILE_JSON},
         )
         execute(
             connection,
-            "INSERT INTO embedding_document (reference, profile_id, text_digest, characters, chunks, indexed_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                source.reference,
-                PROFILE_ID,
-                prepared.digest,
-                prepared.characters,
-                len(prepared.chunks),
-                recorded,
-            ),
+            "INSERT INTO embedding_document (reference, profile_id, text_digest, characters, chunks, indexed_at) VALUES (:reference, :profile_id, :text_digest, :characters, :chunks, :indexed_at)",
+            {
+                "reference": source.reference,
+                "profile_id": PROFILE_ID,
+                "text_digest": prepared.digest,
+                "characters": prepared.characters,
+                "chunks": len(prepared.chunks),
+                "indexed_at": recorded,
+            },
         )
         for chunk in prepared.chunks:
             cursor = execute(
                 connection,
-                "INSERT INTO embedding_chunk (reference, ordinal, start_offset, end_offset, text_digest) VALUES (?, ?, ?, ?, ?)",
-                (source.reference, chunk.ordinal, chunk.start, chunk.end, chunk.digest),
+                "INSERT INTO embedding_chunk (reference, ordinal, start_offset, end_offset, text_digest) VALUES (:reference, :ordinal, :start_offset, :end_offset, :text_digest)",
+                {
+                    "reference": source.reference,
+                    "ordinal": chunk.ordinal,
+                    "start_offset": chunk.start,
+                    "end_offset": chunk.end,
+                    "text_digest": chunk.digest,
+                },
             )
             execute(
                 connection,
-                "INSERT INTO embedding_vector (rowid, vector, chunk_id) VALUES (?, ?, ?)",
-                (cursor.lastrowid, chunk.vector, cursor.lastrowid),
+                "INSERT INTO embedding_vector (rowid, vector, chunk_id) VALUES (:rowid, :vector, :chunk_id)",
+                {"rowid": cursor.lastrowid, "vector": chunk.vector, "chunk_id": cursor.lastrowid},
             )
     return True
 
@@ -245,12 +251,14 @@ def publish_embedding(
 def remove_embedding(connection: sqlite3.Connection, reference: str) -> bool:
     execute(
         connection,
-        "DELETE FROM embedding_vector WHERE rowid IN (SELECT id FROM embedding_chunk WHERE reference = ?)",
-        (reference,),
+        "DELETE FROM embedding_vector WHERE rowid IN (SELECT id FROM embedding_chunk WHERE reference = :reference)",
+        {"reference": reference},
     )
     return (
         execute(
-            connection, "DELETE FROM embedding_document WHERE reference = ?", (reference,)
+            connection,
+            "DELETE FROM embedding_document WHERE reference = :reference",
+            {"reference": reference},
         ).rowcount
         > 0
     )
@@ -279,12 +287,15 @@ def _search_in_scope(
     with transaction(connection, "toolsmith_embedding"):
         rows = execute(
             connection,
-            "SELECT c.id, c.reference, d.text_digest, c.start_offset, c.end_offset, c.text_digest, v.distance FROM embedding_vector(?, ?) v CROSS JOIN embedding_chunk c CROSS JOIN embedding_document d CROSS JOIN ("
+            "SELECT c.id, c.reference, d.text_digest, c.start_offset, c.end_offset, c.text_digest, v.distance FROM embedding_vector(:query, :options) v CROSS JOIN embedding_chunk c CROSS JOIN embedding_document d CROSS JOIN ("
             + selected
             + ") s WHERE v.chunk_id IN (SELECT allowed.id FROM embedding_chunk allowed JOIN embedding_document current ON current.reference = allowed.reference JOIN ("
             + selected
             + ") permitted ON permitted.reference = current.reference AND permitted.text_digest = current.text_digest) AND c.id = v.rowid AND v.chunk_id = c.id AND d.reference = c.reference AND s.reference = d.reference AND s.text_digest = d.text_digest",
-            (query, '{"K":' + str(maximum * max(1, observed.largest_source_chunks)) + "}"),
+            {
+                "query": query,
+                "options": '{"K":' + str(maximum * max(1, observed.largest_source_chunks)) + "}",
+            },
         )
         try:
             for row in rows:
@@ -296,8 +307,8 @@ def _search_in_scope(
                     raise ToolsmithError("integrity", "Vector hit has no indexed source")
                 spans = execute(
                     connection,
-                    "SELECT count(*), min(start_offset), max(end_offset) FROM embedding_chunk WHERE reference = ?",
-                    (reference,),
+                    "SELECT count(*), min(start_offset), max(end_offset) FROM embedding_chunk WHERE reference = :reference",
+                    {"reference": reference},
                 ).fetchone()
                 if tuple(spans) != (metadata[2], 0, metadata[1]):
                     raise ToolsmithError(
@@ -307,7 +318,9 @@ def _search_in_scope(
                 end = integer(row[4], start + 1, metadata[1], "Match end")
                 digest(row[5])
                 vector = execute(
-                    connection, "SELECT vector FROM embedding_vector WHERE rowid = ?", (row[0],)
+                    connection,
+                    "SELECT vector FROM embedding_vector WHERE rowid = :rowid",
+                    {"rowid": row[0]},
                 ).fetchone()
                 if vector is None:
                     raise ToolsmithError("integrity", "Vector hit has no retained vector")
@@ -447,8 +460,8 @@ def relocate_embedding(
             raise ToolsmithError("conflict", "Target reference already has derivatives")
         execute(
             connection,
-            "UPDATE embedding_document SET reference = ? WHERE reference = ?",
-            (source.reference, previous_reference),
+            "UPDATE embedding_document SET reference = :reference WHERE reference = :previous_reference",
+            {"reference": source.reference, "previous_reference": previous_reference},
         )
         return True
 

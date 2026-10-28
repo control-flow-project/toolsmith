@@ -92,7 +92,9 @@ def test_corrupt_store_references_fail_integrity_with_bounded_errors(
     add(store, "document", "source words", "source")
     unwrap(index_text(store, "sample", Path("/unused"), encoder=FixtureEncoder()))
     with open_store(store, "sample", write=True) as selected, selected.connection:
-        selected.connection.execute("UPDATE embedding_document SET reference = ?", (reference,))
+        selected.connection.execute(
+            "UPDATE embedding_document SET reference = :reference", {"reference": reference}
+        )
     result = check_integrity(store, "sample")
     assert isinstance(result, Failure) and result.code == "integrity"
 

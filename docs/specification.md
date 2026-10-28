@@ -107,6 +107,10 @@ Local stores, credentials, .analysis and verification fixtures remain excluded
 from published source and artifacts. Registry publication is a separate release
 action, not an effect of building, installing or importing this package.
 
+All authored SQL value bindings use named placeholders and mappings, including
+examples, tests and bulk writes. SQL identifiers remain validated separately;
+values are never interpolated into SQL.
+
 ## Local state
 
 Each explicit private root holds one collection, one `toolsmith.sqlite3`, immutable

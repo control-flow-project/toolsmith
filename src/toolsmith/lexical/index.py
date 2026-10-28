@@ -74,8 +74,8 @@ def source_digest(source: Source) -> str:
 def state(connection: sqlite3.Connection, reference: str) -> IndexState:
     row = execute(
         connection,
-        "SELECT text_digest, characters, chunks, title FROM lexical_document WHERE reference = ?",
-        (source_reference(reference),),
+        "SELECT text_digest, characters, chunks, title FROM lexical_document WHERE reference = :reference",
+        {"reference": source_reference(reference)},
     ).fetchone()
     if row is None:
         return IndexState(reference, None, 0, 0)
@@ -100,9 +100,8 @@ def inspect_index(
     with transaction(connection, "toolsmith_lexical"):
         rows = execute(
             connection,
-            "SELECT d.reference, d.text_digest, d.characters, d.chunks, d.title FROM lexical_document d "
-            "JOIN json_each(?) r ON d.reference = r.value",
-            (canonical_json(checked).decode(),),
+            "SELECT d.reference, d.text_digest, d.characters, d.chunks, d.title FROM lexical_document d JOIN json_each(:references) r ON d.reference = r.value",
+            {"references": canonical_json(checked).decode()},
         )
         found = {
             source_reference(row[0]): IndexState(
@@ -137,7 +136,9 @@ def matching_scope(
     expression = unwrap(compile_query(query, mode))
     name = "toolsmith_lexical_match_" + hashlib.sha256(expression.encode()).hexdigest()
     with transaction(connection, "toolsmith_lexical_matches"):
-        quoted = execute(connection, "SELECT quote(?)", (expression,)).fetchone()[0]
+        quoted = execute(
+            connection, "SELECT quote(:expression)", {"expression": expression}
+        ).fetchone()[0]
         relation = temporary_relation(
             connection,
             name,
@@ -153,12 +154,14 @@ def matching_scope(
 def remove_source(connection: sqlite3.Connection, reference: str) -> bool:
     execute(
         connection,
-        "DELETE FROM lexical_search WHERE rowid IN (SELECT id FROM lexical_chunk WHERE reference = ?)",
-        (reference,),
+        "DELETE FROM lexical_search WHERE rowid IN (SELECT id FROM lexical_chunk WHERE reference = :reference)",
+        {"reference": reference},
     )
     return (
         execute(
-            connection, "DELETE FROM lexical_document WHERE reference = ?", (reference,)
+            connection,
+            "DELETE FROM lexical_document WHERE reference = :reference",
+            {"reference": reference},
         ).rowcount
         > 0
     )
@@ -180,26 +183,32 @@ def index_source(
         remove_source(connection, source.reference)
         execute(
             connection,
-            "INSERT INTO lexical_document (reference, text_digest, characters, chunks, title) VALUES (?, ?, ?, ?, ?)",
-            (source.reference, checksum, len(source.text), len(chunks), source.title),
+            "INSERT INTO lexical_document (reference, text_digest, characters, chunks, title) VALUES (:reference, :text_digest, :characters, :chunks, :title)",
+            {
+                "reference": source.reference,
+                "text_digest": checksum,
+                "characters": len(source.text),
+                "chunks": len(chunks),
+                "title": source.title,
+            },
         )
         for ordinal, (start, end, body) in enumerate(chunks):
             cursor = execute(
                 connection,
-                "INSERT INTO lexical_chunk (reference, ordinal, start_offset, end_offset, text, text_digest) VALUES (?, ?, ?, ?, ?, ?)",
-                (
-                    source.reference,
-                    ordinal,
-                    start,
-                    end,
-                    body,
-                    hashlib.sha256(body.encode()).hexdigest(),
-                ),
+                "INSERT INTO lexical_chunk (reference, ordinal, start_offset, end_offset, text, text_digest) VALUES (:reference, :ordinal, :start_offset, :end_offset, :text, :text_digest)",
+                {
+                    "reference": source.reference,
+                    "ordinal": ordinal,
+                    "start_offset": start,
+                    "end_offset": end,
+                    "text": body,
+                    "text_digest": hashlib.sha256(body.encode()).hexdigest(),
+                },
             )
             execute(
                 connection,
-                "INSERT INTO lexical_search (rowid, text, title) VALUES (?, ?, ?)",
-                (cursor.lastrowid, body, source.title),
+                "INSERT INTO lexical_search (rowid, text, title) VALUES (:rowid, :text, :title)",
+                {"rowid": cursor.lastrowid, "text": body, "title": source.title},
             )
     return True
 
@@ -222,13 +231,10 @@ def _search_in_scope(
 ) -> SearchReport:
     rows = execute(
         connection,
-        "WITH candidate AS (" + selected + ") "
-        "SELECT c.reference, d.text_digest, c.start_offset, c.end_offset, c.text, bm25(lexical_search), c.text_digest, lexical_search.text, lexical_search.title, d.title "
-        "FROM lexical_search JOIN lexical_chunk c ON c.id = lexical_search.rowid "
-        "JOIN lexical_document d ON d.reference = c.reference "
-        "JOIN candidate a ON a.reference = d.reference AND a.text_digest = d.text_digest "
-        "WHERE lexical_search MATCH ? ORDER BY bm25(lexical_search), c.reference, c.ordinal LIMIT ? OFFSET ?",
-        (expression, maximum, beginning),
+        "WITH candidate AS ("
+        + selected
+        + ") SELECT c.reference, d.text_digest, c.start_offset, c.end_offset, c.text, bm25(lexical_search), c.text_digest, lexical_search.text, lexical_search.title, d.title FROM lexical_search JOIN lexical_chunk c ON c.id = lexical_search.rowid JOIN lexical_document d ON d.reference = c.reference JOIN candidate a ON a.reference = d.reference AND a.text_digest = d.text_digest WHERE lexical_search MATCH :lexical_search ORDER BY bm25(lexical_search), c.reference, c.ordinal LIMIT :limit OFFSET :offset",
+        {"lexical_search": expression, "limit": maximum, "offset": beginning},
     )
     hits: list[Hit] = []
     for row in rows:
@@ -321,9 +327,8 @@ def check_index(connection: sqlite3.Connection, source_text: Callable[[str], str
                 raise ToolsmithError("integrity", "Lexical canonical source is missing or changed")
             actual = execute(
                 connection,
-                "SELECT c.ordinal, c.start_offset, c.end_offset, c.text, f.text, c.text_digest, f.title FROM lexical_chunk c "
-                "LEFT JOIN lexical_search f ON f.rowid = c.id WHERE c.reference = ? ORDER BY c.ordinal",
-                (reference,),
+                "SELECT c.ordinal, c.start_offset, c.end_offset, c.text, f.text, c.text_digest, f.title FROM lexical_chunk c LEFT JOIN lexical_search f ON f.rowid = c.id WHERE c.reference = :reference ORDER BY c.ordinal",
+                {"reference": reference},
             ).fetchall()
             expected = tuple(text_chunks(body))
             metadata = state(connection, reference)

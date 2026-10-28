@@ -125,7 +125,7 @@ def test_full_page_text_is_caller_owned_and_not_a_short_archive_citation() -> No
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("CREATE TABLE physical_page (reference TEXT PRIMARY KEY, text TEXT)")
         body = "exact page text β\n" * 10000
-        connection.execute("INSERT INTO physical_page VALUES ('page:1', ?)", (body,))
+        connection.execute("INSERT INTO physical_page VALUES ('page:1', :body)", {"body": body})
         unwrap(lexical.initialize_index(connection))
         unwrap(
             lexical.index_source(connection, lexical.Source("page:1", body), expected_digest=None)

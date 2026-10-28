@@ -21,8 +21,12 @@ def example() -> tuple[str, ...]:
         )
         with connection:
             connection.execute(
-                "INSERT INTO approved_text VALUES (?,?,?)",
-                (source.reference, source.text, semantic.fingerprint(source.text)),
+                "INSERT INTO approved_text VALUES (:reference,:text,:text_digest)",
+                {
+                    "reference": source.reference,
+                    "text": source.text,
+                    "text_digest": semantic.fingerprint(source.text),
+                },
             )
             unwrap(lexical.index_source(connection, source, expected_digest=None))
         result = unwrap(lexical.search(connection, "liquidity", Scope("approved_text")))

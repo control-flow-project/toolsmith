@@ -172,8 +172,8 @@ def acquire_in_store(
     def record_request() -> None:
         with store.connection:
             store.connection.execute(
-                "UPDATE operation SET requests = requests + 1, updated_at = ? WHERE id = ?",
-                (utc_now(clock), request_id),
+                "UPDATE operation SET requests = requests + 1, updated_at = :updated_at WHERE id = :id",
+                {"updated_at": utc_now(clock), "id": request_id},
             )
 
     try:
@@ -246,8 +246,12 @@ def acquire_in_store(
     except ToolsmithError as error:
         with store.connection:
             store.connection.execute(
-                "UPDATE operation SET status = 'failed', failure_json = ?, updated_at = ? WHERE id = ?",
-                (canonical_json(json_value(error.failure)).decode(), utc_now(clock), request_id),
+                "UPDATE operation SET status = 'failed', failure_json = :failure_json, updated_at = :updated_at WHERE id = :id",
+                {
+                    "failure_json": canonical_json(json_value(error.failure)).decode(),
+                    "updated_at": utc_now(clock),
+                    "id": request_id,
+                },
             )
         raise
 
@@ -310,7 +314,7 @@ def resume_http(
     selected_request = identity(request_id, "Request identity")
     with open_store(root, collection, write=True) as store:
         row = store.connection.execute(
-            "SELECT kind, request_json FROM operation WHERE id = ?", (selected_request,)
+            "SELECT kind, request_json FROM operation WHERE id = :id", {"id": selected_request}
         ).fetchone()
         if row is None or row["kind"] != "http":
             raise ToolsmithError(

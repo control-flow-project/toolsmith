@@ -18,35 +18,44 @@ def test_more_than_100000_chunks_are_searched_without_truncation() -> None:
     chunks_per_entry = 16_668
     body = "x" * chunks_per_entry
     with index_database() as connection:
-        connection.execute("INSERT INTO embedding_profile VALUES (?,?)", (PROFILE_ID, PROFILE_JSON))
+        connection.execute(
+            "INSERT INTO embedding_profile VALUES (:PROFILE_ID,:PROFILE_JSON)",
+            {"PROFILE_ID": PROFILE_ID, "PROFILE_JSON": PROFILE_JSON},
+        )
         vector = pack_vector(tuple(float(axis == 1) for axis in range(384)))
         target = pack_vector(tuple(float(axis == 0) for axis in range(384)))
         with connection:
             connection.executemany(
-                "INSERT INTO embedding_document VALUES (?,?,?,?,?,?)",
+                "INSERT INTO embedding_document VALUES (:value,:PROFILE_ID,:body,:body_2,:chunks_per_entry,:value_2)",
                 (
-                    (
-                        f"entry:{number}",
-                        PROFILE_ID,
-                        fingerprint(body),
-                        len(body),
-                        chunks_per_entry,
-                        "2026-10-17T00:00:00Z",
-                    )
+                    {
+                        "value": f"entry:{number}",
+                        "PROFILE_ID": PROFILE_ID,
+                        "body": fingerprint(body),
+                        "body_2": len(body),
+                        "chunks_per_entry": chunks_per_entry,
+                        "value_2": "2026-10-17T00:00:00Z",
+                    }
                     for number in range(6)
                 ),
             )
             connection.executemany(
-                "INSERT INTO embedding_chunk (reference,ordinal,start_offset,end_offset,text_digest) VALUES (?,?,?,?,?)",
+                "INSERT INTO embedding_chunk (reference,ordinal,start_offset,end_offset,text_digest) VALUES (:reference,:ordinal,:start_offset,:end_offset,:text_digest)",
                 (
-                    (f"entry:{number}", ordinal, ordinal, ordinal + 1, fingerprint("x"))
+                    {
+                        "reference": f"entry:{number}",
+                        "ordinal": ordinal,
+                        "start_offset": ordinal,
+                        "end_offset": ordinal + 1,
+                        "text_digest": fingerprint("x"),
+                    }
                     for number in range(6)
                     for ordinal in range(chunks_per_entry)
                 ),
             )
             connection.execute(
-                "INSERT INTO embedding_vector(rowid,vector,chunk_id) SELECT id, CASE WHEN reference='entry:5' THEN ? ELSE ? END, id FROM embedding_chunk",
-                (target, vector),
+                "INSERT INTO embedding_vector(rowid,vector,chunk_id) SELECT id, CASE WHEN reference='entry:5' THEN :target ELSE :vector END, id FROM embedding_chunk",
+                {"target": target, "vector": vector},
             )
         report = unwrap(
             search_embeddings(
@@ -109,7 +118,10 @@ def test_backup_has_no_10000_object_ceiling_and_keeps_20_gib_budget(
             path = store / "objects" / checksum
             path.write_bytes(body)
             path.chmod(0o600)
-            selected.connection.execute("INSERT INTO blob VALUES (?,?)", (checksum, len(body)))
+            selected.connection.execute(
+                "INSERT INTO blob VALUES (:checksum,:body)",
+                {"checksum": checksum, "body": len(body)},
+            )
     report = unwrap(backup_store(store, "sample", tmp_path / "backup"))
     assert report.objects == 10_001
     assert (

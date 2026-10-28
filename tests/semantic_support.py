@@ -20,7 +20,8 @@ def selected_scope(connection: sqlite3.Connection, entries: tuple[ScopeEntry, ..
     name = "selection_" + uuid4().hex
     connection.execute(f'CREATE TEMP TABLE "{name}" (reference TEXT, text_digest TEXT)')
     connection.executemany(
-        f'INSERT INTO "{name}" VALUES (?,?)', ((entry.reference, entry.digest) for entry in entries)
+        f'INSERT INTO "{name}" VALUES (:reference,:digest)',
+        ({"reference": entry.reference, "digest": entry.digest} for entry in entries),
     )
     return Scope(name, schema="temp")
 

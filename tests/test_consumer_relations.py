@@ -103,8 +103,8 @@ def test_lexical_matching_relation_filters_and_counts_without_returned_record_li
         assert unwrap(lexical.matching_scope(connection, "dividend")) == matched
         assert (
             connection.execute(
-                f'SELECT reference FROM temp."{matched.relation}" WHERE reference=?',
-                ("record:1099",),
+                f'SELECT reference FROM temp."{matched.relation}" WHERE reference=:reference',
+                {"reference": "record:1099"},
             ).fetchone()[0]
             == "record:1099"
         )

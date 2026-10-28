@@ -39,7 +39,8 @@ def validate_retained(store: Store) -> None:
         parts: list[TextPart] = []
         for ordinal, part in enumerate(
             connection.execute(
-                "SELECT * FROM part WHERE version_id = ? ORDER BY ordinal", (version["id"],)
+                "SELECT * FROM part WHERE version_id = :version_id ORDER BY ordinal",
+                {"version_id": version["id"]},
             ),
             start=1,
         ):
@@ -109,8 +110,8 @@ def validate_embeddings(store: Store) -> None:
         if not 1 <= part_id <= 2**63 - 1 or identifier != str(part_id):
             raise ToolsmithError("integrity", "Stored semantic part identity exceeds native bounds")
         row = store.connection.execute(
-            "SELECT p.text FROM part p JOIN item i ON i.latest_version = p.version_id WHERE p.id = ?",
-            (part_id,),
+            "SELECT p.text FROM part p JOIN item i ON i.latest_version = p.version_id WHERE p.id = :id",
+            {"id": part_id},
         ).fetchone()
         return None if row is None else row_text(row, "text", 4 * 1024 * 1024)
 
@@ -123,8 +124,8 @@ def validate_database(store: Store) -> int:
 
     def source(reference: str) -> str | None:
         row = store.connection.execute(
-            "SELECT text FROM part WHERE 'part:' || id = ?",
-            (reference,),
+            "SELECT text FROM part WHERE 'part:' || id = :id",
+            {"id": reference},
         ).fetchone()
         return None if row is None else row_text(row, "text", 4 * 1024 * 1024)
 

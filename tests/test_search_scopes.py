@@ -75,12 +75,15 @@ def test_relational_fts_scope_exceeds_old_100000_limit_and_finds_last_entry() ->
             "CREATE TABLE permitted (reference TEXT PRIMARY KEY, text_digest TEXT NOT NULL)"
         )
         connection.executemany(
-            "INSERT INTO permitted VALUES (?, ?)",
-            ((f"missing:{number}", "a" * 64) for number in range(100_001)),
+            "INSERT INTO permitted VALUES (:value, :value_2)",
+            ({"value": f"missing:{number}", "value_2": "a" * 64} for number in range(100001)),
         )
         connection.execute(
-            "INSERT INTO permitted VALUES (?, ?)",
-            (source.reference, hashlib.sha256(source.text.encode()).hexdigest()),
+            "INSERT INTO permitted VALUES (:reference, :value)",
+            {
+                "reference": source.reference,
+                "value": hashlib.sha256(source.text.encode()).hexdigest(),
+            },
         )
         report = unwrap(lexical.search(connection, "refinancing", Scope("permitted"), 1))
         assert report.candidates == 100_002 and report.missing == 100_001

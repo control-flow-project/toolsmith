@@ -83,12 +83,12 @@ def verify_caller_cli(model: Path) -> None:
             )
             for entry in json.loads(sources.read_text()):
                 connection.execute(
-                    "INSERT INTO canonical VALUES (?,?,?)",
-                    (
-                        entry["reference"],
-                        hashlib.sha256(entry["text"].encode()).hexdigest(),
-                        entry["text"],
-                    ),
+                    "INSERT INTO canonical VALUES (:reference,:text_digest,:text)",
+                    {
+                        "reference": entry["reference"],
+                        "text_digest": hashlib.sha256(entry["text"].encode()).hexdigest(),
+                        "text": entry["text"],
+                    },
                 )
         database.chmod(0o600)
         for command in (
@@ -262,8 +262,11 @@ def main() -> int:
                     "CREATE TABLE requested (reference TEXT PRIMARY KEY, text_digest TEXT NOT NULL)"
                 )
                 connection.executemany(
-                    "INSERT INTO requested VALUES (?, ?)",
-                    ((source.reference, fingerprint(source.text)) for source in sources),
+                    "INSERT INTO requested VALUES (:reference, :text_digest)",
+                    (
+                        {"reference": source.reference, "text_digest": fingerprint(source.text)}
+                        for source in sources
+                    ),
                 )
                 candidates = Scope("requested")
                 for query, ordinal in queries:

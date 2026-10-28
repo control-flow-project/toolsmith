@@ -82,7 +82,8 @@ def test_corrections_and_invalidation_share_the_callers_transaction() -> None:
         source = Source("doc", "original text")
         with connection:
             connection.execute(
-                "INSERT INTO canonical VALUES (?, ?)", (source.reference, source.text)
+                "INSERT INTO canonical VALUES (:reference, :text)",
+                {"reference": source.reference, "text": source.text},
             )
             publish(connection, source)
         with pytest.raises(RuntimeError), connection:
@@ -263,26 +264,35 @@ def test_large_selection_is_searched_without_a_candidate_cutoff() -> None:
         vector = connection.execute("SELECT vector FROM embedding_vector").fetchone()[0]
         with connection:
             connection.executemany(
-                "INSERT INTO embedding_document VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO embedding_document VALUES (:value, :value_2, :checksum, :text, :value_3, :value_4)",
                 (
-                    (
-                        f"entry:{number}",
-                        connection.execute("SELECT id FROM embedding_profile").fetchone()[0],
-                        checksum,
-                        len(source.text),
-                        1,
-                        "2026-10-17T00:00:00Z",
-                    )
-                    for number in range(10_001)
+                    {
+                        "value": f"entry:{number}",
+                        "value_2": connection.execute(
+                            "SELECT id FROM embedding_profile"
+                        ).fetchone()[0],
+                        "checksum": checksum,
+                        "text": len(source.text),
+                        "value_3": 1,
+                        "value_4": "2026-10-17T00:00:00Z",
+                    }
+                    for number in range(10001)
                 ),
             )
             connection.executemany(
-                "INSERT INTO embedding_chunk (reference, ordinal, start_offset, end_offset, text_digest) VALUES (?,0,0,?,?)",
-                ((f"entry:{number}", len(source.text), checksum) for number in range(10_001)),
+                "INSERT INTO embedding_chunk (reference, ordinal, start_offset, end_offset, text_digest) VALUES (:reference,0,0,:end_offset,:text_digest)",
+                (
+                    {
+                        "reference": f"entry:{number}",
+                        "end_offset": len(source.text),
+                        "text_digest": checksum,
+                    }
+                    for number in range(10001)
+                ),
             )
             connection.execute(
-                "INSERT INTO embedding_vector(rowid,vector,chunk_id) SELECT id, ?, id FROM embedding_chunk WHERE reference != 'original'",
-                (vector,),
+                "INSERT INTO embedding_vector(rowid,vector,chunk_id) SELECT id, :vector, id FROM embedding_chunk WHERE reference != 'original'",
+                {"vector": vector},
             )
         publish(connection, Source("last-entry", "rain on wet roads"))
         report = unwrap(
