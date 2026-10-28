@@ -17,9 +17,13 @@ from toolsmith.readers.tables import (
     project_table,
 )
 from toolsmith.readers.text import normalize_text, read_text
-from toolsmith.readers.xml import XmlDocument, XmlElement, XmlLimits, read_xml
+from toolsmith.readers.xls import XlsCell, XlsSheet, read_xls
+from toolsmith.readers.xml import XmlDocument, XmlElement, XmlLimits, read_xml, read_xml_records
 
 __all__ = [
+    "XlsCell",
+    "XlsSheet",
+    "read_xls",
     "HtmlInspection",
     "HtmlLink",
     "HtmlMetadata",
@@ -41,6 +45,7 @@ __all__ = [
     "XmlElement",
     "XmlLimits",
     "read_xml",
+    "read_xml_records",
     "PdfImage",
     "PdfPageText",
     "PdfText",

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -11,6 +12,7 @@ from toolsmith.acquisition.budgets import (
     BudgetPolicy,
     inspect_budget,
     reserve_budget,
+    reserve_budget_async,
     settle_budget,
 )
 from toolsmith.acquisition.client import HttpPolicy, fetch_http
@@ -20,6 +22,61 @@ from toolsmith.result import Failure, ToolsmithError, unwrap
 
 def policy(group: str = "source") -> BudgetPolicy:
     return BudgetPolicy(group, 60, 10, 1000, 3, 300)
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_active_reservation_covers_the_actual_operation_deadline_without_refunding_unknown_usage(
+    tmp_path: Path, clock: ControlledClock, asynchronous: bool
+) -> None:
+    selected = replace(policy(), period_seconds=600)
+    root = tmp_path / "deadline"
+    reservation = (
+        asyncio.run(
+            reserve_budget_async(
+                root, selected, "task", 100, clock=clock, boot="boot-a", deadline_seconds=120
+            )
+        )
+        if asynchronous
+        else reserve_budget(
+            root, selected, "task", 100, clock=clock, boot="boot-a", deadline_seconds=120
+        )
+    )
+    first = unwrap(reservation)
+    clock.advance(60)
+    blocked = reserve_budget(
+        root, selected, "task", 100, clock=clock, boot="boot-a", deadline_seconds=1
+    )
+    assert isinstance(blocked, Failure) and blocked.code == "deferred"
+    assert blocked.retry_after_seconds == 60
+    clock.advance(60)
+    unwrap(
+        reserve_budget(root, selected, "task", 100, clock=clock, boot="boot-a", deadline_seconds=1)
+    )
+    observed = unwrap(inspect_budget(root, selected, "task", clock=clock, boot="boot-a"))
+    assert observed.group_requests == observed.task_requests == 2
+    assert observed.group_bytes == observed.task_bytes == 200
+    assert observed.pending_reservations == 1
+    assert not unwrap(settle_budget(root, selected, first, 0, clock=clock, boot="boot-a"))
+    retained = unwrap(inspect_budget(root, selected, "task", clock=clock, boot="boot-a"))
+    assert retained.group_bytes == retained.task_bytes == 200
+
+
+@pytest.mark.parametrize("deadline", [0, 120.001, float("inf"), True])
+def test_reservation_deadline_outside_the_explicit_bound_is_rejected_before_io(
+    tmp_path: Path, clock: ControlledClock, deadline: float
+) -> None:
+    root = tmp_path / "invalid-deadline"
+    sync = reserve_budget(
+        root, policy(), "task", 100, clock=clock, boot="boot-a", deadline_seconds=deadline
+    )
+    asynchronous = asyncio.run(
+        reserve_budget_async(
+            root, policy(), "task", 100, clock=clock, boot="boot-a", deadline_seconds=deadline
+        )
+    )
+    for result in (sync, asynchronous):
+        assert isinstance(result, Failure) and result.code == "invalid_input"
+    assert not root.exists()
 
 
 def test_group_and_task_counts_are_controlled_by_state_bytes_not_old_record_caps(

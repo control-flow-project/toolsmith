@@ -3,13 +3,31 @@ import ipaddress
 import socket
 import ssl
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 from urllib.parse import urlsplit
 
 from toolsmith.acquisition.urls import canonical_url, public_address
 from toolsmith.clock import Clock
 from toolsmith.compression import expand_gzip
 from toolsmith.result import Failure, ToolsmithError
+
+type HttpMethod = Literal["GET", "POST"]
+
+MAX_REQUEST_BYTES = 64 * 1024
+
+
+def validate_request(method: HttpMethod, body: bytes | None) -> None:
+    if method not in ("GET", "POST"):
+        raise ToolsmithError("invalid_input", "Only explicit GET and POST requests are supported")
+    if method == "GET" and body is not None:
+        raise ToolsmithError("invalid_input", "GET requests cannot carry a body")
+    if method == "POST" and (
+        not isinstance(body, bytes) or not 1 <= len(body) <= MAX_REQUEST_BYTES
+    ):
+        raise ToolsmithError(
+            "invalid_input", "POST requires an explicit body of one to 65,536 bytes"
+        )
+
 
 REQUEST_HEADERS = (
     ("User-Agent", "Mozilla/5.0 (Toolsmith; approved bounded acquisition)"),
@@ -32,13 +50,16 @@ class Resolver(Protocol):
 
 
 class Transport(Protocol):
-    async def get_async(
+    async def request_async(
         self,
         url: str,
         addresses: tuple[str, ...],
         maximum_bytes: int,
         deadline: float,
         clock: Clock,
+        *,
+        method: HttpMethod = "GET",
+        body: bytes | None = None,
     ) -> Response: ...
 
 
@@ -134,7 +155,10 @@ async def request_pinned_async(
     clock: Clock,
     *,
     headers: tuple[tuple[str, str], ...] = REQUEST_HEADERS,
+    method: HttpMethod = "GET",
+    body: bytes | None = None,
 ) -> Response:
+    validate_request(method, body)
     try:
         import aiohttp
         from aiohttp.abc import AbstractResolver, ResolveResult
@@ -149,8 +173,12 @@ async def request_pinned_async(
             "invalid_input", "Transport requires a host and a validated pinned address"
         )
     host, address = parts.hostname, public_address(addresses[0])
-    if any(name.lower() == "host" for name, _value in headers):
-        raise ToolsmithError("invalid_input", "The pinned transport owns the Host header")
+    if any(
+        name.lower() in {"host", "content-length", "transfer-encoding"} for name, _value in headers
+    ):
+        raise ToolsmithError(
+            "invalid_input", "The pinned transport owns Host and request framing headers"
+        )
 
     class PinnedResolver(AbstractResolver):
         async def resolve(
@@ -199,8 +227,13 @@ async def request_pinned_async(
                     max_field_size=65_536,
                     read_bufsize=65_536,
                 ) as session,
-                session.get(
-                    selected, headers=headers, allow_redirects=False, server_hostname=host
+                session.request(
+                    method,
+                    selected,
+                    data=body,
+                    headers=headers,
+                    allow_redirects=False,
+                    server_hostname=host,
                 ) as response,
             ):
                 observed = tuple(
@@ -251,29 +284,50 @@ def request_pinned(
     clock: Clock,
     *,
     headers: tuple[tuple[str, str], ...] = REQUEST_HEADERS,
+    method: HttpMethod = "GET",
+    body: bytes | None = None,
 ) -> Response:
     return asyncio.run(
-        request_pinned_async(url, addresses, maximum_bytes, deadline, clock, headers=headers)
+        request_pinned_async(
+            url,
+            addresses,
+            maximum_bytes,
+            deadline,
+            clock,
+            headers=headers,
+            method=method,
+            body=body,
+        )
     )
 
 
 class NativeTransport:
-    def get(
+    def request(
         self,
         url: str,
         addresses: tuple[str, ...],
         maximum_bytes: int,
         deadline: float,
         clock: Clock,
+        *,
+        method: HttpMethod = "GET",
+        body: bytes | None = None,
     ) -> Response:
-        return request_pinned(url, addresses, maximum_bytes, deadline, clock)
+        return request_pinned(
+            url, addresses, maximum_bytes, deadline, clock, method=method, body=body
+        )
 
-    async def get_async(
+    async def request_async(
         self,
         url: str,
         addresses: tuple[str, ...],
         maximum_bytes: int,
         deadline: float,
         clock: Clock,
+        *,
+        method: HttpMethod = "GET",
+        body: bytes | None = None,
     ) -> Response:
-        return await request_pinned_async(url, addresses, maximum_bytes, deadline, clock)
+        return await request_pinned_async(
+            url, addresses, maximum_bytes, deadline, clock, method=method, body=body
+        )

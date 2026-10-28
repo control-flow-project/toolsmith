@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-MAX_TEXT_BYTES = 128 * 1024 * 1024
+MAX_TEXT_BYTES = 144 * 1024 * 1024
 
 
 @dataclass(frozen=True)

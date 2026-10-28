@@ -67,3 +67,5 @@ The separately selected `[semantic]` extra provides pinned inference/tokenizer
 dependencies. See [model preparation](semantic.md): supplying model assets is an
 operator action, not an installation effect. Base installs have no model software,
 and non-semantic capabilities work without it.
+
+The optional `xls` extra installs `xlrd==2.0.2` for in-process BIFF `.xls` reading. It does not support `.xlsx`, execute macros or install spreadsheet applications.

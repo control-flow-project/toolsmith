@@ -65,3 +65,20 @@ def test_failed_read_does_not_publish_a_result_file(
     assert main(["--json", "--output", str(destination), "read", "xml", str(source)]) == 2
     assert output(capsys)["ok"] is False
     assert not destination.exists()
+
+
+def test_xml_cli_emits_scoped_namespace_bindings(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "namespace.xml"
+    source.write_text('<root xmlns:p="urn:one"><child xmlns:p="urn:two">p:Item</child></root>')
+    assert main(["--json", "read", "xml", str(source)]) == 0
+    result = output(capsys)["result"]
+    assert isinstance(result, dict)
+    root = result["root"]
+    assert isinstance(root, dict) and isinstance(root["namespaces"], dict)
+    assert root["namespaces"]["p"] == "urn:one"
+    content = root["content"]
+    assert isinstance(content, list) and isinstance(content[0], dict)
+    nested = content[0]["namespaces"]
+    assert isinstance(nested, dict) and nested["p"] == "urn:two"

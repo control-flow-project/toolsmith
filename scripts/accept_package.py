@@ -22,6 +22,21 @@ parent = Path.cwd()
 before = set(parent.iterdir())
 import toolsmith
 from toolsmith.acquisition.http import acquire_http
+from toolsmith.acquisition.transport import NativeTransport, request_pinned, request_pinned_async
+from toolsmith.clock import SystemClock
+from toolsmith.result import ToolsmithError
+import inspect
+for function in (request_pinned, request_pinned_async, NativeTransport.request, NativeTransport.request_async):
+    signature = inspect.signature(function)
+    assert signature.parameters['method'].default == 'GET'
+    assert signature.parameters['body'].default is None
+assert not hasattr(NativeTransport, 'get') and not hasattr(NativeTransport, 'get_async')
+try:
+    request_pinned('https://example.com/', ('8.8.8.8',), 100, 100, SystemClock(), method='POST', body=b'x' * 65537)
+except ToolsmithError as error:
+    assert error.failure.code == 'invalid_input'
+else:
+    raise AssertionError('Installed transport must reject oversized POST before optional network import')
 from toolsmith.acquisition.policy import SourcePolicy
 from toolsmith.readers import read_text, read_html, read_feed
 from toolsmith.result import Failure, unwrap
@@ -50,6 +65,11 @@ assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
 assert importlib.metadata.version('ctlflow-toolsmith') == '0.5.0'
 assert importlib.util.find_spec('aiohttp') is None
 assert importlib.util.find_spec('pypdfium2') is None
+assert importlib.util.find_spec('xlrd') is None
+from toolsmith.readers import read_xls
+xls_missing = read_xls(bytes.fromhex('d0cf11e0a1b11ae1'))
+assert isinstance(xls_missing, Failure) and xls_missing.code == 'unavailable'
+assert 'xlrd' not in sys.modules
 from toolsmith.readers import read_xml, read_json_lines, read_pdf
 assert unwrap(read_xml(b'<root><value>one</value></root>')).root.name == 'root'
 assert len(unwrap(read_json_lines(b'{"id":1}\\n{"id":2}\\n'))) == 2
@@ -61,6 +81,27 @@ assert metadata.get_all('License-File') == ['LICENSE']
 assert not any(value.startswith('Private ::') for value in metadata.get_all('Classifier', []))
 assert set(parent.iterdir()) == before
 assert unwrap(read_html(b'<main>Meaningful text</main>')).parts[0].text == 'Meaningful text'
+large_html = b'<main data-padding="' + b'x' * (4 * 1024 * 1024) + b'">Installed bound</main>'
+assert isinstance(inspect_html(large_html), Failure)
+assert unwrap(inspect_html(large_html, maximum_bytes=8 * 1024 * 1024)).text == 'Installed bound'
+assert unwrap(read_html(large_html, maximum_bytes=8 * 1024 * 1024)).parts[0].text == 'Installed bound'
+from toolsmith.readers import XmlLimits
+assert unwrap(read_xml(b'<root/>', XmlLimits(maximum_bytes=144 * 1024 * 1024))).root.name == 'root'
+from toolsmith.cli import main
+bounded_html = parent / 'explicit-bound.html'
+bounded_html.write_bytes(large_html)
+assert main(['--json', 'read', 'html', str(bounded_html), '--maximum-bytes', str(8 * 1024 * 1024)]) == 0
+bounded_html.unlink()
+del large_html
+dense_html = b'<main>' + b'<br>' * 50000 + b'Installed nodes</main>'
+assert isinstance(inspect_html(dense_html), Failure)
+assert unwrap(inspect_html(dense_html, maximum_nodes=500000)).text == 'Installed nodes'
+assert unwrap(read_html(dense_html, maximum_nodes=500000)).parts[0].text == 'Installed nodes'
+bounded_html.write_bytes(dense_html)
+for reader in ('html', 'html-links'):
+    assert main(['--json', 'read', reader, str(bounded_html), '--maximum-nodes', '500000']) == 0
+bounded_html.unlink()
+del dense_html
 assert len(unwrap(read_feed(b'<rss><channel><item><title>A</title><link>https://example.com/a</link></item></channel></rss>', 'https://example.com/feed')).entries) == 1
 assert unwrap(read_feed(b'<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="?page=2"/></feed>', 'https://example.com/feed')).next_url == 'https://example.com/feed?page=2'
 root = parent / 'store'
@@ -146,7 +187,7 @@ def check_archives(wheel: Path, source: Path) -> None:
         metadata = archive.read(next(name for name in names if name.endswith("/METADATA"))).decode()
         check_license(metadata, archive.read(license_path).decode())
         assert all(
-            any("extra == '" + name + "'" in line for name in ("http", "pdf", "semantic"))
+            any("extra == '" + name + "'" in line for name in ("http", "pdf", "semantic", "xls"))
             for line in metadata.splitlines()
             if line.startswith("Requires-Dist:")
         )
@@ -265,7 +306,7 @@ def main() -> int:
                     "filelock=2026-10-25T00:00:00Z",
                     "--constraint",
                     str(constraints),
-                    str(artifact) + "[http,pdf]",
+                    str(artifact) + "[http,pdf,xls]",
                 ],
                 parent,
             )

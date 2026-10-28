@@ -38,7 +38,7 @@ links separately from cleaned prose. Targets remain literal: callers resolve and
 authorize them before any request. Labels are bounded to 1,000 characters with
 an explicit truncation flag. The parser retains only attributes used by reading,
 visibility, resource and link inspection. Unused attributes do not acquire an
-independent value-size limit. Reading attributes also use the complete 4 MiB
+independent value-size limit. Reading attributes also use the complete selected
 HTML input bound, not an 8,192-character per-value cutoff; a long decorative
 attribute must not erase the rest of a readable page. Node/depth/name budgets
 still apply. Form containers preserve ordinary text and links, including pages
@@ -47,6 +47,16 @@ signals and access-screen rejection remain unchanged.
 Duplicate HTML attributes retain their first value; later duplicates never
 replace link targets or visibility attributes. This tolerance does not relax
 XML/feed validation or the untrusted-link authorization boundary.
+HTML inspection and reading retain a 4 MiB default input budget; explicit
+`maximum_bytes` can select up to 8 MiB through the same DOM parser.
+HTML maximum_nodes defaults to 50,000 and can explicitly select up to 500,000
+through that same parser. Node, nesting and attribute-count failures report
+the actual observed/maximum count separately. Depth 128, attributes 100,
+password/access and extracted-text budgets remain unchanged.
+XML retains its 32 MiB default, with an explicit byte ceiling of 144 MiB; its
+independent node, depth and field limits remain in force. The shared UTF-8 reader
+and explicit regular-file reads support the same 144 MiB ceiling, without
+changing their default budgets or file-write/storage limits.
 RSS/Atom results expose a resolved feed-level next-page link, if declared,
 including inherited XML base resolution. Conflicting or unsafe next links fail.
 Pagination is metadata only; callers own authorization, requests and completeness.
@@ -150,7 +160,18 @@ Network access is HTTPS port 443 only, with exact reviewed DNS hosts. Reject URL
 credentials, secret-like query keys, fragments and control characters. Resolve with
 a finite lifetime, reject any non-public result and connect to a validated pinned
 address while validating TLS against the original hostname. Recheck every redirect.
-Ignore proxy environment configuration. Never forward cookies or credentials.
+Ignore proxy environment configuration. The high-level GET client never forwards
+cookies or credentials. Caller-owned native adapters may supply reviewed headers
+to the same low-level pinned transport. `request_pinned` and
+`request_pinned_async` accept explicit `method="POST", body=...` for a caller-approved
+request; GET remains the default and rejects a body. POST requires one to 65,536
+opaque bytes. Callers own the body format, content type, endpoint authorization,
+quotas and any retries. The transport owns Host and request framing, returns every
+response status without following redirects or retrying, and preserves the same
+DNS pinning, TLS verification, deadlines and response bounds. Request bodies are
+never included in errors or response metadata. `NativeTransport.request` and
+`request_async` expose that same primitive; high-level HTTP/archive/batch commands
+continue to perform GET requests only.
 
 Bound compressed and expanded data, requests, redirects and total I/O deadline.
 Upstream Retry-After and policy spacing return explicit deferral; no unconditional
@@ -167,6 +188,10 @@ Computed policy-spacing waits consume the request deadline; upstream cooldowns
 remain explicit deferrals, not automatic retries. A crashed request retains its
 charge and slot until its recorded deadline. Each outcome identifies completed,
 failed or unfinished input. An existing output is rejected before HTTP access.
+Generic caller-owned budget reservations accept explicit deadlines up to 120
+seconds so an interrupted consumer operation retains its slot for that actual
+operation's lifetime. Expiry releases the slot, never its unknown charged usage.
+The standalone HTTP client's separate sixty-second request ceiling is unchanged.
 There is no total item-count ceiling; explicit batch deadlines and byte bounds
 are separate from an application's discovery/completion policy.
 
@@ -262,3 +287,24 @@ coupling. Tests use controlled clocks and fake transport boundaries; no local te
 server or indefinite sleep. Actual approved network acceptance is separate from
 fixtures. Build/test tooling runs in an aggregate-memory/swap/task-bounded group.
 No runtime or production deployment is authorized by package installation.
+
+XML elements expose `namespaces`, the complete in-scope prefix-to-URI bindings,
+including the implicit `xml` prefix and explicit default namespace removal.
+Expanded names do not resolve QName values in text or attributes for callers;
+use the containing element’s bindings. Prefix rebinding stays local to its
+element subtree. Namespace declarations share the attribute count/name/value
+bounds; the same count bound limits the number of in-scope bindings.
+
+The generic XML reader also transforms selected non-nested subtrees through a
+pure caller converter while releasing completed nodes. It validates the entire
+XML before returning any compact record population; it exposes no successful
+partial iterator. One parser owns full-tree and selected-record reading, including
+DTD rejection, namespace scope and text/tail budgets across input chunks. Known
+large documents may explicitly select 144 MiB/eight million nodes; the default
+input and node budgets remain 32 MiB/two million.
+
+## Optional BIFF workbook reader
+
+The `xls` extra pins xlrd 2.0.2. One in-process reader owns library and CLI BIFF `.xls` parsing. It returns bounded row pages with typed cells, exact decimal expansions of stored binary64 numbers, source number formats, date mode, merged ranges and explicit row continuation. It preserves literal text and distinguishes blank/empty cells. It neither renders display values, infers currency/units, converts date serials, evaluates formulas nor supports `.xlsx`. Formula cells expose cached values, without a claim that xlrd identifies formula origin. Input is limited to 32 MiB; returned-cell/text budgets are explicit and violations never return partial success. Caller-owned isolation remains required for untrusted backend execution.
+
+`read_xml_records` selects one exact element name or a nonempty tuple of distinct exact names in one parsing pass. Selected elements must not nest; all selected populations share full-document validation, namespace scope and structural budgets.

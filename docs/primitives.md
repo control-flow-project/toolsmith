@@ -143,3 +143,23 @@ Use `search lexical batch` or `search semantic batch` with `--database`, `--scop
 and `--queries`; semantic queries also require `--model-directory`. The table or
 view named by the scope must contain authorized `reference` and `text_digest` columns.
 Applications own authorization, candidate dates and interpretation of matches.
+
+XML elements expose `namespaces`, the complete in-scope prefix-to-URI bindings,
+including the implicit `xml` prefix and explicit default namespace removal.
+Expanded names do not resolve QName values in text or attributes for callers;
+use the containing element’s bindings. Prefix rebinding stays local to its
+element subtree. Namespace declarations share the attribute count/name/value
+bounds; the same count bound limits the number of in-scope bindings.
+
+For large record-oriented XML, `read_xml_records(content, element_name, convert,
+limits)` uses that same bounded parser and a pure caller converter. It releases
+completed selected subtrees and returns compact converted records only after the
+complete document validates. The converter must perform no external effects; a
+malformed tail returns failure, never a publishable partial prefix. Selected
+elements cannot nest. Callers may explicitly select up to 144 MiB and eight
+million nodes for known large originals; defaults remain 32 MiB/two million.
+Namespace, depth and field limits still apply to selected and unselected content.
+
+The selected-record reader accepts `root_name` to require an exact expanded root
+name before any conversion, so a nested match cannot impersonate another document
+format. This shares the same parser and does not inspect a partial input twice.

@@ -14,6 +14,7 @@ from toolsmith.acquisition.http import acquire_http, resume_http
 from toolsmith.acquisition.limits import inspect_limits
 from toolsmith.acquisition.policy import SourcePolicy
 from toolsmith.acquisition.transport import (
+    HttpMethod,
     Response,
     expanded_body,
 )
@@ -40,13 +41,16 @@ class RecordedTransport:
         self.responses = responses
         self.urls: list[str] = []
 
-    async def get_async(
+    async def request_async(
         self,
         url: str,
         addresses: tuple[str, ...],
         maximum_bytes: int,
         deadline: float,
         clock: Clock,
+        *,
+        method: HttpMethod = "GET",
+        body: bytes | None = None,
     ) -> Response:
         self.urls.append(url)
         response = self.responses.pop(0)

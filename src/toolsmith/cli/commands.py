@@ -19,11 +19,13 @@ from toolsmith.operations.cleanup import (
 )
 from toolsmith.operations.integrity import check_integrity, rebuild_index
 from toolsmith.readers import (
+    XmlLimits,
     inspect_html,
     read_feed,
     read_html,
     read_pdf,
     read_text,
+    read_xls,
     read_xml,
     render_pdf_page,
 )
@@ -92,6 +94,7 @@ def execute(arguments: Arguments) -> Result[object]:
                     "semantic-search",
                     "streaming-files",
                     "tabular-readers",
+                    "xls-workbooks",
                     "caller-owned-lexical-index",
                     "caller-owned-search-cli",
                     "semantic-metadata-status",
@@ -115,21 +118,36 @@ def execute(arguments: Arguments) -> Result[object]:
                     "fleet-runtime",
                 ],
                 "semantic_dependency": "semantic extra; verified operator-supplied local assets, no download",
+                "xls_dependency": "xls extra; in-process BIFF cells, formats and date mode",
                 "pdf_dependency": "pdf extra; in-process PDFium text extraction and page rendering",
             }
         )
     if action.startswith("read."):
-        content = unwrap(read_bytes(required_path(arguments.file), 32 * 1024 * 1024))
+        explicit_bound = action in {"read.text", "read.html", "read.html-links", "read.xml"}
+        content = unwrap(
+            read_bytes(
+                required_path(arguments.file),
+                arguments.maximum_bytes if explicit_bound else 32 * 1024 * 1024,
+            )
+        )
         if action == "read.html-links":
-            return inspect_html(content)
+            return inspect_html(
+                content,
+                maximum_bytes=arguments.maximum_bytes,
+                maximum_nodes=arguments.maximum_nodes,
+            )
         if action == "read.xml":
-            return read_xml(content)
+            return read_xml(content, XmlLimits(maximum_bytes=arguments.maximum_bytes))
         if action == "read.jsonl":
             return read_json_lines(content)
+        if action == "read.xls":
+            return read_xls(content, arguments.sheet, arguments.start, arguments.limit)
         if action == "read.pdf":
             return read_pdf(content, arguments.start, arguments.limit)
         if action == "read.text":
-            return read_text(content, required_text(arguments.title, "Title"))
+            return read_text(
+                content, required_text(arguments.title, "Title"), arguments.maximum_bytes
+            )
         if action == "read.html":
             if arguments.selection not in {"text", "article"}:
                 raise ToolsmithError("invalid_input", "Choose text or article selection")
@@ -137,6 +155,8 @@ def execute(arguments: Arguments) -> Result[object]:
                 content,
                 arguments.title,
                 selection="article" if arguments.selection == "article" else "text",
+                maximum_bytes=arguments.maximum_bytes,
+                maximum_nodes=arguments.maximum_nodes,
             )
         if action == "read.feed":
             return read_feed(content, required_text(arguments.source_url, "Source URL"))

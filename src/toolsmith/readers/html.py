@@ -4,6 +4,8 @@ from typing import Literal
 
 from toolsmith.readers.html_dom import (
     ACCESS_BODY,
+    DEFAULT_HTML_BYTES,
+    DEFAULT_HTML_NODES,
     Node,
     check_access,
     check_title_access,
@@ -78,8 +80,13 @@ def links(root: Node) -> tuple[HtmlLink, ...]:
 
 
 @boundary
-def inspect_html(content: bytes) -> HtmlInspection:
-    root = parse_html(content)
+def inspect_html(
+    content: bytes,
+    *,
+    maximum_bytes: int = DEFAULT_HTML_BYTES,
+    maximum_nodes: int = DEFAULT_HTML_NODES,
+) -> HtmlInspection:
+    root = parse_html(content, maximum_bytes=maximum_bytes, maximum_nodes=maximum_nodes)
     visible = descendants(root)
     check_title_access(visible)
     pending = [root]
@@ -211,12 +218,17 @@ def article_region(root: Node, title: str | None) -> tuple[Node, str]:
 
 @boundary
 def read_html(
-    content: bytes, title: str | None = None, *, selection: Literal["text", "article"] = "text"
+    content: bytes,
+    title: str | None = None,
+    *,
+    selection: Literal["text", "article"] = "text",
+    maximum_bytes: int = DEFAULT_HTML_BYTES,
+    maximum_nodes: int = DEFAULT_HTML_NODES,
 ) -> Document:
     if selection not in {"text", "article"}:
         raise ToolsmithError("invalid_input", "Choose explicit text or article HTML selection")
     hint = None if title is None else text(title, 1024, "Title")
-    root = parse_html(content)
+    root = parse_html(content, maximum_bytes=maximum_bytes, maximum_nodes=maximum_nodes)
     check_access(root)
     visible = descendants(root)
     if selection == "article":

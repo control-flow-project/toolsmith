@@ -1,0 +1,1 @@
+typed-cells.fods is an authored generic spreadsheet fixture. typed-cells.xls was exported from it with LibreOffice 26.2 using the MS Excel 97 filter for real BIFF reader tests. LibreOffice is not a runtime or test prerequisite. The fixture has no external links or macros; amounts have no currency semantics. Both fixtures carry this repository's MIT license.

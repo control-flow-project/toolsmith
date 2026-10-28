@@ -4,8 +4,12 @@ from html.parser import HTMLParser
 
 from toolsmith.readers.text import decode_text, normalize_text
 from toolsmith.result import ToolsmithError
+from toolsmith.validation import integer
 
-MAX_HTML_BYTES = 4 * 1024 * 1024
+DEFAULT_HTML_BYTES = 4 * 1024 * 1024
+MAX_HTML_BYTES = 8 * 1024 * 1024
+DEFAULT_HTML_NODES = 50_000
+MAX_HTML_NODES = 500_000
 
 OMIT = {
     "script",
@@ -135,16 +139,23 @@ def excluded(node: Node, *, include_forms: bool = False, include_navigation: boo
 
 
 class MeaningfulParser(HTMLParser):
-    def __init__(self) -> None:
+    def __init__(self, maximum_nodes: int) -> None:
         super().__init__(convert_charrefs=True)
         self.root = Node("root", {})
         self.stack = [self.root]
         self.nodes = 0
+        self.maximum_nodes = maximum_nodes
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.nodes += 1
-        if self.nodes > 50_000 or len(self.stack) >= 128 or len(attrs) > 100:
-            raise ToolsmithError("limit", "HTML exceeds its node, attribute or nesting budget")
+        if self.nodes > self.maximum_nodes:
+            raise ToolsmithError(
+                "limit", f"HTML node budget exceeded: {self.nodes} > {self.maximum_nodes}"
+            )
+        if len(self.stack) >= 128:
+            raise ToolsmithError("limit", f"HTML nesting budget exceeded: {len(self.stack)} >= 128")
+        if len(attrs) > 100:
+            raise ToolsmithError("limit", f"HTML attribute count exceeded: {len(attrs)} > 100")
         if any(len(name) > 500 for name, _ in attrs):
             raise ToolsmithError("limit", "HTML attribute exceeds its field budget")
         selected: dict[str, str] = {}
@@ -173,10 +184,17 @@ class MeaningfulParser(HTMLParser):
         self.stack[-1].children.append(data)
 
 
-def parse_html(content: bytes) -> Node:
-    parser = MeaningfulParser()
+def parse_html(
+    content: bytes,
+    *,
+    maximum_bytes: int = DEFAULT_HTML_BYTES,
+    maximum_nodes: int = DEFAULT_HTML_NODES,
+) -> Node:
+    maximum = integer(maximum_bytes, 1, MAX_HTML_BYTES, "Maximum HTML bytes")
+    nodes = integer(maximum_nodes, 1, MAX_HTML_NODES, "Maximum HTML nodes")
+    parser = MeaningfulParser(nodes)
     try:
-        parser.feed(decode_text(content, MAX_HTML_BYTES))
+        parser.feed(decode_text(content, maximum))
         parser.close()
     except (AssertionError, ValueError, RecursionError) as error:
         raise ToolsmithError(

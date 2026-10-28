@@ -11,7 +11,7 @@ from aiohttp.http_exceptions import HttpProcessingError
 from aiohttp.http_parser import HttpResponseParser
 from conftest import ControlledClock
 
-from toolsmith.acquisition.transport import NativeTransport
+from toolsmith.acquisition.transport import HttpMethod, NativeTransport
 from toolsmith.result import ToolsmithError
 
 type NativeRequest = Callable[[tuple[tuple[str, str], ...], bytes, int], bytes]
@@ -60,14 +60,17 @@ def native_request(monkeypatch: pytest.MonkeyPatch, clock: ControlledClock) -> N
                 await self.connector.close()
 
             @asynccontextmanager
-            async def get(
+            async def request(
                 self,
+                method: str,
                 url: str,
                 *,
+                data: bytes | None,
                 headers: tuple[tuple[str, str], ...],
                 allow_redirects: bool,
                 server_hostname: str,
             ) -> AsyncIterator[SourceResponse]:
+                assert method == "GET" and data is None
                 assert url == "https://example.com/path"
                 assert server_hostname == "example.com" and not allow_redirects
                 assert dict(headers)["User-Agent"].startswith("Mozilla/5.0")
@@ -94,7 +97,9 @@ def native_request(monkeypatch: pytest.MonkeyPatch, clock: ControlledClock) -> N
         monkeypatch.setattr(aiohttp, "ClientSession", Session)
         return (
             NativeTransport()
-            .get("https://example.com/path", ("8.8.8.8",), maximum, clock.monotonic() + 10, clock)
+            .request(
+                "https://example.com/path", ("8.8.8.8",), maximum, clock.monotonic() + 10, clock
+            )
             .content
         )
 
@@ -106,6 +111,7 @@ def test_native_transport_bounded_success_and_no_credentials(native_request: Nat
     assert native_request((("Content-Length", "0" * 5000 + "5"),), b"plain", 10) == b"plain"
 
 
+@pytest.mark.parametrize("method", ["GET", "POST"])
 @pytest.mark.parametrize(
     "error,code",
     [
@@ -117,7 +123,11 @@ def test_native_transport_bounded_success_and_no_credentials(native_request: Nat
     ],
 )
 def test_native_transport_distinguishes_connection_failures_from_invalid_responses(
-    monkeypatch: pytest.MonkeyPatch, clock: ControlledClock, error: Exception, code: str
+    monkeypatch: pytest.MonkeyPatch,
+    clock: ControlledClock,
+    error: Exception,
+    code: str,
+    method: HttpMethod,
 ) -> None:
     async def fail_request(
         self: aiohttp.ClientSession, method: str, url: object, **options: object
@@ -126,8 +136,14 @@ def test_native_transport_distinguishes_connection_failures_from_invalid_respons
 
     monkeypatch.setattr(aiohttp.ClientSession, "_request", fail_request)
     with pytest.raises(ToolsmithError) as failure:
-        NativeTransport().get(
-            "https://example.com/path", ("8.8.8.8",), 1024, clock.monotonic() + 10, clock
+        NativeTransport().request(
+            "https://example.com/path",
+            ("8.8.8.8",),
+            1024,
+            clock.monotonic() + 10,
+            clock,
+            method=method,
+            body=b"{}" if method == "POST" else None,
         )
     assert failure.value.failure.code == code
 

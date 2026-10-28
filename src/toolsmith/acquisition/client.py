@@ -157,7 +157,7 @@ async def fetch_http_async(
                 if before_request is not None:
                     before_request()
                 requests += 1
-                response = await selected_transport.get_async(
+                response = await selected_transport.request_async(
                     current, pinned, maximum, deadline, actual_clock
                 )
         except TimeoutError as error:

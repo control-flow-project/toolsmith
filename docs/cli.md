@@ -22,6 +22,12 @@ init/status/check/delete do not activate a model.
 `read json`, `read table --column NAME [--filter COLUMN=VALUE]`
 and `read html --selection article [--title INTENDED]` use generic parsers.
 Table output includes complete scan/match counts and explicit truncation.
+`read text`, `read html` and `read html-links` default to 4 MiB; `read xml`
+defaults to 32 MiB. Their explicit `--maximum-bytes` ceilings are 144 MiB for
+UTF-8/XML and 8 MiB for HTML. The selected byte bound does not increase structure,
+access-screen or extracted-output limits.
+HTML and HTML-links also accept --maximum-nodes: default 50,000, ceiling 500,000.
+This does not change depth 128, attributes 100, byte, access or output bounds.
 `filesystem hash/copy FILE --maximum-bytes N` streams selected regular files.
 
 `http request URL --policy FILE --budget-policy FILE --network-state DIR --task ID
@@ -41,13 +47,13 @@ No command starts a server, helper process, listener or fleet.
 ```text
 toolsmith capabilities
 toolsmith store init | inspect
-toolsmith read text FILE --title TITLE
-toolsmith read html FILE [--title TITLE]
-toolsmith read html-links FILE
+toolsmith read text FILE --title TITLE [--maximum-bytes N]
+toolsmith read html FILE [--title TITLE] [--maximum-bytes N] [--maximum-nodes N]
+toolsmith read html-links FILE [--maximum-bytes N] [--maximum-nodes N]
 toolsmith read feed FILE --source-url URL
 toolsmith read json FILE
 toolsmith read jsonl FILE
-toolsmith read xml FILE
+toolsmith read xml FILE [--maximum-bytes N]
 toolsmith read pdf FILE [--start N] [--limit N]
 toolsmith render pdf FILE --page N [--dpi N] --destination FILE
 toolsmith read table FILE --column COLUMN [--filter COLUMN=VALUE] [--format csv|zip-csv|gzip-csv]
@@ -153,3 +159,5 @@ reset production or overwrite existing stores.
 See [semantic retrieval](semantic.md) and the [fleet recipes](fleet-recipes.md)
 for model preparation, bounded indexing, coverage, exact citations, corrections
 and generic caller-owned SQLite integration.
+
+`toolsmith read xls FILE [--sheet N] [--start N] [--limit N]` selects a zero-based sheet and row page (default 1,000 rows). `next_row` is explicit. Numeric and date cells retain exact binary64 decimal strings and source number formats; date serials retain the workbook date mode.

@@ -53,7 +53,7 @@ HTTP client for a Toolsmith service, skill installation or fleet integration.
 | `toolsmith.filesystem` | `inventory`, `sync_directory_tree`, `publish_directory`, `FileEntry` |
 | `toolsmith.archives` | `list_archive`, `read_archive_member`, `pack_files`, `unpack_files`, `ArchiveEntry`, `MemberSource`, `MemberDigest`, `ArchiveReport` |
 | `toolsmith.compression` | `expand_gzip` with an explicit expanded-byte ceiling |
-| `toolsmith.readers` | `Document`, `TextPart`, `read_text`, `normalize_text`, `read_json`, `read_json_lines`, `read_html`, `inspect_html`, `HtmlInspection`, `HtmlLink`, `HtmlMetadata`, `HtmlStructuredData`, `read_feed`, `Feed`, `FeedEntry`, `read_xml`, `XmlDocument`, `XmlElement`, `XmlLimits`, `read_pdf`, `PdfText`, `PdfPageText`, `render_pdf_page`, `PdfImage`, `decode_table`, `iter_table_rows`, `project_table` |
+| `toolsmith.readers` | `Document`, `TextPart`, `read_text`, `normalize_text`, `read_json`, `read_json_lines`, `read_html`, `inspect_html`, `HtmlInspection`, `HtmlLink`, `HtmlMetadata`, `HtmlStructuredData`, `read_feed`, `Feed`, `FeedEntry`, `read_xml`, `XmlDocument`, `XmlElement`, `XmlLimits`, `read_xml_records`, `read_pdf`, `PdfText`, `PdfPageText`, `render_pdf_page`, `PdfImage`, `decode_table`, `iter_table_rows`, `project_table`, `read_xls`, `XlsSheet`, `XlsCell` |
 | `toolsmith.readers.content` | `validate_content`; PDF signature only, not extraction |
 | `toolsmith.lexical` | `Source`, `Scope`, `initialize_index`, `inspect_index`, `indexed_scope`, `matching_scope`, `index_source`, `invalidate_source`, `search`, `search_batch`, `check_index`, `compile_query`, `Region`, `find_text` |
 | `toolsmith.semantic` | `load_model`, `inspect_model`, `Source`, `Scope`, `prepare_connection`, `prepare_embedding`, `encode_query`, `initialize_index`, `inspect_index`, `inspect_coverage`, `indexed_scope`, `pending_references`, `publish_embedding`, `invalidate_embedding`, `relocate_embedding`, `clear_index`, `search_embeddings`, `search_batch`, `search_embeddings_batch`, `check_index`, `indexed_digest` |
@@ -61,7 +61,7 @@ HTTP client for a Toolsmith service, skill installation or fleet integration.
 | `toolsmith.acquisition.urls` | `resolve_url`, `resolve_urls`, `ResolvedUrl`; resolution does not authorize requests |
 | `toolsmith.acquisition.batch` | `DownloadRequest`, `DownloadedFile`, `DownloadOutcome`, `DownloadBatch`, `download_batch`, `download_batch_async` |
 | `toolsmith.acquisition.buckets` | `Bucket`, `BucketResult`, `run_buckets_async`; finite caller-selected acquisition with per-bucket spacing |
-| `toolsmith.acquisition.transport` | `NativeResolver`, `NativeTransport`, `request_pinned`, `request_pinned_async`; bounded DNS and pinned HTTPS transport |
+| `toolsmith.acquisition.transport` | `HttpMethod`, `NativeResolver`, `NativeTransport.request`/`request_async`, `request_pinned`, `request_pinned_async`; bounded DNS and pinned HTTPS transport |
 | `toolsmith.acquisition.client` | `HttpPolicy`, `FetchResponse`, `fetch_http`, `fetch_http_async` without an archive |
 | `toolsmith.acquisition.config` | `read_http_policy`, `read_budget_policy` |
 | `toolsmith.acquisition.budgets` | `BudgetPolicy`, `Reservation`, `BudgetStatus`, `inspect_budget`, `reserve_budget`, `reserve_budget_async`, `settle_budget`; asynchronous admission waits only for local spacing/slots within its deadline, never upstream cooldowns or exhausted quota |
@@ -189,3 +189,26 @@ public `Result` boundary. They do not supply a second implementation or runtime.
 `toolsmith.semantic.store` composes those functions with exact retained citations.
 Importing either loads no optional native package or model. See
 [semantic contracts](semantic.md) and [fleet integration](fleet-recipes.md).
+
+`toolsmith.readers.read_xls(content, sheet=0, start=0, limit=1000)` returns `Result[XlsSheet]`. Rows contain `XlsCell(kind, value, number_format)`. Number/date values are exact decimal expansions of stored binary64 values, not formatted display strings. Text values remain literal Unicode; Boolean and error cells remain Boolean and integer error codes. Empty and formatted blank cells are distinguished with null values. `date_mode`, sheet names, merged ranges, total dimensions and explicit continuation accompany each page. Callers own any documented rounding, currency interpretation or calendar conversion. Cached formula results are read without formula extraction or recalculation; xlrd does not identify whether a cell came from a formula. The optional `xls` dependency is loaded only on an XLS call.
+
+`read_xml_records` selects one exact element name or a nonempty tuple of distinct exact names in one parsing pass. Selected elements must not nest; all selected populations share full-document validation, namespace scope and structural budgets.
+
+HTML `inspect_html` and `read_html` accept keyword-only `maximum_bytes`: default
+4 MiB, explicit ceiling 8 MiB. They use the same parser and retain independent
+access/password and extracted-text limits. Their keyword-only maximum_nodes
+defaults to 50,000 and accepts at most 500,000; depth 128 and attributes 100 remain
+independent. Failures distinguish node, nesting and attribute counts.
+`XmlLimits.maximum_bytes` defaults to 32 MiB and can explicitly reach 144 MiB; node/depth/field limits remain
+separate. `read_text` and safe explicit `read_bytes` share that 144 MiB input
+ceiling; their default budgets and file-write/storage limits are unchanged.
+
+The low-level `request_pinned` and `request_pinned_async` accept keyword-only
+`method="GET"` and `body=None`. Explicit POST requires one to 65,536 opaque body
+bytes; GET rejects a body. Caller-owned adapters supply their reviewed Content-Type
+through `headers`, authorize the endpoint and own quotas/retries. The transport
+sets Host and body framing, verifies TLS against the original host, uses the
+validated pinned address and returns redirect/error statuses without following
+or retrying them. Do not forward POST bodies to redirect targets without a new
+caller authorization. High-level `fetch_http`, archive acquisition, batches and
+the HTTP CLI remain GET-only.

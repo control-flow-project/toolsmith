@@ -14,14 +14,16 @@ application content.
 
 | Capability | Inputs and results | Limits and cautions |
 | --- | --- | --- |
-| Regular-file IO | Explicit path/byte bound → bytes, digest or private streamed copy | Buffered maximum 128 MiB, streaming requires an explicit byte budget (native signed-64-bit range); no-follow regular files; stable metadata; copy never overwrites |
+| Regular-file IO | Explicit path/byte bound → bytes, digest or private streamed copy | Buffered reads at most 144 MiB; streaming requires an explicit byte budget (native signed-64-bit range); no-follow regular files; stable metadata; copy never overwrites |
 | File/tree metadata | Explicit path/tree → stamp or relative file entries | No content hashing; default 10,000 total entries/1 GiB, depth 64; private tree excludes symlinks/special files |
 | Mutable state / publication | Explicit bytes/path or same-parent staging/destination | Private atomic replacement for state; no-replace directory publication; no weakened rename fallback |
 | Exact-file ZIP | Explicit selected files / expected member digests → archive or extracted directory | 10,000 files, 128 MiB/member, 1 GiB total, 4 MiB central directory, path depth 64; no encryption/special/extra members or partial publication |
-| Text / JSON | Explicit UTF-8 bytes → parsing types or bounded JSON | Text default 4 MiB, configurable 128 MiB; JSON default 32 MiB, configurable 128 MiB; duplicate keys/nonfinite numbers rejected |
-| Static HTML | Bytes and explicit text/article selection → `Document` | 4 MiB, 50,000 nodes, depth 128; access screens rejected; article identity/prose checked; table/dynamic-content warnings |
+| Text / JSON | Explicit UTF-8 bytes → parsing types or bounded JSON | Text default 4 MiB, configurable to 144 MiB; JSON default 32 MiB, configurable to 128 MiB; duplicate keys/nonfinite numbers rejected |
+| Static HTML | Bytes and explicit text/article selection → `Document` | Default 4 MiB/50,000 nodes, explicitly selectable to 8 MiB/500,000 nodes; depth 128; access screens rejected; article identity/prose checked; table/dynamic-content warnings |
+| XML records | Explicit element names and pure converter → fully validated converted records | Default 32 MiB/two million nodes, explicitly selectable to 144 MiB/eight million nodes; namespace scopes and text/tail order retained; malformed tails fail the whole read |
 | RSS/Atom | Bytes and source URL → complete `Feed` | 2 MiB, two million nodes, depth 32; all distinct entries within those bounds, explicit declared next URL; duplicate/conflict counts and original/offset/UTC dates distinct |
 | Tabular input | CSV/one ZIP-CSV/one GZIP-CSV → UTF-8 rows/projection | Compressed 32 MiB, expanded 64 MiB; comma/pipe/tab dialect; 256 columns, default 1,000,000 scanned rows; explicit larger budgets supported; strings only; exact scan/match/truncation counts |
+| XLS cells | Explicit sheet and row page → typed values and number formats | Optional in-process `xls` extra; 32 MiB input, default 100,000 returned cells/4 MiB text, explicit output ceiling 16,777,216 cells/32 MiB; cached values only, no recalculation or domain interpretation |
 | Response validation | Selected format/media type → explicit warnings | Wrong-format/access pages rejected; PDF signature only, not a PDF parser or OCR |
 | Literal passages | Source/query/optional nonoverlapping regions → exact matches and counts | Source 128 MiB, 1,000 returned matches; no arbitrary region-count cutoff; punctuation and page-bounded context preserved |
 | Caller-owned lexical index | SQLite + opaque refs/current digests → status, mutations or ranked hits | Source 8 MiB, database-resident authorized scope without a corpus-count ceiling, 1,000 result limit; terms/phrases/explicit FTS5; filtering before limits; BM25 DB-wide statistics |

@@ -72,7 +72,7 @@ def test_product_has_no_process_server_thread_or_domain_owner() -> None:
 def test_dependencies_are_optional_and_distribution_is_mit_licensed() -> None:
     config = tomllib.loads((ROOT / "pyproject.toml").read_text())
     assert config["project"]["dependencies"] == []
-    assert set(config["project"]["optional-dependencies"]) == {"http", "pdf", "semantic"}
+    assert set(config["project"]["optional-dependencies"]) == {"http", "pdf", "semantic", "xls"}
     assert not any(value.startswith("Private ::") for value in config["project"]["classifiers"])
     assert config["project"]["scripts"] == {"toolsmith": "toolsmith.cli:main"}
     assert config["project"]["license"] == "MIT"

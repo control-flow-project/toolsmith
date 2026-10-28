@@ -12,7 +12,14 @@ from toolsmith.acquisition.buckets import Bucket, run_buckets_async
 from toolsmith.acquisition.urls import resolve_urls
 from toolsmith.archives import list_archive, read_archive_member
 from toolsmith.cli import main as cli
-from toolsmith.readers import inspect_html, read_json_lines, read_xml
+from toolsmith.readers import (
+    XmlElement,
+    inspect_html,
+    read_json_lines,
+    read_xls,
+    read_xml,
+    read_xml_records,
+)
 from toolsmith.readers.pdf import read_pdf, render_pdf_page
 from toolsmith.result import unwrap
 
@@ -69,12 +76,26 @@ def main() -> int:
     assert wrapped.links[0].target == "/release"
     assert "opaque" not in wrapped.text
     assert unwrap(read_xml(b'<root><entry href="/one">One</entry></root>')).nodes == 2
+    scoped = unwrap(read_xml(b'<root xmlns:p="urn:outer"><inner xmlns:p="urn:inner"/></root>')).root
+    nested = scoped.content[0]
+    assert isinstance(nested, XmlElement)
+    assert scoped.namespaces["p"] == "urn:outer" and nested.namespaces["p"] == "urn:inner"
+    assert unwrap(
+        read_xml_records(
+            b"<root><row>one</row><row>two</row></root>", "row", lambda element: element.content
+        )
+    ) == (("one",), ("two",))
     assert unwrap(read_json_lines(b'{"id":1}\n{"id":2}\n')) == ({"id": 1}, {"id": 2})
     assert len(unwrap(resolve_urls("https://example.com/index", ("/one", "/two")))) == 2
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w") as writer:
         writer.writestr("folder/", b"")
         writer.writestr("folder/report.txt", b"Report")
+    xls = Path(__file__).resolve().parents[1] / "tests/fixtures/typed-cells.xls"
+    workbook = unwrap(read_xls(xls.read_bytes()))
+    assert workbook.rows[2][0].number_format == "0.00"
+    assert workbook.rows[2][0].value == "30.10000000000000142108547152020037174224853515625"
+    assert workbook.date_mode == 0 and workbook.rows[2][1].kind == "date"
     pdf = blank_pdf()
     assert unwrap(read_pdf(pdf)).total_pages == 1
     rendered = unwrap(render_pdf_page(pdf, 0, dpi=72))
@@ -91,7 +112,28 @@ def main() -> int:
         assert cli(["--output", str(output), "read", "xml", str(source)]) == 0
         assert json.loads(output.read_text())["result"]["root"]["name"] == "root"
         assert os.stat(output).st_mode & 0o777 == 0o600
-    print("Installed primitives: XML/JSONL/HTML/URL/ZIP/PDF/CLI passed; no added threads")
+        xls_output = root / "xls-result.json"
+        assert (
+            cli(
+                [
+                    "--output",
+                    str(xls_output),
+                    "read",
+                    "xls",
+                    str(xls),
+                    "--start",
+                    "2",
+                    "--limit",
+                    "1",
+                ]
+            )
+            == 0
+        )
+        assert (
+            json.loads(xls_output.read_text())["result"]["rows"][0][0]["value"]
+            == workbook.rows[2][0].value
+        )
+    print("Installed primitives: XML/JSONL/HTML/URL/ZIP/PDF/XLS/CLI passed; no added threads")
     return 0
 
 
