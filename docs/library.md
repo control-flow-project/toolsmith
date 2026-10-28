@@ -170,7 +170,7 @@ with sqlite3.connect(":memory:") as connection:
     source = lexical.Source("opaque-reference", "Exact source words", "Source")
     unwrap(lexical.index_source(connection, source, expected_digest=None))
     connection.execute("CREATE TABLE permitted_text (reference TEXT PRIMARY KEY, text_digest TEXT NOT NULL)")
-    connection.execute("INSERT INTO permitted_text VALUES (?, ?)", (source.reference, hashlib.sha256(source.text.encode()).hexdigest()))
+    connection.execute("INSERT INTO permitted_text VALUES (:reference, :text_digest)", {"reference": source.reference, "text_digest": hashlib.sha256(source.text.encode()).hexdigest()})
     matches = unwrap(lexical.search(connection, '"source words"', lexical.Scope("permitted_text")))
 ```
 

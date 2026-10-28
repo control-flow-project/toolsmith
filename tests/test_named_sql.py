@@ -53,3 +53,24 @@ def test_authored_sql_has_no_positional_placeholders() -> None:
                     ):
                         violations.append(f"{path.relative_to(root)}:{node.lineno}")
     assert not violations, "Positional SQL placeholders: " + ", ".join(violations)
+
+
+def test_documented_python_examples_use_named_sql() -> None:
+    root = Path(__file__).resolve().parents[1]
+    violations: list[str] = []
+    for path in sorted((root / "docs").rglob("*.md")):
+        for number, block in enumerate(
+            re.findall(r"```(?:python|py)\n(.*?)```", path.read_text(), re.S), 1
+        ):
+            for node in ast.walk(ast.parse(block)):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    if (
+                        re.match(
+                            r"\s*(?:SELECT|INSERT|UPDATE|DELETE|WITH|VALUES|WHERE|LIMIT|OFFSET)\b",
+                            node.value,
+                            re.I,
+                        )
+                        and chr(63) in node.value
+                    ):
+                        violations.append(f"{path.relative_to(root)}:block {number}:{node.lineno}")
+    assert not violations, "Positional SQL in documented examples: " + ", ".join(violations)
