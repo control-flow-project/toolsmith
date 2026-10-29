@@ -63,14 +63,15 @@ def test_documented_python_examples_use_named_sql() -> None:
             re.findall(r"```(?:python|py)\n(.*?)```", path.read_text(), re.S), 1
         ):
             for node in ast.walk(ast.parse(block)):
-                if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                    if (
-                        re.match(
-                            r"\s*(?:SELECT|INSERT|UPDATE|DELETE|WITH|VALUES|WHERE|LIMIT|OFFSET)\b",
-                            node.value,
-                            re.I,
-                        )
-                        and chr(63) in node.value
-                    ):
-                        violations.append(f"{path.relative_to(root)}:block {number}:{node.lineno}")
+                if (
+                    isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)
+                    and re.match(
+                        r"\s*(?:SELECT|INSERT|UPDATE|DELETE|WITH|VALUES|WHERE|LIMIT|OFFSET)\b",
+                        node.value,
+                        re.I,
+                    )
+                    and chr(63) in node.value
+                ):
+                    violations.append(f"{path.relative_to(root)}:block {number}:{node.lineno}")
     assert not violations, "Positional SQL in documented examples: " + ", ".join(violations)
