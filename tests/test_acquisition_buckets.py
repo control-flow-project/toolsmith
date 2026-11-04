@@ -39,7 +39,9 @@ def test_one_hundred_selections_run_in_five_parallel_serial_throttled_buckets() 
             return f"{group}:{index}"
 
         async with asyncio.timeout(5):
-            running = asyncio.create_task(run_buckets_async(buckets, acquire, clock=clock))
+            running = asyncio.create_task(
+                run_buckets_async(buckets, acquire, clock=clock, maximum_concurrency=5)
+            )
             for index in range(20):
                 starts = [await arrived.get() for _ in range(5)]
                 assert {value[0] for value in starts} == set(range(5))
@@ -101,3 +103,49 @@ def test_failure_in_one_operation_cancels_and_joins_other_workers() -> None:
         assert finished.is_set()
 
     asyncio.run(exercise())
+
+
+def test_many_publishers_share_one_finite_operation_limit() -> None:
+    async def exercise() -> None:
+        entered: asyncio.Queue[int] = asyncio.Queue()
+        releases = [asyncio.Event() for _ in range(35)]
+        active = peak = 0
+
+        async def acquire(value: int) -> int:
+            nonlocal active, peak
+            active += 1
+            peak = max(active, peak)
+            entered.put_nowait(value)
+            try:
+                await releases[value].wait()
+                return value
+            finally:
+                active -= 1
+
+        async with asyncio.timeout(5):
+            running = asyncio.create_task(
+                run_buckets_async(tuple(Bucket(str(i), (i,), 0) for i in range(35)), acquire)
+            )
+            first = [await entered.get() for _ in range(4)]
+            assert active == peak == 4
+            for value in first:
+                releases[value].set()
+            for _ in range(31):
+                value = await entered.get()
+                releases[value].set()
+            result = unwrap(await running)
+        assert peak == 4 and active == 0
+        assert tuple(bucket.items[0] for bucket in result) == tuple(range(35))
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("maximum", [0, 65, True, 1.5])
+def test_invalid_concurrency_fails_before_any_operation(maximum: int) -> None:
+    async def acquire(value: int) -> int:
+        raise AssertionError("Invalid concurrency reached acquisition")
+
+    result = asyncio.run(
+        run_buckets_async((Bucket("group", (1,), 0),), acquire, maximum_concurrency=maximum)
+    )
+    assert isinstance(result, Failure) and result.code == "invalid_input"

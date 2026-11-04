@@ -78,7 +78,7 @@ git clone https://github.com/control-flow-project/toolsmith.git
 cd toolsmith
 uv build --no-sources
 python3 -m venv .venv
-.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.5.0-py3-none-*.whl
+.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.5.1-py3-none-*.whl
 .venv/bin/toolsmith --json capabilities
 .venv/bin/toolsmith --root "$PWD/local-store" --collection sample store init
 ```

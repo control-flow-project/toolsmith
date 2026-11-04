@@ -27,9 +27,12 @@ async def run_buckets_async[Item, Value](
     operation: Callable[[Item], Awaitable[Value]],
     *,
     clock: Clock | None = None,
+    maximum_concurrency: int = 4,
 ) -> tuple[BucketResult[Value], ...]:
     if not isinstance(buckets, tuple) or not callable(operation):
         raise ToolsmithError("invalid_input", "Supply typed buckets and an asynchronous operation")
+    if type(maximum_concurrency) is not int or not 1 <= maximum_concurrency <= 64:
+        raise ToolsmithError("invalid_input", "Select one to 64 concurrent acquisitions")
     identities: set[str] = set()
     for bucket in buckets:
         if not isinstance(bucket, Bucket) or not isinstance(bucket.items, tuple):
@@ -47,6 +50,7 @@ async def run_buckets_async[Item, Value](
             raise ToolsmithError("invalid_input", "Bucket spacing must be finite and nonnegative")
         identities.add(identity)
     selected_clock = clock or SystemClock()
+    slots = asyncio.Semaphore(maximum_concurrency)
 
     async def run_bucket(bucket: Bucket[Item]) -> BucketResult[Value]:
         values: list[Value] = []
@@ -54,9 +58,10 @@ async def run_buckets_async[Item, Value](
         for item in bucket.items:
             while (remaining := ready - selected_clock.monotonic()) > 0:
                 await selected_clock.wait(remaining)
-            started = selected_clock.monotonic()
-            ready = started + bucket.minimum_interval_seconds
-            values.append(await operation(item))
+            async with slots:
+                started = selected_clock.monotonic()
+                ready = started + bucket.minimum_interval_seconds
+                values.append(await operation(item))
         return BucketResult(bucket.id, tuple(values))
 
     async with asyncio.TaskGroup() as group:

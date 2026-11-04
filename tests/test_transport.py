@@ -10,6 +10,8 @@ from aiohttp.base_protocol import BaseProtocol
 from aiohttp.http_exceptions import HttpProcessingError
 from aiohttp.http_parser import HttpResponseParser
 from conftest import ControlledClock
+from multidict import CIMultiDict, CIMultiDictProxy
+from yarl import URL
 
 from toolsmith.acquisition.transport import HttpMethod, NativeTransport
 from toolsmith.result import ToolsmithError
@@ -70,6 +72,11 @@ def native_request(monkeypatch: pytest.MonkeyPatch, clock: ControlledClock) -> N
                 allow_redirects: bool,
                 server_hostname: str,
             ) -> AsyncIterator[SourceResponse]:
+                assert isinstance(self.connector, aiohttp.TCPConnector)
+                resolver = self.connector._resolver
+                resolved = await resolver.resolve("example.com", 443)
+                assert [entry["host"] for entry in resolved] == ["8.8.8.8", "1.1.1.1"]
+                assert all(entry["hostname"] == "example.com" for entry in resolved)
                 assert method == "GET" and data is None
                 assert url == "https://example.com/path"
                 assert server_hostname == "example.com" and not allow_redirects
@@ -87,9 +94,19 @@ def native_request(monkeypatch: pytest.MonkeyPatch, clock: ControlledClock) -> N
                 )
                 try:
                     messages, _upgraded, _tail = parser.feed_data(wire)
+                except (HttpProcessingError, ValueError, OverflowError) as error:
+                    raise aiohttp.ClientResponseError(
+                        aiohttp.RequestInfo(
+                            URL(url), method, CIMultiDictProxy(CIMultiDict()), URL(url)
+                        ),
+                        (),
+                        status=400,
+                        message="Invalid fixture response headers",
+                    ) from error
+                try:
                     parser.feed_eof()
                 except (HttpProcessingError, ValueError, OverflowError) as error:
-                    raise aiohttp.ClientPayloadError("Invalid fixture response framing") from error
+                    raise aiohttp.ClientPayloadError("Response body ended early") from error
                 assert len(messages) == 1
                 message, payload = messages[0]
                 yield SourceResponse(message.code, message.raw_headers, payload)
@@ -98,7 +115,11 @@ def native_request(monkeypatch: pytest.MonkeyPatch, clock: ControlledClock) -> N
         return (
             NativeTransport()
             .request(
-                "https://example.com/path", ("8.8.8.8",), maximum, clock.monotonic() + 10, clock
+                "https://example.com/path",
+                ("8.8.8.8", "1.1.1.1"),
+                maximum,
+                clock.monotonic() + 10,
+                clock,
             )
             .content
         )
@@ -117,7 +138,7 @@ def test_native_transport_bounded_success_and_no_credentials(native_request: Nat
     [
         (ConnectionResetError("Controlled connection reset"), "unavailable"),
         (aiohttp.ServerDisconnectedError("Controlled server disconnect"), "unavailable"),
-        (aiohttp.ClientPayloadError("Controlled malformed response"), "http"),
+        (aiohttp.ClientPayloadError("Response body ended early"), "unavailable"),
         (ssl.SSLError("Controlled TLS rejection"), "tls"),
         (TimeoutError("Controlled deadline"), "limit"),
     ],
@@ -181,3 +202,14 @@ def test_native_response_headers_have_an_aggregate_bound(native_request: NativeR
     with pytest.raises(ToolsmithError) as exceeded:
         native_request(headers, b"plain", 10)
     assert exceeded.value.failure.code == "limit"
+
+
+def test_truncated_body_is_retryable_but_ambiguous_headers_are_not(
+    native_request: NativeRequest,
+) -> None:
+    with pytest.raises(ToolsmithError) as truncated:
+        native_request((("Content-Length", "7"),), b"short", 10)
+    assert truncated.value.failure.code == "unavailable"
+    with pytest.raises(ToolsmithError) as ambiguous:
+        native_request((("Content-Length", "5"), ("Content-Length", "5")), b"plain", 10)
+    assert ambiguous.value.failure.code == "http"

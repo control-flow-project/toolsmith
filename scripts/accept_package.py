@@ -62,7 +62,7 @@ assert importlib.util.find_spec('onnxruntime') is None
 assert importlib.util.find_spec('tokenizers') is None
 from toolsmith.semantic import Scope, Source, encode_query, initialize_index, inspect_model
 assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
-assert importlib.metadata.version('ctlflow-toolsmith') == '0.5.0'
+assert importlib.metadata.version('ctlflow-toolsmith') == '0.5.1'
 assert importlib.util.find_spec('aiohttp') is None
 assert importlib.util.find_spec('pypdfium2') is None
 assert importlib.util.find_spec('xlrd') is None
@@ -226,11 +226,11 @@ def check_archives(wheel: Path, source: Path) -> None:
 
 def main() -> int:
     require_limits()
-    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.5.0-py3-none-*.whl"))
+    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.5.1-py3-none-*.whl"))
     if len(wheels) != 1 or wheels[0].name.endswith("-any.whl"):
         raise RuntimeError("Expected one platform-tagged native wheel")
     wheel = wheels[0]
-    source = ROOT / "dist/ctlflow_toolsmith-0.5.0.tar.gz"
+    source = ROOT / "dist/ctlflow_toolsmith-0.5.1.tar.gz"
     check_archives(wheel, source)
     uv = os.environ.get("TOOLSMITH_UV") or shutil.which("uv")
     if uv is None:
@@ -272,7 +272,7 @@ def main() -> int:
             )
             assert capability["ok"] is True
             version_output = run([str(environment / "bin/toolsmith"), "--version"], workspace)
-            assert version_output.strip() == "toolsmith 0.5.0"
+            assert version_output.strip() == "toolsmith 0.5.1"
             command = json.loads(
                 run(
                     [

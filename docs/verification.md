@@ -493,3 +493,9 @@ The regression covers hidden-template inspection and unchanged static denial.
 The complete bounded verification and installed wheel/sdist/base/HTTP/semantic
 acceptance pass. No publisher request or generative model call is required for
 this change. Actual browser acceptance remains consumer-owned.
+
+## News acquisition primitives — 2026-11-04, 0.5.1
+
+The current isolated quality run passed formatting, lint, strict typing, wheel/sdist builds and all 48 test files. Bucket tests use controlled events to prove a four-operation default across 35 publishers, sequential publisher spacing and cancellation cleanup. Native parser tests retain all validated DNS addresses and distinguish truncated bodies from invalid headers. Download batches use that same concurrency owner.
+
+The separate package acceptance passed both wheel and source-distribution installation, installed CLI/library parity, optional-dependency absence and optional HTTP/PDF/XLS/semantic installation. No registry publication or consumer deployment is established by these local checks.

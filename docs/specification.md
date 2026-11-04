@@ -71,8 +71,8 @@ publication dates, article selection or executable code.
 - Immutable local text/file versions and exact citations, with lexical FTS5 search.
 - Approved HTTPS acquisition, bounded DNS/TLS/body/redirect handling and persistent
   local request pacing, quotas and cooldowns shared by cooperating callers.
-- Finite caller-selected acquisition buckets: all caller-defined buckets run concurrently,
-  each bucket is sequential and carries explicit start spacing. The downloader and
+- Finite caller-selected acquisition buckets share a default four-operation concurrency limit,
+  explicitly selectable from one to 64. Each bucket is sequential and carries explicit start spacing. The downloader and
   caller-owned asynchronous producers use one scheduler. Local spacing does not
   replace shared upstream quotas, cooldowns or caller authorization. No model,
   process, thread or autonomous link traversal is introduced.
@@ -162,8 +162,8 @@ SQLite connection owner retains private-file checks and pinned-parent URI openin
 
 Network access is HTTPS port 443 only, with exact reviewed DNS hosts. Reject URL
 credentials, secret-like query keys, fragments and control characters. Resolve with
-a finite lifetime, reject any non-public result and connect to a validated pinned
-address while validating TLS against the original hostname. Recheck every redirect.
+a finite lifetime, reject any non-public result and give the native connector the complete validated pinned
+address set while validating TLS against the original hostname. Recheck every redirect.
 Ignore proxy environment configuration. The high-level GET client never forwards
 cookies or credentials. Caller-owned native adapters may supply reviewed headers
 to the same low-level pinned transport. `request_pinned` and
@@ -176,6 +176,8 @@ DNS pinning, TLS verification, deadlines and response bounds. Request bodies are
 never included in errors or response metadata. `NativeTransport.request` and
 `request_async` expose that same primitive; high-level HTTP/archive/batch commands
 continue to perform GET requests only.
+
+Interrupted response bodies report unavailable; invalid response framing and unsupported encodings remain terminal HTTP/format failures. The transport does not retry; callers own recovery.
 
 Bound compressed and expanded data, requests, redirects and total I/O deadline.
 Upstream Retry-After and policy spacing return explicit deferral; no unconditional

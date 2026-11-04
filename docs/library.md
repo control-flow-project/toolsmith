@@ -60,7 +60,7 @@ HTTP client for a Toolsmith service, skill installation or fleet integration.
 | `toolsmith.search_batch` | `SearchQuery`, `EmbeddingQuery`, `QueryResult`, `SearchBatch`, `read_queries` |
 | `toolsmith.acquisition.urls` | `resolve_url`, `resolve_urls`, `ResolvedUrl`; resolution does not authorize requests |
 | `toolsmith.acquisition.batch` | `DownloadRequest`, `DownloadedFile`, `DownloadOutcome`, `DownloadBatch`, `download_batch`, `download_batch_async` |
-| `toolsmith.acquisition.buckets` | `Bucket`, `BucketResult`, `run_buckets_async`; finite caller-selected acquisition with per-bucket spacing |
+| `toolsmith.acquisition.buckets` | `Bucket`, `BucketResult`, `run_buckets_async`; finite caller-selected acquisition with per-bucket spacing and `maximum_concurrency=4` (1–64) |
 | `toolsmith.acquisition.transport` | `HttpMethod`, `NativeResolver`, `NativeTransport.request`/`request_async`, `request_pinned`, `request_pinned_async`; bounded DNS and pinned HTTPS transport |
 | `toolsmith.acquisition.client` | `HttpPolicy`, `FetchResponse`, `fetch_http`, `fetch_http_async` without an archive |
 | `toolsmith.acquisition.config` | `read_http_policy`, `read_budget_policy` |
