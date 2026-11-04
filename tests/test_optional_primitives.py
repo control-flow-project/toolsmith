@@ -94,6 +94,20 @@ def test_tree_rejects_symlinks_special_files_and_unbounded_directory_count(tmp_p
     assert isinstance(inventory(root, maximum_records=1), Failure)
 
 
+def test_private_tree_accepts_explicit_capacity_above_100000(tmp_path: Path) -> None:
+    root = tmp_path / "large-private"
+    root.mkdir(mode=0o700)
+    for index in range(100_001):
+        (root / str(index)).touch(mode=0o600)
+    assert isinstance(inventory(root, maximum_records=100_000), Failure)
+    entries = unwrap(inventory(root, maximum_records=100_001, maximum_bytes=1))
+    assert len(entries) == 100_001
+    assert unwrap(sync_directory_tree(root, maximum_records=100_001, maximum_bytes=1)) == 100_001
+    assert isinstance(inventory(root, maximum_records=2**63), Failure)
+    (root / "link").symlink_to(root / "0")
+    assert isinstance(inventory(root, maximum_records=2**63 - 1), Failure)
+
+
 def test_inventory_snapshot_does_not_copy_changed_sources(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.write_bytes(b"original")
