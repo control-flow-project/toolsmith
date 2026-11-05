@@ -149,6 +149,11 @@ scope and file ownership at public boundaries. Regular-file input never follows
 symlinks or opens special files. Local private storage uses pinned directory
 descriptors, no-follow opens, private modes and cooperating-caller kernel locks.
 No tool interprets source text as instructions or executes stored content.
+Directory inventory and synchronization accept a caller-selected positive signed
+64-bit entry budget, defaulting to 10,000 visited entries. There is no separate
+100,000-entry ceiling. Directory entries count toward that budget; byte, depth,
+private ownership, no-link and regular-file checks remain mandatory. Inventory
+materializes metadata; callers own memory limits for the selected population.
 Explicit standalone file output may use an owned, non-group-writable parent;
 collection roots and persistent quota/journal state remain private. Outputs are
 private files, not permission changes to an existing parent. Replacement owns

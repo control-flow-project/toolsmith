@@ -34,7 +34,7 @@ def walk_tree(
     *,
     sync: bool = False,
 ) -> Iterator[FileEntry]:
-    maximum = integer(maximum_records, 1, 100000, "Maximum inventory records")
+    maximum = integer(maximum_records, 1, 2**63 - 1, "Maximum inventory records")
     byte_budget = integer(maximum_bytes, 1, 2**63 - 1, "Inventory byte budget")
     visited, used = 0, 0
 
