@@ -27,7 +27,7 @@ For selected network acquisition:
 .venv/bin/python -m pip install "$(printf '%s' dist/ctlflow_toolsmith-0.5.1-py3-none-*.whl)[http]"
 ```
 
-The `http` extra installs `dnspython==2.8.0` and `aiohttp==3.14.5`. One cooperative
+The `http` extra installs `dnspython==2.9.0` and `aiohttp==3.14.5`. One cooperative
 async transport supplies both synchronous and asynchronous callers; no worker
 threads, proxy configuration or browser processes are used. The `pdf` extra
 installs `pypdfium2==5.14.0` and `Pillow==13.0.0` for in-process text extraction

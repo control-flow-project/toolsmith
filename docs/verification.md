@@ -499,3 +499,20 @@ this change. Actual browser acceptance remains consumer-owned.
 The current isolated quality run passed formatting, lint, strict typing, wheel/sdist builds and all 48 test files. Bucket tests use controlled events to prove a four-operation default across 35 publishers, sequential publisher spacing and cancellation cleanup. Native parser tests retain all validated DNS addresses and distinguish truncated bodies from invalid headers. Download batches use that same concurrency owner.
 
 The separate package acceptance passed both wheel and source-distribution installation, installed CLI/library parity, optional-dependency absence and optional HTTP/PDF/XLS/semantic installation. No registry publication or consumer deployment is established by these local checks.
+
+## Integrated news primitives — 2026-11-05, 0.5.1
+
+Current main's caller-selected private-tree capacity is retained. The integrated
+bounded gate passed all 584 cases across 48 isolated files, format/lint, strict
+types and wheel/sdist builds. Installed wheel/sdist acceptance passed, including
+base optional-dependency absence and HTTP/PDF/XLS/semantic installation. The
+native DNS/TLS HTTPS acceptance passed one approved public request.
+
+The first dependency audit found CVE-2026-114605 in the old dnspython 2.8.0 pin.
+The current HTTP extra pins 2.9.0, uploaded 9 October 2026, within the existing
+17 October dependency cutoff. No release-age exemption or audit suppression was
+added. The complete gate and installed acceptance passed again with that pin;
+the current audit reports no known vulnerabilities. These are local package
+checks, not a completed consumer news run or registry publication.
+
+- [Upstream dnspython 2.9.0 release](https://github.com/rthalley/dnspython/releases/tag/v2.9.0)
