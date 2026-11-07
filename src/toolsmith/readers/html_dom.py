@@ -63,6 +63,7 @@ READ_ATTRIBUTES = frozenset(
         "aria-hidden",
         "aria-modal",
         "class",
+        "colspan",
         "content",
         "datetime",
         "hidden",
@@ -74,6 +75,7 @@ READ_ATTRIBUTES = frozenset(
         "property",
         "rel",
         "role",
+        "rowspan",
         "src",
         "srcset",
         "style",
@@ -212,7 +214,7 @@ SEMANTIC_TAGS = frozenset(
 
 
 def content_html(node: Node) -> str:
-    """One semantic rendering: no attributes, resources, page controls or scripts."""
+    """Semantic rendering; only meaningful table spans survive as attributes."""
     if excluded(node) or node.tag == "title":
         return ""
     parts = [
@@ -226,7 +228,12 @@ def content_html(node: Node) -> str:
     if tag in SEMANTIC_TAGS:
         if tag in {"br", "hr"}:
             return "<" + tag + ">"
-        return "<" + tag + ">" + body.strip() + "</" + tag + ">" if body.strip() else ""
+        spans = "".join(
+            " " + key + '="' + escape(node.attributes[key], quote=True) + '"'
+            for key in ("rowspan", "colspan")
+            if tag in {"td", "th"} and key in node.attributes
+        )
+        return "<" + tag + spans + ">" + body.strip() + "</" + tag + ">" if body.strip() else ""
     return "\n" + body.strip() + "\n" if node.tag in BLOCK else body
 
 

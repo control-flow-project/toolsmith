@@ -84,6 +84,20 @@ def test_encoded_text_cannot_become_markup_and_inline_word_spacing_is_preserved(
     )
 
 
+def test_table_spans_keep_cell_relationships_without_decorative_attributes() -> None:
+    result = unwrap(
+        inspect_html(
+            b'<table><tr><th colspan="2" class="tracking">Reported amounts</th></tr>'
+            b'<tr><td rowspan="2" onclick="bad()">Revenue</td><td>120</td></tr>'
+            b"<tr><td>140</td></tr></table>"
+        )
+    )
+    assert '<th colspan="2">Reported amounts</th>' in result.semantic_html
+    assert '<td rowspan="2">Revenue</td>' in result.semantic_html
+    assert "onclick" not in result.semantic_html
+    assert "class=" not in result.semantic_html
+
+
 def test_missing_html_dependency_fails_without_selecting_another_parser() -> None:
     imported = builtins.__import__
 

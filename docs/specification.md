@@ -59,7 +59,8 @@ HTML maximum_nodes defaults to 50,000 and can explicitly select up to 500,000
 through that same parser. Node and nesting failures report actual/maximum counts.
 Depth 128, password/access and extracted-text budgets remain in force.
 Inspection also supplies `semantic_html`: headings, paragraphs, lists, table
-structure, quotations and inline emphasis, with all attributes removed. It omits
+structure, quotations and inline emphasis. Decorative attributes are removed;
+table `rowspan` and `colspan` remain because they define cell relationships. It omits
 scripts, page controls and known clutter, unwraps decorative elements and escapes
 literal text. Link targets and metadata remain separate typed observations.
 This is static structural cleaning, not proof of article completeness or accurate
