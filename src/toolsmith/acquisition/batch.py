@@ -97,7 +97,6 @@ async def download_one(
     network_state: Path,
     task: str,
     clock: Clock,
-    semaphore: asyncio.Semaphore,
     resolver: Resolver | None,
     transport: Transport | None,
 ) -> DownloadOutcome:
@@ -124,7 +123,6 @@ async def download_one(
                 resolver=resolver,
                 transport=transport,
                 before_request=before_request,
-                network_limit=semaphore,
                 expected_configuration_digest=request.configuration_digest,
             )
         )
@@ -166,11 +164,8 @@ async def download_batch_async(
     for request in requests:
         groups[request.budget.group].append(request)
     maximum = (
-        max(1, len(groups))
-        if concurrency is None
-        else integer(concurrency, 1, 2**31 - 1, "Concurrent network operations")
+        4 if concurrency is None else integer(concurrency, 1, 64, "Concurrent network operations")
     )
-    semaphore = asyncio.Semaphore(maximum)
     outcomes: dict[str, DownloadOutcome] = {}
     blocked: dict[str, Failure] = {}
 
@@ -187,7 +182,7 @@ async def download_batch_async(
         else:
             try:
                 outcome = await download_one(
-                    request, network_state, task, selected_clock, semaphore, resolver, transport
+                    request, network_state, task, selected_clock, resolver, transport
                 )
             except asyncio.CancelledError:
                 outcomes[request.id] = DownloadOutcome(
@@ -210,7 +205,11 @@ async def download_batch_async(
     )
     try:
         async with asyncio.timeout(duration):
-            unwrap(await run_buckets_async(buckets, download, clock=selected_clock))
+            unwrap(
+                await run_buckets_async(
+                    buckets, download, clock=selected_clock, maximum_concurrency=maximum
+                )
+            )
     except TimeoutError:
         pass
     items = tuple(

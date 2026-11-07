@@ -172,7 +172,8 @@ async def request_pinned_async(
         raise ToolsmithError(
             "invalid_input", "Transport requires a host and a validated pinned address"
         )
-    host, address = parts.hostname, public_address(addresses[0])
+    host = parts.hostname
+    pinned = tuple(dict.fromkeys(public_address(address) for address in addresses))
     if any(
         name.lower() in {"host", "content-length", "transfer-encoding"} for name, _value in headers
     ):
@@ -188,20 +189,18 @@ async def request_pinned_async(
                 raise ToolsmithError(
                     "denied", "Connection does not match the validated host and port"
                 )
-            selected_family = (
-                socket.AF_INET6
-                if isinstance(ipaddress.ip_address(address), ipaddress.IPv6Address)
-                else socket.AF_INET
-            )
             return [
                 ResolveResult(
                     hostname=host,
                     host=address,
                     port=443,
-                    family=selected_family,
+                    family=socket.AF_INET6
+                    if isinstance(ipaddress.ip_address(address), ipaddress.IPv6Address)
+                    else socket.AF_INET,
                     proto=0,
                     flags=socket.AI_NUMERICHOST,
                 )
+                for address in pinned
             ]
 
         async def close(self) -> None:
@@ -253,7 +252,7 @@ async def request_pinned_async(
                 wire = bytes(content)
                 length = one_header(observed, "content-length")
                 if length is not None and len(wire) != int(length.lstrip("0") or "0"):
-                    raise ToolsmithError("http", "Response ended before its declared length")
+                    raise ToolsmithError("unavailable", "Response ended before its declared length")
                 return Response(
                     response.status,
                     observed,
@@ -266,7 +265,7 @@ async def request_pinned_async(
         ) from error
     except TimeoutError as error:
         raise ToolsmithError("limit", "The explicit network deadline was exhausted") from error
-    except (OSError, aiohttp.ClientConnectionError) as error:
+    except (OSError, aiohttp.ClientConnectionError, aiohttp.ClientPayloadError) as error:
         raise ToolsmithError(
             "unavailable", "Approved source connection failed within its deadline"
         ) from error

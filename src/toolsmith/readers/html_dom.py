@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass, field
-from html.parser import HTMLParser
+from html import escape
 
 from toolsmith.readers.text import decode_text, normalize_text
 from toolsmith.result import ToolsmithError
@@ -29,22 +29,6 @@ OMIT = {
     "canvas",
 }
 FORMS = {"form", "button", "select", "input", "textarea"}
-VOID = {
-    "area",
-    "base",
-    "br",
-    "col",
-    "embed",
-    "hr",
-    "img",
-    "input",
-    "link",
-    "meta",
-    "param",
-    "source",
-    "track",
-    "wbr",
-}
 BLOCK = {
     "p",
     "div",
@@ -79,6 +63,7 @@ READ_ATTRIBUTES = frozenset(
         "aria-hidden",
         "aria-modal",
         "class",
+        "colspan",
         "content",
         "datetime",
         "hidden",
@@ -90,6 +75,7 @@ READ_ATTRIBUTES = frozenset(
         "property",
         "rel",
         "role",
+        "rowspan",
         "src",
         "srcset",
         "style",
@@ -138,52 +124,6 @@ def excluded(node: Node, *, include_forms: bool = False, include_navigation: boo
     )
 
 
-class MeaningfulParser(HTMLParser):
-    def __init__(self, maximum_nodes: int) -> None:
-        super().__init__(convert_charrefs=True)
-        self.root = Node("root", {})
-        self.stack = [self.root]
-        self.nodes = 0
-        self.maximum_nodes = maximum_nodes
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.nodes += 1
-        if self.nodes > self.maximum_nodes:
-            raise ToolsmithError(
-                "limit", f"HTML node budget exceeded: {self.nodes} > {self.maximum_nodes}"
-            )
-        if len(self.stack) >= 128:
-            raise ToolsmithError("limit", f"HTML nesting budget exceeded: {len(self.stack)} >= 128")
-        if len(attrs) > 100:
-            raise ToolsmithError("limit", f"HTML attribute count exceeded: {len(attrs)} > 100")
-        if any(len(name) > 500 for name, _ in attrs):
-            raise ToolsmithError("limit", "HTML attribute exceeds its field budget")
-        selected: dict[str, str] = {}
-        for name, value in attrs:
-            if name in READ_ATTRIBUTES:
-                selected.setdefault(name, value or "")
-        if tag in {"p", "li"} and self.stack[-1].tag == tag:
-            self.stack.pop()
-        node = Node(tag, selected)
-        self.stack[-1].children.append(node)
-        if tag not in VOID:
-            self.stack.append(node)
-
-    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.handle_starttag(tag, attrs)
-        if tag not in VOID:
-            self.handle_endtag(tag)
-
-    def handle_endtag(self, tag: str) -> None:
-        for position in range(len(self.stack) - 1, 0, -1):
-            if self.stack[position].tag == tag:
-                del self.stack[position:]
-                return
-
-    def handle_data(self, data: str) -> None:
-        self.stack[-1].children.append(data)
-
-
 def parse_html(
     content: bytes,
     *,
@@ -192,15 +132,109 @@ def parse_html(
 ) -> Node:
     maximum = integer(maximum_bytes, 1, MAX_HTML_BYTES, "Maximum HTML bytes")
     nodes = integer(maximum_nodes, 1, MAX_HTML_NODES, "Maximum HTML nodes")
-    parser = MeaningfulParser(nodes)
     try:
-        parser.feed(decode_text(content, maximum))
-        parser.close()
+        from bs4 import BeautifulSoup, Comment, Declaration, Doctype, FeatureNotFound, Tag
+        from bs4.element import NavigableString
+    except ImportError as error:
+        raise ToolsmithError(
+            "unavailable", "HTML reading requires the optional html extra"
+        ) from error
+    try:
+        document = BeautifulSoup(
+            decode_text(content, maximum), "lxml", multi_valued_attributes=None
+        )
+    except FeatureNotFound as error:
+        raise ToolsmithError(
+            "unavailable", "HTML reading requires the optional html extra"
+        ) from error
     except (AssertionError, ValueError, RecursionError) as error:
         raise ToolsmithError(
             "invalid_input", "HTML declarations or structure are malformed"
         ) from error
-    return parser.root
+    root = Node("root", {})
+    pending = [(child, root, 1) for child in reversed(document.contents)]
+    count = 0
+    while pending:
+        child, parent, depth = pending.pop()
+        if isinstance(child, (Comment, Declaration, Doctype)):
+            continue
+        if isinstance(child, Tag):
+            count += 1
+            if count > nodes:
+                raise ToolsmithError("limit", f"HTML node budget exceeded: {count} > {nodes}")
+            if depth >= 128:
+                raise ToolsmithError("limit", f"HTML nesting budget exceeded: {depth} >= 128")
+            attributes: dict[str, str] = {}
+            for name in READ_ATTRIBUTES:
+                value = child.attrs.get(name)
+                if name in child.attrs:
+                    attributes[name] = " ".join(value) if isinstance(value, list) else value or ""
+            node = Node(child.name, attributes)
+            parent.children.append(node)
+            pending.extend((item, node, depth + 1) for item in reversed(child.contents))
+        elif isinstance(child, NavigableString):
+            parent.children.append(str(child))
+    return root
+
+
+SEMANTIC_TAGS = frozenset(
+    [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "p",
+        "ul",
+        "ol",
+        "li",
+        "table",
+        "thead",
+        "tbody",
+        "tfoot",
+        "tr",
+        "th",
+        "td",
+        "caption",
+        "blockquote",
+        "pre",
+        "code",
+        "strong",
+        "em",
+        "br",
+        "hr",
+        "sub",
+        "sup",
+        "dl",
+        "dt",
+        "dd",
+    ]
+)
+
+
+def content_html(node: Node) -> str:
+    """Semantic rendering; only meaningful table spans survive as attributes."""
+    if excluded(node) or node.tag == "title":
+        return ""
+    parts = [
+        escape(re.sub(r"\s+", " ", child), quote=False)
+        if isinstance(child, str)
+        else content_html(child)
+        for child in node.children
+    ]
+    body = "".join(parts)
+    tag = {"b": "strong", "i": "em"}.get(node.tag, node.tag)
+    if tag in SEMANTIC_TAGS:
+        if tag in {"br", "hr"}:
+            return "<" + tag + ">"
+        spans = "".join(
+            " " + key + '="' + escape(node.attributes[key], quote=True) + '"'
+            for key in ("rowspan", "colspan")
+            if tag in {"td", "th"} and key in node.attributes
+        )
+        return "<" + tag + spans + ">" + body.strip() + "</" + tag + ">" if body.strip() else ""
+    return "\n" + body.strip() + "\n" if node.tag in BLOCK else body
 
 
 def descendants(
@@ -230,7 +264,7 @@ def content_text(node: Node, *, include_forms: bool = False) -> str:
                 parts.extend(("\n", value, "\n"))
             elif child.tag in {"td", "th"}:
                 parts.extend((value, "\t"))
-            elif child.tag not in {"head", "title"}:
+            elif child.tag != "title":
                 parts.append(value)
     return "".join(parts)
 

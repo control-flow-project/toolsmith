@@ -29,6 +29,11 @@ proposed only after this coverage work; no import aliases are retained.
 
 - Bounded UTF-8 text, meaningful HTML and RSS/Atom reading.
 
+HTML reading uses Beautiful Soup with the explicitly selected lxml HTML parser,
+installed through the optional `html` extra. RSS/Atom title and description HTML
+normalization uses the same parser and extra. No alternate parser is selected when
+the dependency is absent. The parsed HTML tree can include implied
+html/head/body elements; these count toward the same node and nesting budgets.
 HTML inspection reports markup signals and rejects document-title access screens;
 it does not infer computed CSS visibility. Static text reading still rejects
 unresolved access dialogs. Browser-owning callers validate computed-visible DOM
@@ -40,8 +45,9 @@ an explicit truncation flag. The parser retains only attributes used by reading,
 visibility, resource and link inspection. Unused attributes do not acquire an
 independent value-size limit. Reading attributes also use the complete selected
 HTML input bound, not an 8,192-character per-value cutoff; a long decorative
-attribute must not erase the rest of a readable page. Node/depth/name budgets
-still apply. Form containers preserve ordinary text and links, including pages
+attribute must not erase the rest of a readable page. Node/depth budgets
+still apply. Ignored attribute count/names do not reject a bounded input: the
+retained attribute vocabulary is fixed. Form containers preserve ordinary text and links, including pages
 wrapped by ASP.NET forms; controls and their values remain excluded. Password
 signals and access-screen rejection remain unchanged.
 Duplicate HTML attributes retain their first value; later duplicates never
@@ -50,9 +56,15 @@ XML/feed validation or the untrusted-link authorization boundary.
 HTML inspection and reading retain a 4 MiB default input budget; explicit
 `maximum_bytes` can select up to 8 MiB through the same DOM parser.
 HTML maximum_nodes defaults to 50,000 and can explicitly select up to 500,000
-through that same parser. Node, nesting and attribute-count failures report
-the actual observed/maximum count separately. Depth 128, attributes 100,
-password/access and extracted-text budgets remain unchanged.
+through that same parser. Node and nesting failures report actual/maximum counts.
+Depth 128, password/access and extracted-text budgets remain in force.
+Inspection also supplies `semantic_html`: headings, paragraphs, lists, table
+structure, quotations and inline emphasis. Decorative attributes are removed;
+table `rowspan` and `colspan` remain because they define cell relationships. It omits
+scripts, page controls and known clutter, unwraps decorative elements and escapes
+literal text. Link targets and metadata remain separate typed observations.
+This is static structural cleaning, not proof of article completeness or accurate
+computed visibility, and table markup is not interpreted as validated records.
 XML retains its 32 MiB default, with an explicit byte ceiling of 144 MiB; its
 independent node, depth and field limits remain in force. The shared UTF-8 reader
 and explicit regular-file reads support the same 144 MiB ceiling, without
@@ -71,8 +83,8 @@ publication dates, article selection or executable code.
 - Immutable local text/file versions and exact citations, with lexical FTS5 search.
 - Approved HTTPS acquisition, bounded DNS/TLS/body/redirect handling and persistent
   local request pacing, quotas and cooldowns shared by cooperating callers.
-- Finite caller-selected acquisition buckets: all caller-defined buckets run concurrently,
-  each bucket is sequential and carries explicit start spacing. The downloader and
+- Finite caller-selected acquisition buckets share a default four-operation concurrency limit,
+  explicitly selectable from one to 64. Each bucket is sequential and carries explicit start spacing. The downloader and
   caller-owned asynchronous producers use one scheduler. Local spacing does not
   replace shared upstream quotas, cooldowns or caller authorization. No model,
   process, thread or autonomous link traversal is introduced.
@@ -167,8 +179,8 @@ SQLite connection owner retains private-file checks and pinned-parent URI openin
 
 Network access is HTTPS port 443 only, with exact reviewed DNS hosts. Reject URL
 credentials, secret-like query keys, fragments and control characters. Resolve with
-a finite lifetime, reject any non-public result and connect to a validated pinned
-address while validating TLS against the original hostname. Recheck every redirect.
+a finite lifetime, reject any non-public result and give the native connector the complete validated pinned
+address set while validating TLS against the original hostname. Recheck every redirect.
 Ignore proxy environment configuration. The high-level GET client never forwards
 cookies or credentials. Caller-owned native adapters may supply reviewed headers
 to the same low-level pinned transport. `request_pinned` and
@@ -181,6 +193,8 @@ DNS pinning, TLS verification, deadlines and response bounds. Request bodies are
 never included in errors or response metadata. `NativeTransport.request` and
 `request_async` expose that same primitive; high-level HTTP/archive/batch commands
 continue to perform GET requests only.
+
+Interrupted response bodies report unavailable; invalid response framing and unsupported encodings remain terminal HTTP/format failures. The transport does not retry; callers own recovery.
 
 Bound compressed and expanded data, requests, redirects and total I/O deadline.
 Upstream Retry-After and policy spacing return explicit deferral; no unconditional

@@ -60,7 +60,7 @@ HTTP client for a Toolsmith service, skill installation or fleet integration.
 | `toolsmith.search_batch` | `SearchQuery`, `EmbeddingQuery`, `QueryResult`, `SearchBatch`, `read_queries` |
 | `toolsmith.acquisition.urls` | `resolve_url`, `resolve_urls`, `ResolvedUrl`; resolution does not authorize requests |
 | `toolsmith.acquisition.batch` | `DownloadRequest`, `DownloadedFile`, `DownloadOutcome`, `DownloadBatch`, `download_batch`, `download_batch_async` |
-| `toolsmith.acquisition.buckets` | `Bucket`, `BucketResult`, `run_buckets_async`; finite caller-selected acquisition with per-bucket spacing |
+| `toolsmith.acquisition.buckets` | `Bucket`, `BucketResult`, `run_buckets_async`; finite caller-selected acquisition with per-bucket spacing and `maximum_concurrency=4` (1–64) |
 | `toolsmith.acquisition.transport` | `HttpMethod`, `NativeResolver`, `NativeTransport.request`/`request_async`, `request_pinned`, `request_pinned_async`; bounded DNS and pinned HTTPS transport |
 | `toolsmith.acquisition.client` | `HttpPolicy`, `FetchResponse`, `fetch_http`, `fetch_http_async` without an archive |
 | `toolsmith.acquisition.config` | `read_http_policy`, `read_budget_policy` |
@@ -197,8 +197,10 @@ Importing either loads no optional native package or model. See
 HTML `inspect_html` and `read_html` accept keyword-only `maximum_bytes`: default
 4 MiB, explicit ceiling 8 MiB. They use the same parser and retain independent
 access/password and extracted-text limits. Their keyword-only maximum_nodes
-defaults to 50,000 and accepts at most 500,000; depth 128 and attributes 100 remain
-independent. Failures distinguish node, nesting and attribute counts.
+defaults to 50,000 and accepts at most 500,000; depth 128 remains independent.
+Failures distinguish node and nesting counts. Reading attributes share the selected
+input byte bound; unused attributes have no separate count cutoff. Inspection
+semantic HTML retains table rowspan/colspan but removes decorative attributes.
 `XmlLimits.maximum_bytes` defaults to 32 MiB and can explicitly reach 144 MiB; node/depth/field limits remain
 separate. `read_text` and safe explicit `read_bytes` share that 144 MiB input
 ceiling; their default budgets and file-write/storage limits are unchanged.

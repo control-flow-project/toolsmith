@@ -62,7 +62,7 @@ assert importlib.util.find_spec('onnxruntime') is None
 assert importlib.util.find_spec('tokenizers') is None
 from toolsmith.semantic import Scope, Source, encode_query, initialize_index, inspect_model
 assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
-assert importlib.metadata.version('ctlflow-toolsmith') == '0.5.0'
+assert importlib.metadata.version('ctlflow-toolsmith') == '0.5.1'
 assert importlib.util.find_spec('aiohttp') is None
 assert importlib.util.find_spec('pypdfium2') is None
 assert importlib.util.find_spec('xlrd') is None
@@ -80,30 +80,14 @@ assert metadata['License-Expression'] == 'MIT'
 assert metadata.get_all('License-File') == ['LICENSE']
 assert not any(value.startswith('Private ::') for value in metadata.get_all('Classifier', []))
 assert set(parent.iterdir()) == before
-assert unwrap(read_html(b'<main>Meaningful text</main>')).parts[0].text == 'Meaningful text'
-large_html = b'<main data-padding="' + b'x' * (4 * 1024 * 1024) + b'">Installed bound</main>'
-assert isinstance(inspect_html(large_html), Failure)
-assert unwrap(inspect_html(large_html, maximum_bytes=8 * 1024 * 1024)).text == 'Installed bound'
-assert unwrap(read_html(large_html, maximum_bytes=8 * 1024 * 1024)).parts[0].text == 'Installed bound'
+assert importlib.util.find_spec('bs4') is None and importlib.util.find_spec('lxml') is None
+html_missing = inspect_html(b'<main>Reporting</main>')
+assert isinstance(html_missing, Failure) and html_missing.code == 'unavailable'
 from toolsmith.readers import XmlLimits
 assert unwrap(read_xml(b'<root/>', XmlLimits(maximum_bytes=144 * 1024 * 1024))).root.name == 'root'
 from toolsmith.cli import main
-bounded_html = parent / 'explicit-bound.html'
-bounded_html.write_bytes(large_html)
-assert main(['--json', 'read', 'html', str(bounded_html), '--maximum-bytes', str(8 * 1024 * 1024)]) == 0
-bounded_html.unlink()
-del large_html
-dense_html = b'<main>' + b'<br>' * 50000 + b'Installed nodes</main>'
-assert isinstance(inspect_html(dense_html), Failure)
-assert unwrap(inspect_html(dense_html, maximum_nodes=500000)).text == 'Installed nodes'
-assert unwrap(read_html(dense_html, maximum_nodes=500000)).parts[0].text == 'Installed nodes'
-bounded_html.write_bytes(dense_html)
-for reader in ('html', 'html-links'):
-    assert main(['--json', 'read', reader, str(bounded_html), '--maximum-nodes', '500000']) == 0
-bounded_html.unlink()
-del dense_html
-assert len(unwrap(read_feed(b'<rss><channel><item><title>A</title><link>https://example.com/a</link></item></channel></rss>', 'https://example.com/feed')).entries) == 1
-assert unwrap(read_feed(b'<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="?page=2"/></feed>', 'https://example.com/feed')).next_url == 'https://example.com/feed?page=2'
+missing_feed = read_feed(b'<rss><channel><item><title>A</title><link>https://example.com/a</link></item></channel></rss>', 'https://example.com/feed')
+assert isinstance(missing_feed, Failure) and missing_feed.code == 'unavailable'
 root = parent / 'store'
 unwrap(initialize_store(root, 'sample'))
 document = unwrap(read_text(b'Installed package lexical words', 'Installed'))
@@ -139,10 +123,6 @@ assert unwrap(inspect_budget(settings, selected, 'assignment')).task_bytes == 40
 before_audit = (settings / 'budget.json').read_bytes()
 assert unwrap(check_budget(settings, (selected,))) == 0
 assert (settings / 'budget.json').read_bytes() == before_audit
-assert unwrap(inspect_html(b'<main>Public text</main><input type="password">')).password_controls
-linked = unwrap(inspect_html(b'<nav><a href="/section">Section</a></nav><main data-unused="' + b'x' * 20000 + b'"><a href="/article">Article</a></main>'))
-assert tuple(link.target for link in linked.links) == ('/section', '/article')
-assert linked.links[1].label == 'Article' and not linked.links[1].label_truncated
 assert unwrap(replace_bytes(parent / 'explicit-output.txt', b'private output')) == 14
 assert not (parent / '.lock').exists()
 assert unwrap(project_table(unwrap(decode_table(b'Name,Value\\nA,10\\n')), ('Value',), {'Name':'A'})).matched == 1
@@ -151,6 +131,50 @@ journal.mkdir(mode=0o700)
 record = unwrap(append_record(journal, {'generic':'event'}))
 assert unwrap(read_journal(journal)) == (record,)
 print(json.dumps({'installed_library':'passed','base_dependencies':0,'optional_http_absent':True,'schema_license_and_typed_result':'passed'}))
+"""
+
+
+HTML_SMOKE = """
+import io
+import json
+from contextlib import redirect_stdout
+from pathlib import Path
+from toolsmith.readers import inspect_html, read_html, read_feed
+from toolsmith.result import Failure, unwrap
+from toolsmith.cli import main
+parent = Path.cwd()
+assert unwrap(read_html(b'<main>Meaningful text</main>')).parts[0].text == 'Meaningful text'
+large_html = b'<main data-padding="' + b'x' * (4 * 1024 * 1024) + b'">Installed bound</main>'
+assert isinstance(inspect_html(large_html), Failure)
+assert unwrap(inspect_html(large_html, maximum_bytes=8 * 1024 * 1024)).text == 'Installed bound'
+assert unwrap(read_html(large_html, maximum_bytes=8 * 1024 * 1024)).parts[0].text == 'Installed bound'
+bounded_html = parent / 'explicit-bound.html'
+bounded_html.write_bytes(large_html)
+with redirect_stdout(io.StringIO()) as output:
+    assert main(['--json', 'read', 'html', str(bounded_html), '--maximum-bytes', str(8 * 1024 * 1024)]) == 0
+assert json.loads(output.getvalue())['ok'] is True
+bounded_html.unlink()
+del large_html
+dense_html = b'<main>' + b'<br>' * 50000 + b'Installed nodes</main>'
+assert isinstance(inspect_html(dense_html), Failure)
+assert unwrap(inspect_html(dense_html, maximum_nodes=500000)).text == 'Installed nodes'
+assert unwrap(read_html(dense_html, maximum_nodes=500000)).parts[0].text == 'Installed nodes'
+bounded_html.write_bytes(dense_html)
+for reader in ('html', 'html-links'):
+    with redirect_stdout(io.StringIO()) as output:
+        assert main(['--json', 'read', reader, str(bounded_html), '--maximum-nodes', '500000']) == 0
+    assert json.loads(output.getvalue())['ok'] is True
+bounded_html.unlink()
+del dense_html
+assert unwrap(inspect_html(b'<main>Public text</main><input type="password">')).password_controls
+linked = unwrap(inspect_html(b'<nav><a href="/section">Section</a></nav><main data-unused="' + b'x' * 20000 + b'"><a href="/article">Article</a></main>'))
+assert tuple(link.target for link in linked.links) == ('/section', '/article')
+assert linked.links[1].label == 'Article' and not linked.links[1].label_truncated
+assert len(unwrap(read_feed(b'<rss><channel><item><title>A</title><link>https://example.com/a</link></item></channel></rss>', 'https://example.com/feed')).entries) == 1
+assert unwrap(read_feed(b'<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="?page=2"/></feed>', 'https://example.com/feed')).next_url == 'https://example.com/feed?page=2'
+semantic = unwrap(inspect_html(b'<h1 class="title">Results</h1><p data-x="1">Revenue rose.</p>')).semantic_html
+assert semantic == '<h1>Results</h1><p>Revenue rose.</p>'
+print('Installed optional HTML library/CLI passed')
 """
 
 
@@ -187,7 +211,10 @@ def check_archives(wheel: Path, source: Path) -> None:
         metadata = archive.read(next(name for name in names if name.endswith("/METADATA"))).decode()
         check_license(metadata, archive.read(license_path).decode())
         assert all(
-            any("extra == '" + name + "'" in line for name in ("http", "pdf", "semantic", "xls"))
+            any(
+                "extra == '" + name + "'" in line
+                for name in ("html", "http", "pdf", "semantic", "xls")
+            )
             for line in metadata.splitlines()
             if line.startswith("Requires-Dist:")
         )
@@ -226,11 +253,11 @@ def check_archives(wheel: Path, source: Path) -> None:
 
 def main() -> int:
     require_limits()
-    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.5.0-py3-none-*.whl"))
+    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.5.1-py3-none-*.whl"))
     if len(wheels) != 1 or wheels[0].name.endswith("-any.whl"):
         raise RuntimeError("Expected one platform-tagged native wheel")
     wheel = wheels[0]
-    source = ROOT / "dist/ctlflow_toolsmith-0.5.0.tar.gz"
+    source = ROOT / "dist/ctlflow_toolsmith-0.5.1.tar.gz"
     check_archives(wheel, source)
     uv = os.environ.get("TOOLSMITH_UV") or shutil.which("uv")
     if uv is None:
@@ -272,7 +299,7 @@ def main() -> int:
             )
             assert capability["ok"] is True
             version_output = run([str(environment / "bin/toolsmith"), "--version"], workspace)
-            assert version_output.strip() == "toolsmith 0.5.0"
+            assert version_output.strip() == "toolsmith 0.5.1"
             command = json.loads(
                 run(
                     [
@@ -306,10 +333,11 @@ def main() -> int:
                     "filelock=2026-10-25T00:00:00Z",
                     "--constraint",
                     str(constraints),
-                    str(artifact) + "[http,pdf,xls]",
+                    str(artifact) + "[html,http,pdf,xls]",
                 ],
                 parent,
             )
+            print(run([str(python), "-c", HTML_SMOKE], workspace), end="")
             print(run([str(python), str(ROOT / "scripts/accept_primitives.py")], workspace), end="")
             model_directory = os.environ.get("TOOLSMITH_MODEL_DIRECTORY")
             api_header = os.environ.get("TOOLSMITH_API_HEADER")
