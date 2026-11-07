@@ -44,7 +44,8 @@ The CLI calls the same validated library functions that applications import.
 ## Available tools
 
 - Streaming regular-file hash/copy, private tree inventory/publication and exact-file ZIPs.
-- UTF-8/strict JSON/JSONL, XML, static HTML with links/metadata, CSV and RSS/Atom readers.
+- UTF-8/strict JSON/JSONL, XML and CSV readers; optional RSS/Atom and static HTML
+  reading with links, metadata and attribute-free semantic markup (`html` extra).
 - Optional in-process PDF text extraction and PNG page rendering; no OCR or table interpretation.
 - URL resolution, ZIP inspection/exact-member reads and bounded gzip decompression.
 - Literal passages and lexical indexes over caller-owned sources and authorized database scopes.

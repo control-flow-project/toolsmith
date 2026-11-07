@@ -21,6 +21,10 @@ python3 -m venv .venv
 .venv/bin/toolsmith --json capabilities
 ```
 
+HTML and RSS/Atom reading require the `html` extra: `beautifulsoup4==4.15.0` and
+`lxml==6.1.3`. The base package imports without them; an HTML read returns an
+explicit unavailable result until installed. No parser fallback exists.
+
 For selected network acquisition:
 
 ```sh

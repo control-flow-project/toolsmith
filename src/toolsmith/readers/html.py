@@ -9,6 +9,7 @@ from toolsmith.readers.html_dom import (
     Node,
     check_access,
     check_title_access,
+    content_html,
     content_text,
     descendants,
     parse_html,
@@ -58,6 +59,7 @@ class HtmlInspection:
     structured_data: tuple[HtmlStructuredData, ...]
     time_values: tuple[str, ...]
     base_href: str | None
+    semantic_html: str
 
 
 def links(root: Node) -> tuple[HtmlLink, ...]:
@@ -137,6 +139,7 @@ def inspect_html(
         tuple(structured),
         tuple(time_values),
         base_href,
+        content_html(root).strip(),
     )
 
 

@@ -56,7 +56,7 @@ structure. They are not ceilings on the application database's total entries.
 | Backup manifest | 128 MiB bounded metadata input; writer streams records and enforces the same bound as restore |
 | ZIP | 128 MiB/member, 1 GiB aggregate, 10,000 members, 4 MiB central directory, depth 64; bounded untrusted archive expansion/metadata |
 | Plain text / JSON | Text configurable to 144 MiB; JSON to 128 MiB, rejecting duplicate keys and nonfinite numbers |
-| HTML | Default 4 MiB/50,000 nodes, explicitly selectable to 8 MiB/500,000 nodes; depth 128. Reading attributes share the complete input byte bound; unused attributes discarded. Inspection preserves typed links, labels at most 1,000 characters with explicit truncation. No deterministic table interpretation. |
+| HTML | Optional Beautiful Soup/lxml parser. Default 4 MiB/50,000 parsed nodes including implied wrappers, explicitly selectable to 8 MiB/500,000 nodes; depth 128. Reading attributes share the complete input byte bound; unused attributes discarded without a separate count cutoff. Inspection preserves typed links, labels at most 1,000 characters with explicit truncation, and attribute-free semantic HTML. No deterministic table interpretation. |
 | Feed | 2 MiB, two million nodes, depth 32; all distinct entries are returned, without an item-count ceiling |
 | XML / JSONL | Default 32 MiB input; XML explicitly selectable to 144 MiB with independent node/depth/field bounds and DTD/entity rejection; invalid JSONL never drops a line silently |
 | PDF | 32 MiB input; paged text defaults to twenty pages with an explicit continuation; rendering checks DPI/pixels/output bytes before publication |

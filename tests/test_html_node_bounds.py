@@ -12,7 +12,8 @@ from toolsmith.result import Failure, ToolsmithError, unwrap
 
 
 def dense_html(nodes: int) -> bytes:
-    return b"<main>" + b"<br>" * (nodes - 1) + b"Exact observations</main>"
+    # lxml supplies the html/body wrappers; both count toward the parsed DOM.
+    return b"<main>" + b"<br>" * (nodes - 3) + b"Exact observations</main>"
 
 
 def test_explicit_node_limit_admits_dense_input_without_changing_the_default() -> None:
@@ -43,16 +44,10 @@ def test_node_option_is_validated_at_each_library_boundary(maximum: int) -> None
         parse_html(b"<main>Text</main>", maximum_nodes=maximum)
 
 
-def test_larger_node_budget_keeps_depth_attributes_bytes_and_access_independent() -> None:
+def test_larger_node_budget_keeps_depth_bytes_and_access_independent() -> None:
     nested = inspect_html(b"<div>" * 128 + b"Text", maximum_nodes=500_000)
     assert isinstance(nested, Failure)
     assert nested.message == "HTML nesting budget exceeded: 128 >= 128"
-    attributes = inspect_html(
-        b"<main " + b" ".join(f"data-{i}='x'".encode() for i in range(101)) + b">Text</main>",
-        maximum_nodes=500_000,
-    )
-    assert isinstance(attributes, Failure)
-    assert attributes.message == "HTML attribute count exceeded: 101 > 100"
     assert isinstance(
         inspect_html(dense_html(20), maximum_nodes=500_000, maximum_bytes=10), Failure
     )

@@ -24,6 +24,7 @@ Documentation = "https://github.com/control-flow-project/toolsmith/tree/main/doc
 Issues = "https://github.com/control-flow-project/toolsmith/issues"
 
 [project.optional-dependencies]
+html = ["beautifulsoup4==4.15.0", "lxml==6.1.3"]
 http = ["dnspython==2.9.0", "aiohttp==3.14.5"]
 xls = ["xlrd==2.0.2"]
 pdf = ["pypdfium2==5.14.0", "Pillow==13.0.0"]
