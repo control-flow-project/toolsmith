@@ -29,3 +29,12 @@ def test_embedding_metadata_rejects_wrong_storage_types() -> None:
             "INSERT INTO embedding_profile(id,definition) VALUES (:id,:definition)",
             {"id": "profile", "definition": b"binary-is-not-text"},
         )
+
+
+def test_embedding_profile_foreign_key_has_an_index() -> None:
+    with index_database() as connection:
+        indexes = [
+            tuple(row[2] for row in connection.execute("PRAGMA index_info(" + index[1] + ")"))
+            for index in connection.execute("PRAGMA index_list(embedding_document)")
+        ]
+        assert any(index[:1] == ("profile_id",) for index in indexes)

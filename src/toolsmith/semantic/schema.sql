@@ -10,6 +10,7 @@ CREATE TABLE embedding_document (
     chunks INTEGER NOT NULL CHECK (chunks > 0 AND chunks <= 20000),
     indexed_at TEXT NOT NULL
 ) STRICT;
+CREATE INDEX embedding_document_profile ON embedding_document(profile_id);
 CREATE TABLE embedding_chunk (
     id INTEGER PRIMARY KEY,
     reference TEXT NOT NULL REFERENCES embedding_document(reference) ON DELETE CASCADE ON UPDATE CASCADE,
