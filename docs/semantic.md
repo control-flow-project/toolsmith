@@ -64,6 +64,13 @@ partial index schemas fail. There is one derivative schema and no vector-schema
 conversion API. Derivatives are rebuilt from caller-owned canonical text through
 the same public initialization and indexing functions.
 
+The ordinary `embedding_profile`, `embedding_document` and `embedding_chunk`
+tables use SQLite STRICT typing. Text primary keys reject null; chunk IDs use
+SQLite's generated integer primary keys. The document's `profile_id` foreign key
+has an index. The native vector virtual table keeps its extension-defined schema.
+Applications adopting these constraints in an existing database own the forward
+migration; Toolsmith does not migrate databases automatically.
+
 ```python
 import hashlib
 import sqlite3
