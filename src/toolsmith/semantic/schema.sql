@@ -1,15 +1,16 @@
 CREATE TABLE embedding_profile (
-    id TEXT PRIMARY KEY,
+    id TEXT NOT NULL PRIMARY KEY,
     definition TEXT NOT NULL
-);
+) STRICT;
 CREATE TABLE embedding_document (
-    reference TEXT PRIMARY KEY,
+    reference TEXT NOT NULL PRIMARY KEY,
     profile_id TEXT NOT NULL REFERENCES embedding_profile(id),
     text_digest TEXT NOT NULL,
     characters INTEGER NOT NULL CHECK (characters > 0),
     chunks INTEGER NOT NULL CHECK (chunks > 0 AND chunks <= 20000),
     indexed_at TEXT NOT NULL
-);
+) STRICT;
+CREATE INDEX embedding_document_profile ON embedding_document(profile_id);
 CREATE TABLE embedding_chunk (
     id INTEGER PRIMARY KEY,
     reference TEXT NOT NULL REFERENCES embedding_document(reference) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -18,6 +19,6 @@ CREATE TABLE embedding_chunk (
     end_offset INTEGER NOT NULL CHECK (end_offset > start_offset),
     text_digest TEXT NOT NULL,
     UNIQUE (reference, ordinal)
-);
+) STRICT;
 CREATE VIRTUAL TABLE embedding_vector USING vec1(vector, chunk_id);
 INSERT INTO embedding_vector(cmd,arg) VALUES ('rebuild','{"index":"flat","distance":"cos"}');

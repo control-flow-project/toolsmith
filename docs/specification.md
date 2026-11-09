@@ -238,8 +238,12 @@ Queries exceeding 256 tokens fail; document chunks cover every character with
 32-token overlap, checking the actual token ceiling without silent truncation.
 
 Generic derivatives retain only references, source digest/length, profile, indexed
-time and bounded vector/span records, not a second source archive. Consumers own
-canonical text, authorization, summaries and source corrections. They invalidate
+time and bounded vector/span records, not a second source archive. The ordinary embedding
+profile, document and chunk tables are STRICT with non-null primary keys; the
+native vector virtual table retains its module-defined schema. No historical
+reader or converter is added to the generic library. Consumers own forward
+migrations when adopting a changed schema, canonical text, authorization,
+summaries and source corrections. They invalidate
 derivatives in the same transaction as a correction and publish with an expected
 previous digest after encoding outside transactions. Search accepts an explicit database-resident authorized table/view and reports
 missing/stale coverage without any corpus-count or scanned-chunk cutoff, never other
