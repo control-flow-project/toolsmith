@@ -33,6 +33,10 @@ holes where that saves calls. A native start anchor preserves providers whose
 proven file boundaries depend on the start date. `calendar_months` supports
 whole indivisible publisher months or clipped query months.
 
+`Gap` records typed unresolved/provisional units and reasons. These remain
+retryable observations, never a permanent exclusion list. `WindowPlan` keeps actual
+missing spans separate from the wider native request used to pack them efficiently.
+
 `Acquisition` records source originals, actual observation time, closed and
 provisional coverage, native evidence, measurements and discovery completeness.
 Only source adapters can establish what their responses prove. Downloaded bytes

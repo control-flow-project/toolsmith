@@ -154,6 +154,38 @@ def inspect(
         counts[value.action] = counts.get(value.action, 0) + 1
         if offset <= position < offset + limit:
             row = asdict(value)
+            observations = []
+            unique = {
+                (v.source, v.item, v.identity, v.observed_at, v.originals): v
+                for v in (*value.available, *(() if value.retained is None else (value.retained,)))
+            }
+            for original in sorted(
+                unique.values(), key=lambda v: datetime.fromisoformat(v.observed_at), reverse=True
+            ):
+                for gap in original.unresolved:
+                    if gap.scope is not None and not any(
+                        isinstance(v, type(gap.scope))
+                        and v.start <= gap.scope.end
+                        and v.end >= gap.scope.start
+                        for v in value.missing
+                    ):
+                        continue
+                    observations.append(
+                        {
+                            "scope": None
+                            if gap.scope is None
+                            else {
+                                "start": gap.scope.start.isoformat(),
+                                "end": gap.scope.end.isoformat(),
+                            },
+                            "outcome": gap.outcome,
+                            "reason": gap.reason,
+                            "observed_at": original.observed_at,
+                            "originals": list(original.originals),
+                        }
+                    )
+            row["gap_observations"] = observations
+
             row["available"] = [
                 {
                     "identity": v.identity,
@@ -185,6 +217,19 @@ def inspect(
                 {"start": str(gap.start), "end": str(gap.end)} for gap in value.missing
             ]
             if value.retained is not None:
+                row["retained"]["unresolved"] = [
+                    {
+                        "scope": None
+                        if gap.scope is None
+                        else {
+                            "start": gap.scope.start.isoformat(),
+                            "end": gap.scope.end.isoformat(),
+                        },
+                        "outcome": gap.outcome,
+                        "reason": gap.reason,
+                    }
+                    for gap in value.retained.unresolved
+                ]
                 row["retained"]["complete"] = [
                     {"start": str(gap.start), "end": str(gap.end)}
                     for gap in value.retained.complete

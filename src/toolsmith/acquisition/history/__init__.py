@@ -2,6 +2,7 @@
 
 from .contracts import Acquisition as Acquisition
 from .contracts import Decision as Decision
+from .contracts import Gap as Gap
 from .contracts import NativeRequest as NativeRequest
 from .execution import Expansion as Expansion
 from .execution import WorkItem as WorkItem

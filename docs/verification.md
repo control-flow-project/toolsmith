@@ -537,3 +537,11 @@ zero swap. The installed library and `history record` CLI read the same current
 contract. Base import creates no state or optional model/thread. No real-provider
 backfill, consumer-store conversion, registry publication or deployment is certified
 by this local package verification.
+
+
+The structured-gap follow-up passed the full 623-test gate (25 acquisition-category
+tests), zero skips/failures, all 140 strict-type files, wheel/sdist builds and
+installed package acceptance. Full verification plus installed acceptance completed
+in one bounded group in 64.469 seconds, peak1.7GiB/zero swap; separate phase wall
+times were not recorded for this invocation. Typed unresolved-unit observations
+survive ledger round trips and appear only against still-unresolved dates.

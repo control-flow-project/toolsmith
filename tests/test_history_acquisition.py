@@ -439,3 +439,29 @@ def test_packed_window_keeps_real_holes_and_reuses_different_native_captures() -
     assert reused.missing == ()
     assert inspect((reused,))["known_requests"] == 0
     assert decide(native, None, available=(existing,), refresh=True).action == "download"
+
+
+def test_gap_observations_are_typed_persisted_and_only_report_unresolved_dates(
+    tmp_path: Path,
+) -> None:
+    from dataclasses import replace
+
+    from toolsmith.acquisition.history import Gap, Ledger
+
+    missing = scope("2026-10-31", "2026-10-31")
+    original = replace(
+        acquired(),
+        complete=(scope("2026-10-01", "2026-10-30"),),
+        unresolved=(Gap(missing, "unavailable", "Provider returned no observations"),),
+    )
+    ledger = Ledger(tmp_path / "ledger")
+    unwrap(ledger.save(original))
+    assert unwrap(ledger.lookup("source", "item", "native-key")) == original
+    report = inspect((decide(request(), original, available=(original,)),))
+    entries = report["entries"]
+    assert isinstance(entries, list)
+    row = entries[0]
+    assert isinstance(row, dict)
+    assert len(row["gap_observations"]) == 1
+    assert row["gap_observations"][0]["outcome"] == "unavailable"
+    canonical_json(report)

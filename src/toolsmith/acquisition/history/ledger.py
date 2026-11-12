@@ -10,7 +10,7 @@ from toolsmith.files import absolute_path, directory_lock, private_directory
 from toolsmith.result import ToolsmithError, boundary, unwrap
 from toolsmith.validation import canonical_json, fields, text, timestamp
 
-from .contracts import Acquisition
+from .contracts import Acquisition, Gap
 from .ranges import DateRange, TimeRange
 from .records import Record, read_record, write_record
 
@@ -53,6 +53,14 @@ def acquisition_value(value: Acquisition) -> dict[str, object]:
         "evidence": value.evidence,
         "discovery_complete": value.discovery_complete,
         "assignment": value.assignment,
+        "unresolved": [
+            {
+                "scope": None if gap.scope is None else scope_value(gap.scope),
+                "outcome": gap.outcome,
+                "reason": gap.reason,
+            }
+            for gap in value.unresolved
+        ],
     }
 
 
@@ -79,6 +87,7 @@ def acquisition_read(value: object) -> Acquisition:
             "evidence",
             "discovery_complete",
             "assignment",
+            "unresolved",
         },
     )
     if (
@@ -101,24 +110,39 @@ def acquisition_read(value: object) -> Acquisition:
         raise ToolsmithError("invalid_input", "Acquisition measurements are invalid")
     if row["reason"] is not None and not isinstance(row["reason"], str):
         raise ToolsmithError("invalid_input", "Acquisition reason is invalid")
+    if not isinstance(row["unresolved"], list):
+        raise ToolsmithError("invalid_input", "Unresolved acquisition observations must be a list")
+    unresolved = []
+    for raw in row["unresolved"]:
+        gap = fields(raw, {"scope", "outcome", "reason"})
+        if not isinstance(gap["outcome"], str) or gap["outcome"] not in OUTCOMES:
+            raise ToolsmithError("invalid_input", "Gap outcome is invalid")
+        unresolved.append(
+            Gap(
+                None if gap["scope"] is None else scope_read(gap["scope"]),
+                cast(Outcome, gap["outcome"]),
+                text(gap["reason"], 2000, "Gap reason"),
+            )
+        )
     return Acquisition(
-        text(row["identity"], 4096, "Request"),
-        text(row["source"], 4096, "Source"),
-        text(row["item"], 4096, "Item"),
-        text(row["observed_at"], 64, "Observed at"),
-        cast(Outcome, row["outcome"]),
-        tuple(text(v, 4096, "Original") for v in row["originals"]),
-        tuple(scope_read(v) for v in row["complete"]),
-        tuple(scope_read(v) for v in row["provisional"]),
-        row["reason"],
-        row["bytes"],
-        row["requests"],
-        None if row["elapsed_seconds"] is None else float(row["elapsed_seconds"]),
-        {key: val for key, val in row["evidence"].items()},
-        row["discovery_complete"],
-        None
+        identity=text(row["identity"], 4096, "Request"),
+        source=text(row["source"], 4096, "Source"),
+        item=text(row["item"], 4096, "Item"),
+        observed_at=text(row["observed_at"], 64, "Observed at"),
+        outcome=cast(Outcome, row["outcome"]),
+        originals=tuple(text(v, 4096, "Original") for v in row["originals"]),
+        complete=tuple(scope_read(v) for v in row["complete"]),
+        provisional=tuple(scope_read(v) for v in row["provisional"]),
+        reason=row["reason"],
+        bytes=row["bytes"],
+        requests=row["requests"],
+        elapsed_seconds=None if row["elapsed_seconds"] is None else float(row["elapsed_seconds"]),
+        evidence={key: val for key, val in row["evidence"].items()},
+        discovery_complete=row["discovery_complete"],
+        assignment=None
         if row["assignment"] is None
         else text(row["assignment"], 4096, "Acquisition assignment"),
+        unresolved=tuple(unresolved),
     )
 
 

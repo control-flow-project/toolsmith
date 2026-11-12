@@ -32,6 +32,20 @@ OUTCOMES = frozenset(
 
 
 @dataclass(frozen=True)
+class Gap:
+    scope: DateRange | TimeRange | None
+    outcome: Outcome
+    reason: str
+
+    def __post_init__(self) -> None:
+        if self.scope is not None and not isinstance(self.scope, DateRange | TimeRange):
+            raise ToolsmithError("invalid_input", "Gap extent must use a typed coverage unit")
+        if self.outcome not in OUTCOMES or self.outcome == "complete":
+            raise ToolsmithError("invalid_input", "Gap must have an unresolved/provisional outcome")
+        text(self.reason, 2000, "Gap reason")
+
+
+@dataclass(frozen=True)
 class NativeRequest:
     identity: str
     source: str
@@ -94,6 +108,7 @@ class Acquisition:
     evidence: dict[str, object] = field(default_factory=dict)
     discovery_complete: bool = False
     assignment: str | None = None
+    unresolved: tuple[Gap, ...] = ()
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -121,8 +136,13 @@ class Acquisition:
             from toolsmith.validation import number
 
             number(self.elapsed_seconds, 0, float("inf"), "Acquisition duration")
-        if any(
-            not isinstance(v, DateRange | TimeRange) for v in (*self.complete, *self.provisional)
+        if (
+            not isinstance(self.complete, tuple)
+            or not isinstance(self.provisional, tuple)
+            or any(
+                not isinstance(v, DateRange | TimeRange)
+                for v in (*self.complete, *self.provisional)
+            )
         ):
             raise ToolsmithError("invalid_input", "Coverage requires typed ranges")
         if self.complete and self.outcome not in {"complete", "provisional"}:
@@ -131,6 +151,10 @@ class Acquisition:
             text(self.assignment, 4096, "Acquisition assignment")
         if not isinstance(self.evidence, dict) or type(self.discovery_complete) is not bool:
             raise ToolsmithError("invalid_input", "Acquisition evidence/discovery flags differ")
+        if not isinstance(self.unresolved, tuple) or any(
+            not isinstance(v, Gap) for v in self.unresolved
+        ):
+            raise ToolsmithError("invalid_input", "Acquisition gaps must be typed observations")
         json_value(self.evidence)
 
 
