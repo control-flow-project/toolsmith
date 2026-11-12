@@ -55,7 +55,7 @@ async def accept_buckets() -> None:
 
 
 def main() -> int:
-    assert importlib.metadata.version("ctlflow-toolsmith") == "0.5.1"
+    assert importlib.metadata.version("ctlflow-toolsmith") == "0.6.0"
     asyncio.run(accept_buckets())
     assert "aiohttp" not in sys.modules and "pypdfium2" not in sys.modules
     threads = len(list(Path("/proc/self/task").iterdir()))

@@ -516,3 +516,24 @@ the current audit reports no known vulnerabilities. These are local package
 checks, not a completed consumer news run or registry publication.
 
 - [Upstream dnspython 2.9.0 release](https://github.com/rthalley/dnspython/releases/tag/v2.9.0)
+
+## Shared historical acquisition — 2026-11-12, 0.6.0
+
+The complete local gate passed 622 tests across 51 isolated modules, with zero
+failures/skips. Formatting/lint, 140 strict-type-checked source files and native
+wheel/sdist builds passed. The bounded group used two CPU affinities, 2 GiB memory,
+zero swap and 256 tasks; observed wall time was 50.252 seconds and peak memory
+1.7 GiB. These are complete command-group timings, not summed parallel durations.
+
+Twenty-four category tests cover inclusive dates, actual-time/DST gaps, overlap,
+native packing/anchors, payload-format independence, exact identity, provisional
+refresh, unresolved retry, current-only metadata, ledger integrity, inspection,
+15-daily/one-bulk shared frontiers, parent/child withdrawal, interruption, specific
+failure reasons and wider-original coverage reuse without a fake request receipt.
+
+Separate installed wheel and sdist acceptance passed for the base package and
+optional readers/HTTP/semantic installations in 15.081 seconds, peak 510.4 MiB,
+zero swap. The installed library and `history record` CLI read the same current
+contract. Base import creates no state or optional model/thread. No real-provider
+backfill, consumer-store conversion, registry publication or deployment is certified
+by this local package verification.

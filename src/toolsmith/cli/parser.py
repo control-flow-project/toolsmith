@@ -77,6 +77,12 @@ def make_parser() -> Parser:
     parser.add_argument("--output", type=Path, help="Write the result to a new explicit file")
     families = parser.add_subparsers(dest="family", required=True)
     parser.add_argument("--version", action="version", version=f"toolsmith {__version__}")
+    history = families.add_parser("history").add_subparsers(dest="command", required=True)
+    history_record = history.add_parser(
+        "record", help="Read one current historical acquisition record without effects"
+    )
+    history_record.set_defaults(action="history.record")
+    history_record.add_argument("file", type=Path)
     capabilities = families.add_parser("capabilities")
     capabilities.set_defaults(action="capabilities")
     store = families.add_parser("store").add_subparsers(dest="command", required=True)

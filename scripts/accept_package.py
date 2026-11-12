@@ -62,7 +62,8 @@ assert importlib.util.find_spec('onnxruntime') is None
 assert importlib.util.find_spec('tokenizers') is None
 from toolsmith.semantic import Scope, Source, encode_query, initialize_index, inspect_model
 assert 'onnxruntime' not in sys.modules and 'numpy' not in sys.modules
-assert importlib.metadata.version('ctlflow-toolsmith') == '0.5.1'
+assert importlib.metadata.version('ctlflow-toolsmith') == '0.6.0'
+from toolsmith.acquisition.history import Acquisition,Ledger,NativeRequest,decide,inspect as inspect_history
 assert importlib.util.find_spec('aiohttp') is None
 assert importlib.util.find_spec('pypdfium2') is None
 assert importlib.util.find_spec('xlrd') is None
@@ -80,6 +81,13 @@ assert metadata['License-Expression'] == 'MIT'
 assert metadata.get_all('License-File') == ['LICENSE']
 assert not any(value.startswith('Private ::') for value in metadata.get_all('Classifier', []))
 assert set(parent.iterdir()) == before
+ledger = Ledger(parent/'historical')
+original = Acquisition('native','publisher','item','2026-11-12T00:00:00Z','complete',('snapshot',))
+unwrap(ledger.save(original))
+assert unwrap(ledger.lookup('publisher','item','native')) == original
+assert inspect_history((decide(NativeRequest('native','publisher','item',{}),original),))['known_requests'] == 0
+history_path = ledger.path('inputs','publisher','item','native')
+
 assert importlib.util.find_spec('bs4') is None and importlib.util.find_spec('lxml') is None
 html_missing = inspect_html(b'<main>Reporting</main>')
 assert isinstance(html_missing, Failure) and html_missing.code == 'unavailable'
@@ -253,11 +261,11 @@ def check_archives(wheel: Path, source: Path) -> None:
 
 def main() -> int:
     require_limits()
-    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.5.1-py3-none-*.whl"))
+    wheels = list((ROOT / "dist").glob("ctlflow_toolsmith-0.6.0-py3-none-*.whl"))
     if len(wheels) != 1 or wheels[0].name.endswith("-any.whl"):
         raise RuntimeError("Expected one platform-tagged native wheel")
     wheel = wheels[0]
-    source = ROOT / "dist/ctlflow_toolsmith-0.5.1.tar.gz"
+    source = ROOT / "dist/ctlflow_toolsmith-0.6.0.tar.gz"
     check_archives(wheel, source)
     uv = os.environ.get("TOOLSMITH_UV") or shutil.which("uv")
     if uv is None:
@@ -299,7 +307,25 @@ def main() -> int:
             )
             assert capability["ok"] is True
             version_output = run([str(environment / "bin/toolsmith"), "--version"], workspace)
-            assert version_output.strip() == "toolsmith 0.5.1"
+            assert version_output.strip() == "toolsmith 0.6.0"
+            history_records = list((workspace / "historical/inputs").glob("*/*/*.json"))
+            assert len(history_records) == 1
+            history_result = json.loads(
+                run(
+                    [
+                        str(environment / "bin/toolsmith"),
+                        "--json",
+                        "history",
+                        "record",
+                        str(history_records[0]),
+                    ],
+                    workspace,
+                )
+            )
+            assert history_result["ok"] and history_result["result"]["value"]["originals"] == [
+                "snapshot"
+            ]
+
             command = json.loads(
                 run(
                     [
