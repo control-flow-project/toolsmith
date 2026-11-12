@@ -465,3 +465,33 @@ def test_gap_observations_are_typed_persisted_and_only_report_unresolved_dates(
     assert len(row["gap_observations"]) == 1
     assert row["gap_observations"][0]["outcome"] == "unavailable"
     canonical_json(report)
+
+
+def test_frontier_callback_filesystem_failure_is_typed_and_preserves_handled_work() -> None:
+    import asyncio
+
+    from toolsmith.acquisition.history import Expansion, WorkItem, run_frontiers_async
+
+    async def operation(batch: tuple[WorkItem[str], ...]) -> Expansion[str]:
+        raise OSError("Controlled storage failure after original preservation")
+
+    result = asyncio.run(
+        run_frontiers_async((WorkItem("one", "source", request(), "one"),), operation)
+    )
+    assert isinstance(result, Failure)
+    assert result.code == "io"
+
+
+def test_frontier_without_progress_returns_a_failure_instead_of_spinning() -> None:
+    import asyncio
+
+    from toolsmith.acquisition.history import Expansion, WorkItem, run_frontiers_async
+
+    async def operation(batch: tuple[WorkItem[str], ...]) -> Expansion[str]:
+        return Expansion(finished=())
+
+    result = asyncio.run(
+        run_frontiers_async((WorkItem("one", "source", request(), "one"),), operation)
+    )
+    assert isinstance(result, Failure)
+    assert result.code == "invalid_input"

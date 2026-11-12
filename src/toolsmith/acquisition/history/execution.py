@@ -72,6 +72,7 @@ async def run_frontiers_async[Payload](
     add(items)
     waves = 0
     while pending := [value for key, value in known.items() if key not in handled]:
+        pending_keys = set(known) - handled
         dated = [value.request.scope.end for value in pending if value.request.scope is not None]
         newest = max(v.date() if isinstance(v, datetime) else v for v in dated) if dated else None
         threshold = (
@@ -99,6 +100,7 @@ async def run_frontiers_async[Payload](
         for value in wave:
             groups.setdefault(value.group, []).append(value)
 
+        @async_boundary
         async def process(batch: tuple[WorkItem[Payload], ...]) -> Expansion[Payload]:
             return await operation(batch)
 
@@ -108,7 +110,8 @@ async def run_frontiers_async[Payload](
         )
         stopped = False
         for outcome in outcomes:
-            for expansion in outcome.items:
+            for result in outcome.items:
+                expansion = unwrap(result)
                 if not isinstance(expansion, Expansion):
                     raise ToolsmithError("invalid_input", "Discovery must return a typed expansion")
                 batch_keys = {value.key for value in groups[outcome.id]}
@@ -125,6 +128,10 @@ async def run_frontiers_async[Payload](
         waves += 1
         if stopped:
             break
+        if set(known) - handled == pending_keys:
+            raise ToolsmithError(
+                "invalid_input", "A frontier operation must finish, discover, withdraw or stop work"
+            )
     return {
         "known_work": len(known),
         "handled_work": len(handled),

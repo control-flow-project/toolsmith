@@ -545,3 +545,11 @@ installed package acceptance. Full verification plus installed acceptance comple
 in one bounded group in 64.469 seconds, peak1.7GiB/zero swap; separate phase wall
 times were not recorded for this invocation. Typed unresolved-unit observations
 survive ledger round trips and appear only against still-unresolved dates.
+
+The frontier error-boundary and no-progress follow-up passed **625 tests across 51
+isolated modules**, including 27 acquisition-category tests, with zero failures or
+skips. Strict typing, format/lint, wheel/sdist build and both installed-package
+acceptance paths passed. The combined bounded group took 62.495 seconds with
+1.7 GiB peak and zero swap. Expected callback I/O errors return typed failures;
+a callback that neither finishes nor changes work fails explicitly instead of
+spinning. This is offline/category verification, not provider-live certification.
