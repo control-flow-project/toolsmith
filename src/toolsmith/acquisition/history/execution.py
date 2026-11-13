@@ -134,7 +134,8 @@ async def run_frontiers_async[Payload](
             )
     return {
         "known_work": len(known),
-        "handled_work": len(handled),
+        "handled_work": len(set(known) & handled),
+        "handled_work_total": len(handled),
         "pending_work": len(set(known) - handled),
         "frontier_waves": waves,
         "block_days": block_days,

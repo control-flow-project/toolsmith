@@ -495,3 +495,28 @@ def test_frontier_without_progress_returns_a_failure_instead_of_spinning() -> No
     )
     assert isinstance(result, Failure)
     assert result.code == "invalid_input"
+
+
+def test_withdrawn_handled_work_has_separate_active_and_lifetime_counts() -> None:
+    import asyncio
+
+    from toolsmith.acquisition.history import Expansion, WorkItem, run_frontiers_async
+
+    parent = WorkItem("parent", "publisher", request(discovery=True), "parent")
+    child = WorkItem("child", "publisher", request(), "child")
+    later = WorkItem("later", "publisher", request(discovery=True), "later")
+    seen: list[str] = []
+
+    async def operation(batch: tuple[WorkItem[str], ...]) -> Expansion[str]:
+        seen.extend(value.key for value in batch)
+        if batch[0].key == "parent":
+            return Expansion(items=(child,))
+        if batch[0].key == "child":
+            return Expansion(items=(later,))
+        return Expansion(withdraw=("child",))
+
+    result = unwrap(asyncio.run(run_frontiers_async((parent,), operation)))
+    assert seen == ["parent", "child", "later"]
+    assert result["known_work"] == result["handled_work"] == 2
+    assert result["handled_work_total"] == 3
+    assert result["pending_work"] == 0

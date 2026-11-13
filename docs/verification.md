@@ -553,3 +553,19 @@ acceptance paths passed. The combined bounded group took 62.495 seconds with
 1.7 GiB peak and zero swap. Expected callback I/O errors return typed failures;
 a callback that neither finishes nor changes work fails explicitly instead of
 spinning. This is offline/category verification, not provider-live certification.
+
+
+## Historical frontier review follow-up — 2026-11-13
+
+The complete current gate passed 626 tests across 51 isolated modules, including
+28 historical-acquisition category cases, with zero failures or skips. Formatting,
+lint, 140 strict-type files, wheel/sdist builds and installed base, optional
+reader, HTTP and semantic acceptance passed. The combined bounded group completed
+in 67.285 seconds, with 1.8 GiB peak memory and zero swap; separate phase timings
+were not recorded.
+
+The withdrawal regression distinguishes currently active handled work from
+lifetime handled work: removing an already handled child reduces active counts
+without erasing the completed request from lifetime accounting. This is local
+category and package verification; it does not certify live store conversion or
+a provider backfill.

@@ -61,7 +61,9 @@ frontier advances. A 15-day native range can therefore run beside 15 daily files
 Wide native files run once; they are not split to fit coordination blocks.
 Discovery parents precede payloads and can withdraw superseded membership.
 Explicit unavailable/failed outcomes do not stall independent sources forever.
-A bounded interruption returns exact pending work. No task, process, thread,
+A bounded interruption returns exact pending work. `known_work`, `handled_work`
+and `pending_work` count the current active queue; `handled_work_total` retains
+lifetime handled work even when later discovery withdraws it. No task, process, thread,
 model or service is created outside the calling finite coroutine.
 
 `Accounting` supplies per-stream reuse, outcome, byte and request counts with
