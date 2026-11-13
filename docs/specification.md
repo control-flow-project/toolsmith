@@ -335,3 +335,18 @@ input and node budgets remain 32 MiB/two million.
 The `xls` extra pins xlrd 2.0.2. One in-process reader owns library and CLI BIFF `.xls` parsing. It returns bounded row pages with typed cells, exact decimal expansions of stored binary64 numbers, source number formats, date mode, merged ranges and explicit row continuation. It preserves literal text and distinguishes blank/empty cells. It neither renders display values, infers currency/units, converts date serials, evaluates formulas nor supports `.xlsx`. Formula cells expose cached values, without a claim that xlrd identifies formula origin. Input is limited to 32 MiB; returned-cell/text budgets are explicit and violations never return partial success. Caller-owned isolation remains required for untrusted backend execution.
 
 `read_xml_records` selects one exact element name or a nonempty tuple of distinct exact names in one parsing pass. Selected elements must not nest; all selected populations share full-document validation, namespace scope and structural budgets.
+
+## Historical acquisition planning
+
+The optional `acquisition.history` library owns one current input/attempt/coverage
+ledger, exact native reuse/freshness/due decisions, inclusive calendar and half-open
+aware-time gap arithmetic, provider-bounded packing, bounded inspection, finite
+backward-frontier coordination and per-stream accounting. Payload formats remain
+orthogonal to coverage units. Source identity, native routes/calendars/discovery,
+permissions, authentication, original bytes and analytical builders stay caller-owned.
+Inspection and execution consume the same decisions. Completed discovery is known;
+unresolved downstream request counts are explicitly unknown. Neither ordinary
+reads nor installation convert old metadata. Application maintenance may explicitly
+adopt the current contract while retaining original bytes and source references.
+The library adds no SQL schema, generative call, server, thread or transport.
+See historical-acquisition.md for the current contract and read-only CLI.

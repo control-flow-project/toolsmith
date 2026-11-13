@@ -55,6 +55,7 @@ The CLI calls the same validated library functions that applications import.
   responses and persistent shared group/task budgets.
 - Concurrent file-download batches, serial within each caller-defined quota group.
 - Batch lexical/semantic queries with one authorized coverage snapshot per batch.
+- Source-neutral historical acquisition ledgers, native request planning, coverage/gap inspection and finite backward-frontier coordination. See [historical acquisition](docs/historical-acquisition.md).
 - Generic bounded JSON journals; applications own event meaning and retention.
 - A separately optional text/file archive: exact versions/citations, acquisition
   receipts/recovery, verified backup/restore, integrity and staging cleanup.
@@ -79,7 +80,7 @@ git clone https://github.com/control-flow-project/toolsmith.git
 cd toolsmith
 uv build --no-sources
 python3 -m venv .venv
-.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.5.1-py3-none-*.whl
+.venv/bin/python -m pip install dist/ctlflow_toolsmith-0.6.0-py3-none-*.whl
 .venv/bin/toolsmith --json capabilities
 .venv/bin/toolsmith --root "$PWD/local-store" --collection sample store init
 ```

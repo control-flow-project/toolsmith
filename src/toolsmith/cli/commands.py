@@ -60,6 +60,11 @@ def required_path(value: Path | None) -> Path:
 
 def execute(arguments: Arguments) -> Result[object]:
     action = arguments.action
+    if action == "history.record":
+        from toolsmith.acquisition.history import read_record
+
+        record = unwrap(read_record(required_path(arguments.file)))
+        return Success({"category": record.category, "key": record.key, "value": record.value})
     if action == "http.batch":
         return execute_downloads(arguments)
     if action.startswith(("archive.", "url.", "decompress.")):
@@ -76,6 +81,7 @@ def execute(arguments: Arguments) -> Result[object]:
                     "html-links-metadata",
                     "pdf-text-images",
                     "batch-https-files",
+                    "historical-acquisition-planning",
                     "batch-indexed-search",
                     "url-resolution",
                     "archive-inspection",

@@ -516,3 +516,56 @@ the current audit reports no known vulnerabilities. These are local package
 checks, not a completed consumer news run or registry publication.
 
 - [Upstream dnspython 2.9.0 release](https://github.com/rthalley/dnspython/releases/tag/v2.9.0)
+
+## Shared historical acquisition — 2026-11-12, 0.6.0
+
+The complete local gate passed 622 tests across 51 isolated modules, with zero
+failures/skips. Formatting/lint, 140 strict-type-checked source files and native
+wheel/sdist builds passed. The bounded group used two CPU affinities, 2 GiB memory,
+zero swap and 256 tasks; observed wall time was 50.252 seconds and peak memory
+1.7 GiB. These are complete command-group timings, not summed parallel durations.
+
+Twenty-four category tests cover inclusive dates, actual-time/DST gaps, overlap,
+native packing/anchors, payload-format independence, exact identity, provisional
+refresh, unresolved retry, current-only metadata, ledger integrity, inspection,
+15-daily/one-bulk shared frontiers, parent/child withdrawal, interruption, specific
+failure reasons and wider-original coverage reuse without a fake request receipt.
+
+Separate installed wheel and sdist acceptance passed for the base package and
+optional readers/HTTP/semantic installations in 15.081 seconds, peak 510.4 MiB,
+zero swap. The installed library and `history record` CLI read the same current
+contract. Base import creates no state or optional model/thread. No real-provider
+backfill, consumer-store conversion, registry publication or deployment is certified
+by this local package verification.
+
+
+The structured-gap follow-up passed the full 623-test gate (25 acquisition-category
+tests), zero skips/failures, all 140 strict-type files, wheel/sdist builds and
+installed package acceptance. Full verification plus installed acceptance completed
+in one bounded group in 64.469 seconds, peak1.7GiB/zero swap; separate phase wall
+times were not recorded for this invocation. Typed unresolved-unit observations
+survive ledger round trips and appear only against still-unresolved dates.
+
+The frontier error-boundary and no-progress follow-up passed **625 tests across 51
+isolated modules**, including 27 acquisition-category tests, with zero failures or
+skips. Strict typing, format/lint, wheel/sdist build and both installed-package
+acceptance paths passed. The combined bounded group took 62.495 seconds with
+1.7 GiB peak and zero swap. Expected callback I/O errors return typed failures;
+a callback that neither finishes nor changes work fails explicitly instead of
+spinning. This is offline/category verification, not provider-live certification.
+
+
+## Historical frontier review follow-up — 2026-11-13
+
+The complete current gate passed 626 tests across 51 isolated modules, including
+28 historical-acquisition category cases, with zero failures or skips. Formatting,
+lint, 140 strict-type files, wheel/sdist builds and installed base, optional
+reader, HTTP and semantic acceptance passed. The combined bounded group completed
+in 67.285 seconds, with 1.8 GiB peak memory and zero swap; separate phase timings
+were not recorded.
+
+The withdrawal regression distinguishes currently active handled work from
+lifetime handled work: removing an already handled child reduces active counts
+without erasing the completed request from lifetime accounting. This is local
+category and package verification; it does not certify live store conversion or
+a provider backfill.
